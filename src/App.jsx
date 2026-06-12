@@ -26,7 +26,7 @@ const getPriority = v => PRIORITIES.find(p => p.value === v) || PRIORITIES[2];
 const getStatus = v => STATUSES.find(s => s.value === v) || STATUSES[0];
 function daysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().split("T")[0]; }
 const TODAY = new Date().toISOString().split("T")[0];
-const INIT_TASKS = [
+const INIT_TASKS = [];
 { id:"t1", standup_id:"today", title:"Redesign checkout page UI", assignee_email:"deepak.nr@xtransmatrix.com", assignee_name:"Deepak NR", priority:"critical", status:"in-progress", timeline:"Today EOD (6 PM)", notes:"", manager_note:"Cover mobile too", blocker:"", created_at:new Date().toISOString() },
 { id:"t2", standup_id:"today", title:"Fix session timeout in auth API", assignee_email:"deepak.nr@xtransmatrix.com", assignee_name:"Deepak NR", priority:"high", status:"todo", timeline:"Today 3 PM", notes:"", manager_note:"", blocker:"", created_at:new Date().toISOString() },
 { id:"t3", standup_id:"today", title:"Write test cases for payment module", assignee_email:"madhan.m@xtransmatrix.com", assignee_name:"Madhan M", priority:"high", status:"done", timeline:"Today noon", notes:"34 test cases", manager_note:"", blocker:"", created_at:new Date().toISOString() },
@@ -38,7 +38,7 @@ const INIT_TASKS = [
 { id:"t9", standup_id:"today", title:"Set up CI/CD pipeline for staging", assignee_email:"zeeba.kauser@xtransmatrix.com", assignee_name:"Zeeba Kauser",priority:"high", status:"in-progress", timeline:"Today EOD (6 PM)", notes:"", manager_note:"Coordinate with Deepak on env vars", blocker:"", created_at:new Date().toISOString() },
 { id:"t10",standup_id:"today", title:"Write onboarding email copy", assignee_email:"zeeba.kauser@xtransmatrix.com", assignee_name:"Zeeba Kauser",priority:"low", status:"todo", timeline:"Tomorrow", notes:"", manager_note:"", blocker:"", created_at:new Date().toISOString() },
 ];
-const HISTORY = [
+const HISTORY = [];
 { id:"h1", date:daysAgo(1), tasks:[
 { id:"h1t1", assignee_email:"deepak.nr@xtransmatrix.com", assignee_name:"Deepak NR", title:"Fix login redirect bug", priority:"high", status:"done", timeline:"EOD", blocker:"" },
 { id:"h1t2", assignee_email:"madhan.m@xtransmatrix.com", assignee_name:"Madhan M", title:"Deploy auth service v1.2", priority:"critical", status:"done", timeline:"noon", blocker:"" },
