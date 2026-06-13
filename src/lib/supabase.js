@@ -1,14 +1,13 @@
-// src/lib/supabase.js
 import { createClient } from '@supabase/supabase-js';
 
 const SUPA_URL = process.env.REACT_APP_SUPABASE_URL  || '';
 const SUPA_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 export const supabase = (SUPA_URL && SUPA_KEY) ? createClient(SUPA_URL, SUPA_KEY, {
   auth: {
-    persistSession: true,        // keep session in localStorage
-    autoRefreshToken: true,      // silently refresh tokens
-    detectSessionInUrl: false,   // STOP re-checking URL on tab focus — this was the bug
-    storageKey: 'ss-auth',       // our own key so nothing else touches it
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
+    storageKey: 'ss-auth',
   }
 }) : null;
 export const IS_LIVE = !!supabase;
@@ -18,73 +17,179 @@ export async function signUp(email, password, meta) {
   if (!supabase) return { error: { message: 'Supabase not configured' } };
   return supabase.auth.signUp({ email, password, options: { data: meta } });
 }
-
 export async function signIn(email, password) {
   if (!supabase) return { error: { message: 'Supabase not configured' } };
   return supabase.auth.signInWithPassword({ email, password });
 }
-
+export async function signInWithGoogle() {
+  if (!supabase) return { error: { message: 'Supabase not configured' } };
+  return supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin },
+  });
+}
 export async function signOut() {
   if (!supabase) return;
   return supabase.auth.signOut();
 }
-
 export async function resetPassword(email) {
   if (!supabase) return { error: { message: 'Supabase not configured' } };
   return supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/reset-password`,
+    redirectTo: window.location.origin + '/reset-password',
   });
 }
-
 export async function updatePassword(password) {
   if (!supabase) return { error: { message: 'Supabase not configured' } };
   return supabase.auth.updateUser({ password });
 }
-
 export async function updateProfile(data) {
   if (!supabase) return { error: { message: 'Supabase not configured' } };
   return supabase.auth.updateUser({ data });
 }
-
-export function onAuthChange(cb) {
-  if (!supabase) return () => {};
-  const { data } = supabase.auth.onAuthStateChange(cb);
-  return () => data.subscription.unsubscribe();
-}
-
 export async function getSession() {
   if (!supabase) return null;
   const { data } = await supabase.auth.getSession();
   return data.session;
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const ROOM_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function genRoomId() {
+  let id = '';
+  for (let i = 0; i < 6; i++) id += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)];
+  return id;
+}
+function genRoomPass() { return String(Math.floor(1000 + Math.random() * 9000)); }
+const COLORS = ['#818CF8','#38BDF8','#34D399','#F472B6','#FB923C','#E879F9','#F59E0B','#06B6D4','#8B5CF6','#EC4899'];
+
 // ── Teams ─────────────────────────────────────────────────────────────────────
-export async function createTeam(name, ownerId, ownerEmail, ownerName) {
-  const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + Math.random().toString(36).slice(2,6);
-  const { data: team } = await supabase.from('teams').insert({ name, slug, owner_id: ownerId }).select().single();
-  if (team) {
-    await supabase.from('team_members').insert({ team_id: team.id, user_id: ownerId, email: ownerEmail, name: ownerName, role: 'manager', status: 'active' });
-  }
-  return team;
+export async function createTeam(name, ownerId, ownerEmail, ownerName, standupName) {
+  const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + Math.random().toString(36).slice(2, 6);
+  const { data: team, error } = await supabase
+    .from('teams')
+    .insert({ name, slug, owner_id: ownerId, standup_name: standupName || name })
+    .select().single();
+  if (error || !team) return null;
+
+  // Add owner as manager
+  await supabase.from('team_members').insert({
+    team_id: team.id, user_id: ownerId, email: ownerEmail,
+    name: ownerName, role: 'manager', designation: 'Team Manager',
+    status: 'active', color: '#818CF8',
+  });
+
+  // Create default room with unique ID
+  const room_id = genRoomId();
+  const room_password = genRoomPass();
+  const { data: room } = await supabase.from('rooms').insert({
+    team_id: team.id,
+    name: standupName || (name + ' - Main Room'),
+    room_id,
+    room_password,
+    created_by: ownerId,
+  }).select().single();
+
+  return { ...team, default_room_id: room_id, default_room_password: room_password, default_room_db_id: room?.id };
 }
 
 export async function getMyTeams(userId) {
-  const { data } = await supabase.from('team_members').select('team_id, role, teams(*)').eq('user_id', userId).eq('status', 'active');
+  const { data } = await supabase
+    .from('team_members')
+    .select('team_id, role, designation, teams(*)')
+    .eq('user_id', userId)
+    .eq('status', 'active');
   return data || [];
 }
 
 export async function getTeamMembers(teamId) {
-  const { data } = await supabase.from('team_members').select('*').eq('team_id', teamId).eq('status', 'active');
+  const { data } = await supabase
+    .from('team_members')
+    .select('*')
+    .eq('team_id', teamId)
+    .eq('status', 'active')
+    .order('created_at');
   return data || [];
+}
+
+export async function updateMemberDesignation(teamMemberId, designation, role) {
+  const updates = {};
+  if (designation !== undefined) updates.designation = designation;
+  if (role !== undefined) updates.role = role;
+  const { data } = await supabase
+    .from('team_members')
+    .update(updates)
+    .eq('id', teamMemberId)
+    .select().single();
+  return data;
+}
+
+export async function removeMember(teamMemberId) {
+  return supabase.from('team_members').update({ status: 'left' }).eq('id', teamMemberId);
+}
+
+// ── Rooms ─────────────────────────────────────────────────────────────────────
+export async function getTeamRooms(teamId) {
+  const { data } = await supabase.from('rooms').select('*').eq('team_id', teamId).order('created_at');
+  return data || [];
+}
+
+export async function createRoom(teamId, roomName, createdBy) {
+  const room_id = genRoomId();
+  const room_password = genRoomPass();
+  const { data } = await supabase.from('rooms').insert({
+    team_id: teamId, name: roomName, room_id, room_password, created_by: createdBy,
+  }).select().single();
+  return data;
+}
+
+export async function deleteRoom(roomDbId) {
+  return supabase.from('rooms').delete().eq('id', roomDbId);
+}
+
+// Join team via Room ID + password — room_id/password are permanent
+export async function joinTeamByCode(roomId, password, userId, email, name) {
+  const { data: room, error } = await supabase
+    .from('rooms')
+    .select('*, teams(*)')
+    .eq('room_id', roomId.toUpperCase().trim())
+    .eq('room_password', password.trim())
+    .single();
+
+  if (error || !room) return { error: 'Invalid Room ID or password. Check with your manager.' };
+  const team = room.teams;
+  if (!team) return { error: 'Team not found.' };
+
+  // Already a member?
+  const { data: existing } = await supabase
+    .from('team_members')
+    .select('id, status')
+    .eq('team_id', team.id)
+    .eq('user_id', userId)
+    .single();
+
+  if (existing) {
+    if (existing.status === 'left') {
+      await supabase.from('team_members').update({ status: 'active' }).eq('id', existing.id);
+    }
+    return { team, alreadyMember: true };
+  }
+
+  const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+  await supabase.from('team_members').insert({
+    team_id: team.id, user_id: userId, email, name,
+    role: 'member', designation: 'Team Member', status: 'active', color,
+  });
+  return { team };
 }
 
 // ── Invites ───────────────────────────────────────────────────────────────────
 export async function inviteMember(teamId, teamName, email, inviterName) {
   const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
   const { data } = await supabase.from('invites').insert({
-    team_id: teamId, email, token, invited_by: inviterName, expires_at: new Date(Date.now() + 7*24*60*60*1000).toISOString()
+    team_id: teamId, email, token, invited_by: inviterName,
+    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   }).select().single();
-  return { invite: data, token, link: `${window.location.origin}?invite=${token}` };
+  return { invite: data, token, link: window.location.origin + '?invite=' + token };
 }
 
 export async function getInvite(token) {
@@ -95,7 +200,11 @@ export async function getInvite(token) {
 export async function acceptInvite(token, userId, email, name) {
   const invite = await getInvite(token);
   if (!invite) return { error: 'Invalid invite' };
-  await supabase.from('team_members').upsert({ team_id: invite.team_id, user_id: userId, email, name, role: 'member', status: 'active' });
+  const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+  await supabase.from('team_members').upsert({
+    team_id: invite.team_id, user_id: userId, email, name,
+    role: 'member', designation: 'Team Member', status: 'active', color,
+  });
   await supabase.from('invites').update({ accepted_at: new Date().toISOString() }).eq('token', token);
   return { teamId: invite.team_id, teamName: invite.teams?.name };
 }
@@ -126,65 +235,29 @@ export async function updateTask(id, updates) {
 }
 
 export async function getPastStandups(teamId, limit = 30) {
-  const { data } = await supabase.from('standups').select('*, tasks(*)').eq('team_id', teamId).order('date', { ascending: false }).limit(limit);
+  const { data } = await supabase
+    .from('standups')
+    .select('*, tasks(*)')
+    .eq('team_id', teamId)
+    .order('date', { ascending: false })
+    .limit(limit);
   return data || [];
 }
 
 export function subscribeToTasks(standupId, cb) {
   if (!supabase) return () => {};
   const ch = supabase.channel('tasks-' + standupId)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `standup_id=eq.${standupId}` }, cb)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: 'standup_id=eq.' + standupId }, cb)
     .subscribe();
   return () => supabase.removeChannel(ch);
 }
 
-// ── Storage (avatars) ─────────────────────────────────────────────────────────
+// ── Storage ───────────────────────────────────────────────────────────────────
 export async function uploadAvatar(userId, file) {
   const ext = file.name.split('.').pop();
-  const path = `${userId}.${ext}`;
+  const path = userId + '.' + ext;
   const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
   if (error) return null;
   const { data } = supabase.storage.from('avatars').getPublicUrl(path);
   return data.publicUrl;
-}
-
-// ── Team join via Room ID + password ─────────────────────────────────────────
-export async function createTeamWithCode(name, ownerId, ownerEmail, ownerName, standupName) {
-  const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + Math.random().toString(36).slice(2,6);
-  // Room ID: 6 uppercase letters easy to share
-  const room_id = Math.random().toString(36).slice(2,8).toUpperCase();
-  // Room password: 4 digit PIN
-  const room_password = String(Math.floor(1000 + Math.random() * 9000));
-  const { data: team } = await supabase.from('teams')
-    .insert({ name, slug, owner_id: ownerId, standup_name: standupName||name, room_id, room_password })
-    .select().single();
-  if (team) {
-    await supabase.from('team_members').insert({
-      team_id: team.id, user_id: ownerId, email: ownerEmail,
-      name: ownerName, role: 'manager', status: 'active'
-    });
-  }
-  return team;
-}
-
-export async function joinTeamByCode(roomId, password, userId, email, name) {
-  const { data: team, error } = await supabase.from('teams')
-    .select('*')
-    .eq('room_id', roomId.toUpperCase().trim())
-    .eq('room_password', password.trim())
-    .single();
-  if (error || !team) return { error: 'Invalid Room ID or password. Please check and try again.' };
-  // Check if already a member
-  const { data: existing } = await supabase.from('team_members')
-    .select('id').eq('team_id', team.id).eq('user_id', userId).single();
-  if (existing) return { team, alreadyMember: true };
-  await supabase.from('team_members').insert({
-    team_id: team.id, user_id: userId, email, name, role: 'member', status: 'active'
-  });
-  return { team };
-}
-
-export async function getTeamCode(teamId) {
-  const { data } = await supabase.from('teams').select('room_id,room_password').eq('id', teamId).single();
-  return data;
 }
