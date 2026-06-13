@@ -61,7 +61,9 @@ ${historySummary || 'No history yet'}
 - Use emojis naturally but not excessively
 - Format responses cleanly with bullet points when listing items`;
 
+  // No key — use smart fallback
   if (!GEMINI_KEY) {
+    console.warn('StandSync AI: No REACT_APP_GEMINI_KEY found. Using offline fallback.');
     return generateSmartFallback(userMessage, { tasks, members, myTasks, done, blocked, pct, inProg, userName, teamName });
   }
 
@@ -73,17 +75,41 @@ ${historySummary || 'No history yet'}
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents: [{ parts: [{ text: userMessage }] }],
+          contents: [{ role: 'user', parts: [{ text: userMessage }] }],
           generationConfig: { maxOutputTokens: 1024, temperature: 0.7 }
         })
       }
     );
+
     const data = await response.json();
+
+    // Log full response in dev to help debug
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Gemini raw response:', JSON.stringify(data, null, 2));
+    }
+
+    // Handle Gemini API errors (wrong key, quota exceeded, etc.)
+    if (data.error) {
+      console.error('Gemini API error:', data.error.message);
+      if (data.error.code === 400) return '❌ Invalid Gemini API key. Please check your REACT_APP_GEMINI_KEY in Vercel settings.';
+      if (data.error.code === 429) return '⏳ Gemini API quota exceeded. You\'ve hit the free limit — try again in a minute.';
+      return `❌ AI error: ${data.error.message}`;
+    }
+
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (text) return text;
-    return 'I had trouble processing that. Please try again.';
+
+    // If candidates exist but are blocked (safety filter)
+    if (data.candidates?.[0]?.finishReason === 'SAFETY') {
+      return generateSmartFallback(userMessage, { tasks, members, myTasks, done, blocked, pct, inProg, userName, teamName });
+    }
+
+    // Unexpected empty response — fall back gracefully
+    console.warn('Gemini returned no text. Full response:', data);
+    return generateSmartFallback(userMessage, { tasks, members, myTasks, done, blocked, pct, inProg, userName, teamName });
+
   } catch (e) {
-    console.error('AI error:', e);
+    console.error('AI fetch error:', e);
     return generateSmartFallback(userMessage, { tasks, members, myTasks, done, blocked, pct, inProg, userName, teamName });
   }
 }
@@ -94,7 +120,7 @@ function generateSmartFallback(msg, { tasks, members, myTasks, done, blocked, pc
   if (lower.includes('priority') || lower.includes('focus') || lower.includes('what should')) {
     const critical = myTasks.filter(t => t.priority === 'critical' && t.status !== 'done');
     const high = myTasks.filter(t => t.priority === 'high' && t.status !== 'done');
-    if (critical.length) return `🎯 **Top priority for you right now:**\n\n${critical.map(t=>`🔴 **${t.title}** — Critical${t.timeline?` (due: ${t.timeline})`:''}${t.blocker?`\n   ⚠️ Blocked: ${t.blocker}`:''}`).join('\n\n')}${high.length?`\n\nAlso high priority:\n${high.slice(0,2).map(t=>`🟠 ${t.title}`).join('\n')}`: ''}`;
+    if (critical.length) return `🎯 **Top priority for you right now:**\n\n${critical.map(t=>`🔴 **${t.title}** — Critical${t.timeline?` (due: ${t.timeline})`:''}${t.blocker?`\n   ⚠️ Blocked: ${t.blocker}`:''}`).join('\n\n')}${high.length?`\n\nAlso high priority:\n${high.slice(0,2).map(t=>`🟠 ${t.title}`).join('\n')}`:''}`;
     if (high.length) return `🎯 **Focus on these high-priority tasks:**\n\n${high.map(t=>`🟠 **${t.title}**${t.timeline?` (due: ${t.timeline})`:''}${t.blocker?`\n   ⚠️ ${t.blocker}`:''}`).join('\n\n')}`;
     return `✅ No critical or high-priority tasks pending. You're in good shape! Focus on your in-progress tasks.`;
   }
