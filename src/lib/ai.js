@@ -202,4 +202,4 @@ function smartFallback(msg, { tasks, members, myTasks, done, blocked, pct, inPro
     : `You have ${myTasks.length - myDone} of ${myTasks.length} tasks still pending today.`;
 
   return `Hey ${first}! 😊 ${taskContext}\n\nI can help you with:\n• What to focus on today\n• Your task progress\n• Team performance overview\n• Current blockers\n• Today's standup summary\n\nWhat would you like to know?`;
-}
+}\
