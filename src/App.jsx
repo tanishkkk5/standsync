@@ -724,34 +724,59 @@ const DEMO_MEMBERS=[
 export default function App() {
   const [dark,setDark]=useState(()=>(localStorage.getItem('ss-theme')||'dark')==='dark');
   const toggle=useCallback(()=>setDark(d=>{const n=!d;localStorage.setItem('ss-theme',n?'dark':'light');document.body.style.background=n?'#060412':'#F1F5F9';return n;}),[]);
-  const [session,setSession]=useState(null); const [authLoading,setAuthLoading]=useState(true);
-  const [view,setView]=useState('auth'); const [team,setTeam]=useState(null); const [myRole,setMyRole]=useState('member');
+
+  // SESSION: persisted to sessionStorage so tab switches never lose it
+  const [session,setSession]=useState(()=>{
+    try { const s=sessionStorage.getItem('ss_session'); return s?JSON.parse(s):null; } catch(e){ return null; }
+  });
+  const [authLoading,setAuthLoading]=useState(true);
+  // VIEW: never starts as auth — starts as home if session exists
+  const [view,setView]=useState(()=>{
+    try { const s=sessionStorage.getItem('ss_session'); return s?'home':'auth'; } catch(e){ return 'auth'; }
+  });
+  const [team,setTeam]=useState(null); const [myRole,setMyRole]=useState('member');
   const [members,setMembers]=useState(DEMO_MEMBERS); const [tasks,setTasks]=useState([]); const [standup,setStandup]=useState(null);
   const [history,setHistory]=useState([]); const [messages,setMessages]=useState([]); const [chatTheme,setChatTheme]=useState('default');
   const [toast,setToast]=useState(null); const [emailBusy,setEmailBusy]=useState(false); const [inviteToken,setInviteToken]=useState(null);
   const isManager=myRole==='manager'||!SB.IS_LIVE;
   const showToast=useCallback((msg,type='success')=>setToast({msg,type}),[]);
 
+  // Persist session to sessionStorage whenever it changes
+  useEffect(()=>{
+    if(session){ try{ sessionStorage.setItem('ss_session',JSON.stringify(session)); }catch(e){} }
+    else { try{ sessionStorage.removeItem('ss_session'); }catch(e){} }
+  },[session]);
+
   useEffect(()=>{ const p=new URLSearchParams(window.location.search); const inv=p.get('invite'); if(inv)setInviteToken(inv); },[]);
 
   useEffect(()=>{
     if(!SB.IS_LIVE){setAuthLoading(false);setView('home');return;}
-    // Get session once on mount — don't let auth events touch view
+    // Verify session with Supabase on mount
     SB.getSession().then(s=>{
-      setSession(s);
-      setAuthLoading(false);
-      if(s) setView(v=>v==='auth'?'home':v);
-    });
-    // ONLY act on explicit sign-out — ignore TOKEN_REFRESHED, INITIAL_SESSION, etc.
-    return SB.onAuthChange((event,s)=>{
-      if(event==='SIGNED_OUT'){
-        setSession(null);setTeam(null);setView('auth');
-      } else if(event==='SIGNED_IN'&&s?.session&&!session){
-        setSession(s.session);
-      } else if(event==='TOKEN_REFRESHED'&&s?.session){
-        setSession(s.session); // just update session silently, never touch view
+      if(s){
+        setSession(s);
+        // Only move to home if on auth page — never move away from standup/settings
+        setView(v=>v==='auth'?'home':v);
+      } else {
+        // Clear cached session only if Supabase confirms it's invalid
+        try{ sessionStorage.removeItem('ss_session'); }catch(e){}
+        setSession(null);
+        setView('auth');
       }
+      setAuthLoading(false);
     });
+    // Auth listener: ONLY handle explicit SIGNED_OUT
+    // Do NOT handle any other events — they cause the tab-switch bug
+    if(SB.supabase){
+      const {data:{subscription}} = SB.supabase.auth.onAuthStateChange((event)=>{
+        if(event==='SIGNED_OUT'){
+          setSession(null);setTeam(null);setView('auth');
+          try{ sessionStorage.removeItem('ss_session'); }catch(e){}
+        }
+        // All other events (TOKEN_REFRESHED, INITIAL_SESSION, etc.) = do nothing to view
+      });
+      return ()=>subscription.unsubscribe();
+    }
   },[]);
 
   useEffect(()=>{
@@ -786,11 +811,13 @@ export default function App() {
       <style>{CSS+`select option{background:${dark?'#0D0B24':'#fff'}!important;color:${dark?'#fff':'#1E1B4B'}}input::placeholder,textarea::placeholder{color:${dark?'rgba(255,255,255,.28)':'rgba(0,0,0,.35)'}}`}</style>
       <BgEl/>
       {toast&&<ToastEl msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
-      {view==='auth'&&<AuthPage onLogin={handleLogin} inviteToken={inviteToken}/>}
-      {view==='home'&&(session||!SB.IS_LIVE)&&<HomeView session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onSelectTeam={handleSelectTeam} onLogout={handleLogout} onSettings={()=>setView('settings')}/>}
-      {view==='settings'&&(session||!SB.IS_LIVE)&&<SettingsPage session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onBack={()=>setView(team?'standup':'home')} onSaved={d=>showToast('✅ Profile saved')}/>}
-      {view==='standup'&&(session||!SB.IS_LIVE)&&isManager&&<ManagerView session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>setView('home')} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme}/>}
-      {view==='standup'&&(session||!SB.IS_LIVE)&&!isManager&&<MemberView user={userForView} myMember={myMember} tasks={tasks} onAdd={handleAddTask} onStatus={handleStatus} onBlocker={handleBlocker} onBack={()=>setView('home')} onSettings={()=>setView('settings')} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} members={members} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme}/>}
+      {/* Auth gate: show login only when NO session exists */}
+      {(!session&&!SB.IS_LIVE===false?!session:!session)&&view==='auth'&&<AuthPage onLogin={handleLogin} inviteToken={inviteToken}/>}
+      {/* App views: show when session exists OR demo mode */}
+      {(session||!SB.IS_LIVE)&&view==='home'&&<HomeView session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onSelectTeam={handleSelectTeam} onLogout={handleLogout} onSettings={()=>setView('settings')}/>}
+      {(session||!SB.IS_LIVE)&&view==='settings'&&<SettingsPage session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onBack={()=>setView(team?'standup':'home')} onSaved={d=>showToast('Profile saved')}/>}
+      {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>setView('home')} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme}/>}
+      {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<MemberView user={userForView} myMember={myMember} tasks={tasks} onAdd={handleAddTask} onStatus={handleStatus} onBlocker={handleBlocker} onBack={()=>setView('home')} onSettings={()=>setView('settings')} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} members={members} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme}/>}
     </ThemeCtx.Provider>
   );
 }
