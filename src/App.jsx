@@ -217,10 +217,14 @@ function AuthPage({ onLogin, inviteToken }) {
 // ─── HOME — multiple teams/projects ───────────────────────────────────────────
 function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
   const c=useC(); const [teams,setTeams]=useState([]); const [loading,setLoading]=useState(true);
-  const [showCreate,setShowCreate]=useState(false); const [step,setStep]=useState(1);
+  const [showCreate,setShowCreate]=useState(false); const [showJoin,setShowJoin]=useState(false);
+  const [step,setStep]=useState(1);
   const [teamName,setTeamName]=useState(''); const [standupName,setStandupName]=useState('');
   const [standupTime,setStandupTime]=useState('09:00'); const [standupDays,setStandupDays]=useState(['Mon','Tue','Wed','Thu','Fri','Sat']);
   const [memberEmails,setMemberEmails]=useState(['']); const [creating,setCreating]=useState(false);
+  const [roomId,setRoomId]=useState(''); const [roomPass,setRoomPass]=useState('');
+  const [joinLoading,setJoinLoading]=useState(false); const [joinError,setJoinError]=useState('');
+  const [createdCode,setCreatedCode]=useState(null);
   const name=session?.user?.user_metadata?.name||session?.user?.email?.split('@')[0]||'there';
 
   useEffect(()=>{ if(!SB.IS_LIVE){setLoading(false);return;} SB.getMyTeams(session.user.id).then(d=>{setTeams(d);setLoading(false);}); },[session]);
@@ -236,9 +240,29 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
       team=await SB.createTeam(teamName.trim(),session.user.id,session.user.email,myName,standupName.trim());
       const validEmails=memberEmails.filter(e=>e.trim()&&e.includes('@'));
       for(const em of validEmails){const {link}=await SB.inviteMember(team.id,teamName,em,myName);await Email.sendInvite(em,myName,teamName,link);}
-    } else {team={id:'demo_'+Date.now(),name:teamName,standup_name:standupName||teamName,standup_time:standupTime,standup_days:standupDays};}
-    setCreating(false);setShowCreate(false);setStep(1);setTeamName('');setStandupName('');setMemberEmails(['']);
-    onSelectTeam(team,'manager');
+      // Get the room code to show user
+      const code = await SB.getTeamCode(team.id);
+      if(code) setCreatedCode({...code, teamName:teamName.trim()});
+    } else {
+      team={id:'demo_'+Date.now(),name:teamName,standup_name:standupName||teamName};
+    }
+    setCreating(false);
+    if(!createdCode) { setShowCreate(false); setStep(1); setTeamName(''); setStandupName(''); setMemberEmails(['']); onSelectTeam(team,'manager'); }
+  };
+
+  const joinTeam=async()=>{
+    if(!roomId.trim()||!roomPass.trim()){setJoinError('Enter both Room ID and password');return;}
+    setJoinLoading(true); setJoinError('');
+    if(SB.IS_LIVE){
+      const myName=session?.user?.user_metadata?.name||session?.user?.email;
+      const result=await SB.joinTeamByCode(roomId,roomPass,session.user.id,session.user.email,myName);
+      if(result.error){setJoinError(result.error);setJoinLoading(false);return;}
+      setShowJoin(false);setRoomId('');setRoomPass('');
+      onSelectTeam(result.team,'member');
+    } else {
+      setJoinError('Demo mode — connect Supabase to use Room ID join');
+    }
+    setJoinLoading(false);
   };
 
   const PROJECT_ICONS = ['⚡','🚀','🎯','🔥','💡','🌟','🏗️','🎨','🔬','📱'];
@@ -252,8 +276,19 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
       </div>
       <div style={{ maxWidth:900,margin:'0 auto',padding:'40px 24px' }}>
         <h1 style={{ fontSize:26,fontWeight:800,color:c.text,letterSpacing:'-.025em',marginBottom:6 }}>Good morning, {name} 👋</h1>
-        <p style={{ color:c.mut,fontSize:15,marginBottom:32 }}>Your teams and projects — select one to start or create a new one.</p>
+        <p style={{ color:c.mut,fontSize:15,marginBottom:28 }}>Your teams and projects — select one or join / create a new one.</p>
         {!SB.IS_LIVE&&<div style={{ background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.3)',borderRadius:12,padding:'14px 18px',marginBottom:24,fontSize:13,color:'#FCD34D' }}>⚡ Demo mode — configure Supabase for real login and data persistence</div>}
+        {/* Join Team banner for new users with no teams */}
+        {!loading&&teams.length===0&&SB.IS_LIVE&&(
+          <div style={{ background:'rgba(99,102,241,.08)',border:'1px solid rgba(99,102,241,.25)',borderRadius:14,padding:'20px 24px',marginBottom:24,display:'flex',alignItems:'center',gap:16 }}>
+            <div style={{ fontSize:32 }}>🔑</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:15,fontWeight:700,color:c.text,marginBottom:4 }}>Got a Room ID?</div>
+              <div style={{ fontSize:13,color:c.mut }}>If your manager shared a Room ID and password, click Join Team to get in instantly.</div>
+            </div>
+            <Btn onClick={()=>setShowJoin(true)} style={{ flexShrink:0 }}>🔑 Join a team</Btn>
+          </div>
+        )}
         {loading?<div style={{ display:'flex',justifyContent:'center',padding:40 }}><Spin/></div>:(
           <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:14 }}>
             {teams.map((tm,i)=>(
@@ -261,20 +296,74 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
                 <div style={{ width:48,height:48,borderRadius:14,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:14,fontSize:22 }}>{PROJECT_ICONS[i%PROJECT_ICONS.length]}</div>
                 <div style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:4 }}>{tm.teams?.name}</div>
                 <div style={{ fontSize:12,color:c.mut,marginBottom:8,textTransform:'capitalize' }}>{tm.role} · {tm.teams?.standup_name||'Daily standup'}</div>
-                <div style={{ display:'flex',gap:6 }}>
-                  <span style={{ fontSize:11,background:'rgba(99,102,241,.12)',color:'#818CF8',padding:'3px 8px',borderRadius:20 }}>Active</span>
-                </div>
+                <div style={{ display:'flex',gap:6 }}><span style={{ fontSize:11,background:'rgba(99,102,241,.12)',color:'#818CF8',padding:'3px 8px',borderRadius:20 }}>Active</span></div>
               </Card>
             ))}
             <Card onClick={()=>setShowCreate(true)} style={{ padding:'22px',cursor:'pointer',border:`1.5px dashed ${c.bord}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:10,minHeight:140 }}>
               <div style={{ width:40,height:40,borderRadius:'50%',background:'rgba(99,102,241,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22 }}>+</div>
               <div style={{ fontSize:14,color:c.sub,fontWeight:600 }}>New team / project</div>
-              <div style={{ fontSize:12,color:c.mut,textAlign:'center' }}>Standup, sprint, or any recurring meeting</div>
+              <div style={{ fontSize:12,color:c.mut,textAlign:'center' }}>Standup, sprint, or any meeting</div>
             </Card>
+            {teams.length>0&&(
+              <Card onClick={()=>setShowJoin(true)} style={{ padding:'22px',cursor:'pointer',border:`1.5px dashed ${c.bord}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:10,minHeight:140 }}>
+                <div style={{ width:40,height:40,borderRadius:'50%',background:'rgba(99,102,241,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22 }}>🔑</div>
+                <div style={{ fontSize:14,color:c.sub,fontWeight:600 }}>Join a team</div>
+                <div style={{ fontSize:12,color:c.mut,textAlign:'center' }}>Enter Room ID + password</div>
+              </Card>
+            )}
           </div>
         )}
       </div>
-      {showCreate&&(
+
+      {/* JOIN TEAM MODAL */}
+      {showJoin&&(
+        <Modal onClose={()=>{setShowJoin(false);setJoinError('');setRoomId('');setRoomPass('');}} title="Join a team" width={440}>
+          <div style={{ textAlign:'center',marginBottom:20 }}>
+            <div style={{ fontSize:40,marginBottom:8 }}>🔑</div>
+            <p style={{ fontSize:13,color:c.mut,lineHeight:1.6 }}>Ask your manager for the Room ID and password. They can find it in Team Settings.</p>
+          </div>
+          <Inp label="Room ID" value={roomId} onChange={e=>setRoomId(e.target.value.toUpperCase())} placeholder="e.g. XK9P2M" style={{ marginBottom:14,letterSpacing:'.1em',textTransform:'uppercase',fontSize:16,textAlign:'center' }} autoFocus/>
+          <Inp label="Room password" type="password" value={roomPass} onChange={e=>setRoomPass(e.target.value)} placeholder="4-digit PIN" style={{ marginBottom:18,textAlign:'center',fontSize:16,letterSpacing:'.15em' }} onKeyDown={e=>e.key==='Enter'&&joinTeam()}/>
+          {joinError&&<div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#F87171',marginBottom:14 }}>{joinError}</div>}
+          <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}>
+            <Btn v="ghost" onClick={()=>{setShowJoin(false);setJoinError('');setRoomId('');setRoomPass('');}}>Cancel</Btn>
+            <Btn onClick={joinTeam} loading={joinLoading} disabled={!roomId.trim()||!roomPass.trim()}>Join team →</Btn>
+          </div>
+          <div style={{ marginTop:16,padding:'12px 14px',background:'rgba(99,102,241,.08)',border:'1px solid rgba(99,102,241,.2)',borderRadius:10,fontSize:12,color:c.mut }}>
+            💡 Don't have a Room ID? Ask your manager to share it from Team Settings → Room code, or ask them to send you an email invite instead.
+          </div>
+        </Modal>
+      )}
+
+      {/* ROOM CODE REVEAL after team creation */}
+      {createdCode&&(
+        <Modal onClose={()=>{setCreatedCode(null);setShowCreate(false);setStep(1);setTeamName('');setStandupName('');setMemberEmails(['']);}} title="Team created! 🎉" width={460}>
+          <p style={{ fontSize:13,color:c.mut,marginBottom:20,lineHeight:1.6 }}>Share these details with your team members so they can join instantly. They'll need both the Room ID and password.</p>
+          <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:20 }}>
+            <div style={{ background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.3)',borderRadius:12,padding:'16px',textAlign:'center' }}>
+              <div style={{ fontSize:11,color:'#818CF8',fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8 }}>Room ID</div>
+              <div style={{ fontSize:28,fontWeight:800,color:'#818CF8',letterSpacing:'.15em' }}>{createdCode.room_id}</div>
+            </div>
+            <div style={{ background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.3)',borderRadius:12,padding:'16px',textAlign:'center' }}>
+              <div style={{ fontSize:11,color:'#34D399',fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8 }}>Password</div>
+              <div style={{ fontSize:28,fontWeight:800,color:'#34D399',letterSpacing:'.15em' }}>{createdCode.room_password}</div>
+            </div>
+          </div>
+          <div style={{ background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:10,padding:'12px 14px',fontSize:12,color:'#FCD34D',marginBottom:20 }}>
+            ⚠️ Save these somewhere safe — you can always find them again in Team Settings → Room code.
+          </div>
+          <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}>
+            <Btn onClick={()=>{
+              const t=teams.find(x=>x.teams?.name===createdCode.teamName);
+              setCreatedCode(null);setShowCreate(false);setStep(1);setTeamName('');setStandupName('');setMemberEmails(['']);
+              SB.getMyTeams(session.user.id).then(d=>setTeams(d));
+            }} style={{ background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none' }}>Go to dashboard →</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* CREATE TEAM MODAL */}
+      {showCreate&&!createdCode&&(
         <Modal onClose={()=>{setShowCreate(false);setStep(1);}} title={`Create team — Step ${step} of 3`} width={540}>
           {step===1&&(
             <>
@@ -297,7 +386,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
           )}
           {step===3&&(
             <>
-              <p style={{ fontSize:13,color:c.mut,marginBottom:16 }}>Add team members by email. They'll receive an invite link.</p>
+              <p style={{ fontSize:13,color:c.mut,marginBottom:16 }}>Add team members by email. They'll receive an invite link. You can also share the Room ID after creation.</p>
               {memberEmails.map((em,i)=>(
                 <div key={i} style={{ display:'flex',gap:8,marginBottom:10 }}>
                   <Inp value={em} onChange={e=>setMemberEmails(p=>p.map((x,idx)=>idx===i?e.target.value:x))} placeholder={`member${i+1}@company.com`} type="email" style={{ flex:1 }}/>
@@ -314,339 +403,6 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
   );
 }
 
-// ─── AI ASSISTANT ─────────────────────────────────────────────────────────────
-function AIAssistant({ tasks, members, history, session, myTasks, teamName }) {
-  const c=useC();
-  const [messages,setMessages]=useState([
-    { id:'welcome',role:'assistant',text:`👋 Hi! I'm your StandSync AI assistant.\n\nI know your tasks, team progress, blockers, and history. Ask me anything:\n\n• "What should I focus on today?"\n• "How is the team doing?"\n• "Any blockers I should know about?"\n• "Give me today's summary"\n\nWhat would you like to know?` }
-  ]);
-  const [input,setInput]=useState(''); const [loading,setLoading]=useState(false); const bottomRef=useRef();
-  const name=session?.user?.user_metadata?.name||session?.user?.email?.split('@')[0]||'User';
-
-  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:'smooth'}); },[messages]);
-
-  const send=async()=>{
-    if(!input.trim()||loading) return;
-    const userMsg={id:'u'+Date.now(),role:'user',text:input.trim()};
-    setMessages(p=>[...p,userMsg]); setInput(''); setLoading(true);
-    try {
-      const reply=await askAI(input.trim(),{tasks,members,history,teamName,userName:name,myTasks});
-      setMessages(p=>[...p,{id:'a'+Date.now(),role:'assistant',text:reply}]);
-    } catch(e) {
-      setMessages(p=>[...p,{id:'e'+Date.now(),role:'assistant',text:'Sorry, I had trouble with that. Please try again.'}]);
-    }
-    setLoading(false);
-  };
-
-  const QUICK = ['What should I focus on today?','How\'s my progress?','Any blockers?','Team summary','Who\'s performing best?'];
-
-  const cleanAI=(t)=>t.replace(/\*\*(.+?)\*\*/g,'$1').replace(/\*(.+?)\*/g,'$1').replace(/^#{1,6}\s+/gm,'').replace(/`(.+?)`/g,'$1').replace(/^[-*]\s+/gm,'• ');
-  const formatText=(text)=>{
-    return cleanAI(text).split('\n').map((line,i)=>{
-      if(line.trim()==='') return <div key={i} style={{ height:6 }}/>;
-      if(line.startsWith('• ')) return <div key={i} style={{ paddingLeft:14,marginBottom:3,color:c.sub,lineHeight:1.6,display:'flex',gap:6 }}><span style={{flexShrink:0}}>•</span><span>{line.slice(2)}</span></div>;
-      return <div key={i} style={{ marginBottom:3,color:c.sub,lineHeight:1.6 }}>{line}</div>;
-    });
-  };
-
-  return (
-    <div style={{ display:'flex',flexDirection:'column',height:'calc(100vh - 130px)',minHeight:500 }}>
-      {/* Quick actions */}
-      <div style={{ padding:'0 0 12px',display:'flex',gap:6,flexWrap:'wrap' }}>
-        {QUICK.map(q=>(
-          <button key={q} onClick={()=>{setInput(q);}} style={{ fontSize:11,padding:'5px 11px',borderRadius:20,border:`1px solid ${c.bord}`,background:c.surf,color:c.mut,cursor:'pointer',transition:'all .15s',whiteSpace:'nowrap' }} onMouseEnter={e=>e.currentTarget.style.borderColor='#818CF8'} onMouseLeave={e=>e.currentTarget.style.borderColor=c.bord}>{q}</button>
-        ))}
-      </div>
-      {/* Messages */}
-      <div style={{ flex:1,overflowY:'auto',display:'flex',flexDirection:'column',gap:12,paddingBottom:12 }}>
-        {messages.map(m=>(
-          <div key={m.id} style={{ display:'flex',gap:10,alignItems:'flex-start',flexDirection:m.role==='user'?'row-reverse':'row' }}>
-            {m.role==='assistant'&&<div style={{ width:32,height:32,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>🤖</div>}
-            <div style={{ maxWidth:'80%',background:m.role==='user'?'linear-gradient(135deg,#6366F1,#818CF8)':c.surf,color:m.role==='user'?'#fff':c.text,padding:'11px 14px',borderRadius:m.role==='user'?'14px 14px 4px 14px':'14px 14px 14px 4px',fontSize:13,lineHeight:1.55,border:m.role==='user'?'none':`1px solid ${c.bord}` }}>
-              {m.role==='assistant'?formatText(m.text):m.text}
-            </div>
-          </div>
-        ))}
-        {loading&&(
-          <div style={{ display:'flex',gap:10,alignItems:'flex-start' }}>
-            <div style={{ width:32,height:32,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>🤖</div>
-            <div style={{ background:c.surf,border:`1px solid ${c.bord}`,padding:'11px 14px',borderRadius:'14px 14px 14px 4px',display:'flex',gap:4,alignItems:'center' }}>
-              {[0,1,2].map(i=><div key={i} style={{ width:7,height:7,borderRadius:'50%',background:'#818CF8',animation:`bounce .8s ease ${i*.15}s infinite` }}/>)}
-            </div>
-          </div>
-        )}
-        <div ref={bottomRef}/>
-      </div>
-      {/* Input */}
-      <div style={{ display:'flex',gap:8,paddingTop:12,borderTop:`1px solid ${c.bord}` }}>
-        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&send()} placeholder="Ask me about your tasks, team, priorities..." style={{ flex:1,background:c.inp,border:`1.5px solid ${c.inpB}`,borderRadius:10,padding:'10px 14px',color:c.text,fontSize:14,outline:'none' }}/>
-        <button onClick={send} disabled={!input.trim()||loading} style={{ width:42,height:42,borderRadius:10,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',color:'#fff',cursor:input.trim()&&!loading?'pointer':'not-allowed',opacity:input.trim()&&!loading?1:.5,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0 }}>↑</button>
-      </div>
-      {!process.env.REACT_APP_ANTHROPIC_KEY&&<div style={{ fontSize:11,color:c.mut,textAlign:'center',marginTop:6 }}>⚙️ Add REACT_APP_ANTHROPIC_KEY to Vercel for full AI responses</div>}
-    </div>
-  );
-}
-
-// ─── RICH CHAT ────────────────────────────────────────────────────────────────
-const GIPHY_KEY = process.env.REACT_APP_GIPHY_KEY || 'dc6zaTOxFJmzC'; // public beta key
-
-function RichChatPanel({ messages, onSend, session, members, chatTheme, onChangeTheme }) {
-  const c=useC(); const [msg,setMsg]=useState(''); const [showGif,setShowGif]=useState(false);
-  const [gifSearch,setGifSearch]=useState(''); const [gifs,setGifs]=useState([]); const [showTheme,setShowTheme]=useState(false);
-  const [imgLoading,setImgLoading]=useState(false);
-  const bottomRef=useRef(); const fileRef=useRef();
-  const myEmail=session?.user?.email||'demo@standsync.app';
-  const myName=session?.user?.user_metadata?.name||myEmail.split('@')[0];
-
-  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:'smooth'}); },[messages]);
-
-  const theme=CHAT_THEMES.find(t=>t.id===chatTheme)||CHAT_THEMES[0];
-
-  const sendMsg=(text,type='text',url='')=>{
-    if(!text.trim()&&type==='text') return;
-    onSend({id:'m'+Date.now(),text:type==='text'?text.trim():'',type,url,sender_email:myEmail,sender_name:myName,created_at:new Date().toISOString()});
-    if(type==='text') setMsg('');
-    setShowGif(false);setShowTheme(false);
-  };
-
-  const searchGifs=async(q)=>{
-    if(!q.trim()) return;
-    try {
-      const r=await fetch(`https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_KEY}&q=${encodeURIComponent(q)}&limit=12&rating=g`);
-      const d=await r.json();
-      setGifs(d.data||[]);
-    } catch(e) { setGifs([]); }
-  };
-
-  const handleImage=async(e)=>{
-    const file=e.target.files[0]; if(!file) return;
-    setImgLoading(true);
-    const reader=new FileReader();
-    reader.onload=ev=>{ sendMsg('',  'image',ev.target.result); setImgLoading(false); };
-    reader.readAsDataURL(file);
-  };
-
-  const renderMsg=(m)=>{
-    if(m.type==='image') return <img src={m.url} alt="shared" style={{ maxWidth:240,maxHeight:240,borderRadius:10,objectFit:'cover' }}/>;
-    if(m.type==='gif') return <img src={m.url} alt="gif" style={{ maxWidth:240,borderRadius:10 }}/>;
-    return <span style={{ lineHeight:1.55 }}>{m.text}</span>;
-  };
-
-  return (
-    <div style={{ display:'flex',flexDirection:'column',height:'calc(100vh - 130px)',minHeight:500,borderRadius:16,overflow:'hidden',border:`1px solid ${c.bord}` }}>
-      {/* Chat header with theme */}
-      <div style={{ padding:'12px 16px',background:c.nav,borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',gap:10 }}>
-        <div style={{ display:'flex',gap:-6 }}>{members.slice(0,4).map((m,i)=><div key={m.id||m.email} style={{ marginLeft:i>0?-8:0,zIndex:4-i }}><Av member={m} size={28} url={m.avatar_url}/></div>)}</div>
-        <div style={{ flex:1 }}><div style={{ fontSize:13,fontWeight:700,color:c.text }}>Team Chat</div><div style={{ fontSize:11,color:c.mut }}>{members.length} members</div></div>
-        <button onClick={()=>setShowTheme(!showTheme)} style={{ width:32,height:32,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16 }} title="Change theme">🎨</button>
-        {showTheme&&(
-          <div style={{ position:'absolute',right:24,top:200,background:c.dark?'rgba(18,15,50,.98)':'#fff',border:`1px solid ${c.bord}`,borderRadius:14,padding:12,zIndex:200,backdropFilter:'blur(20px)',animation:'slideDown .2s ease',width:280 }}>
-            <div style={{ fontSize:12,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:10 }}>Chat theme</div>
-            <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8 }}>
-              {CHAT_THEMES.map(t=>(
-                <button key={t.id} onClick={()=>{onChangeTheme(t.id);setShowTheme(false);}} style={{ padding:'10px 6px',borderRadius:10,border:`2px solid ${chatTheme===t.id?t.accent:c.bord}`,background:t.bg,cursor:'pointer',textAlign:'center',transition:'all .2s' }}>
-                  <div style={{ fontSize:10,fontWeight:600,color:chatTheme===t.id?t.accent:'rgba(255,255,255,.6)' }}>{t.label}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-      {/* Messages */}
-      <div style={{ flex:1,overflowY:'auto',padding:'16px',display:'flex',flexDirection:'column',gap:4,background:theme.bg }}>
-        {messages.length===0&&(
-          <div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.4)',gap:10 }}>
-            <div style={{ fontSize:40 }}>💬</div>
-            <div style={{ fontSize:14 }}>No messages yet — say hello!</div>
-          </div>
-        )}
-        {messages.map(m=>{
-          const isMe=m.sender_email===myEmail;
-          const member=members.find(x=>x.email===m.sender_email);
-          const color=member?.color||theme.accent;
-          return (
-            <div key={m.id} style={{ display:'flex',gap:8,alignItems:'flex-end',marginBottom:4,flexDirection:isMe?'row-reverse':'row' }}>
-              {!isMe&&<Av member={{name:m.sender_name,color}} size={28} url={member?.avatar_url}/>}
-              <div style={{ maxWidth:'70%' }}>
-                {!isMe&&<div style={{ fontSize:10,color:'rgba(255,255,255,.45)',marginBottom:3,marginLeft:4 }}>{m.sender_name}</div>}
-                <div style={{ background:isMe?`linear-gradient(135deg,${theme.accent},${theme.accent}cc)`:'rgba(255,255,255,.1)',color:'#fff',padding:m.type!=='text'?6:'9px 13px',borderRadius:isMe?'14px 14px 4px 14px':'14px 14px 14px 4px',fontSize:13,border:'none',backdropFilter:'blur(10px)' }}>
-                  {renderMsg(m)}
-                </div>
-                <div style={{ fontSize:10,color:'rgba(255,255,255,.3)',marginTop:3,textAlign:isMe?'right':'left',paddingLeft:isMe?0:4,paddingRight:isMe?4:0 }}>{new Date(m.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>
-              </div>
-            </div>
-          );
-        })}
-        <div ref={bottomRef}/>
-      </div>
-      {/* GIF picker */}
-      {showGif&&(
-        <div style={{ padding:'12px 16px',background:c.nav,borderTop:`1px solid ${c.bord}` }}>
-          <div style={{ display:'flex',gap:8,marginBottom:10 }}>
-            <input value={gifSearch} onChange={e=>setGifSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&searchGifs(gifSearch)} placeholder="Search GIFs..." style={{ flex:1,background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:8,padding:'7px 12px',color:c.text,fontSize:13,outline:'none' }}/>
-            <Btn onClick={()=>searchGifs(gifSearch)} style={{ padding:'7px 14px',fontSize:12 }}>Search</Btn>
-            <button onClick={()=>setShowGif(false)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:18 }}>×</button>
-          </div>
-          {gifs.length>0&&<div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,maxHeight:160,overflowY:'auto' }}>
-            {gifs.map(g=><img key={g.id} src={g.images.fixed_height_small.url} alt={g.title} onClick={()=>sendMsg('','gif',g.images.fixed_height.url)} style={{ width:'100%',height:80,objectFit:'cover',borderRadius:8,cursor:'pointer',transition:'opacity .15s' }} onMouseEnter={e=>e.target.style.opacity='.7'} onMouseLeave={e=>e.target.style.opacity='1'}/>)}
-          </div>}
-        </div>
-      )}
-      {/* Input */}
-      <div style={{ padding:'12px 16px',background:c.nav,borderTop:`1px solid ${c.bord}`,display:'flex',gap:8,alignItems:'center' }}>
-        <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} style={{ display:'none' }}/>
-        <button onClick={()=>fileRef.current.click()} disabled={imgLoading} style={{ width:36,height:36,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0 }} title="Send image">🖼️</button>
-        <button onClick={()=>setShowGif(!showGif)} style={{ width:36,height:36,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0 }} title="Send GIF">GIF</button>
-        <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&sendMsg(msg)} placeholder="Message your team..." style={{ flex:1,background:c.inp,border:`1.5px solid ${c.inpB}`,borderRadius:10,padding:'10px 14px',color:c.text,fontSize:14,outline:'none' }}/>
-        <button onClick={()=>sendMsg(msg)} disabled={!msg.trim()} style={{ width:40,height:40,borderRadius:10,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',color:'#fff',cursor:msg.trim()?'pointer':'not-allowed',opacity:msg.trim()?1:.5,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0 }}>↑</button>
-      </div>
-    </div>
-  );
-}
-
-// ─── REMINDERS PANEL ──────────────────────────────────────────────────────────
-function RemindersPanel({ team, members, session }) {
-  const c=useC();
-  const [reminders,setReminders]=useState([
-    {id:'r1',type:'standup_start',label:'Standup starting soon',enabled:true,minutes:10,email:true},
-    {id:'r2',type:'task_deadline',label:'Task deadline reminder',enabled:true,minutes:60,email:true},
-    {id:'r3',type:'eod_incomplete',label:'EOD incomplete tasks',enabled:true,minutes:0,time:'18:00',email:true},
-    {id:'r4',type:'blocker_followup',label:'Blocker follow-up',enabled:false,minutes:120,email:true},
-  ]);
-  const [saved,setSaved]=useState(false);
-
-  const toggle=(id)=>setReminders(p=>p.map(r=>r.id===id?{...r,enabled:!r.enabled}:r));
-  const updateMins=(id,v)=>setReminders(p=>p.map(r=>r.id===id?{...r,minutes:parseInt(v)||0}:r));
-  const save=()=>{setSaved(true);setTimeout(()=>setSaved(false),2000);};
-
-  return (
-    <div>
-      <div style={{ marginBottom:20 }}>
-        <div style={{ fontSize:15,fontWeight:700,color:c.text,marginBottom:4 }}>Reminders & notifications</div>
-        <div style={{ fontSize:13,color:c.mut }}>Set up automatic reminders for your team. All reminders are sent via email.</div>
-      </div>
-      <div style={{ display:'flex',flexDirection:'column',gap:12,marginBottom:20 }}>
-        {reminders.map(r=>(
-          <Card key={r.id} style={{ padding:'16px 18px' }}>
-            <div style={{ display:'flex',alignItems:'center',gap:12 }}>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:14,fontWeight:600,color:c.text,marginBottom:2 }}>{r.label}</div>
-                <div style={{ fontSize:12,color:c.mut }}>
-                  {r.type==='eod_incomplete'?`Sends at ${r.time||'6:00 PM'} if tasks are pending`:`${r.minutes} minutes before deadline`}
-                </div>
-              </div>
-              {r.type!=='eod_incomplete'&&r.enabled&&(
-                <div style={{ display:'flex',alignItems:'center',gap:6 }}>
-                  <input type="number" value={r.minutes} onChange={e=>updateMins(r.id,e.target.value)} min="5" max="480" style={{ width:64,background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:8,padding:'5px 8px',color:c.text,fontSize:13,outline:'none',textAlign:'center' }}/>
-                  <span style={{ fontSize:12,color:c.mut }}>min</span>
-                </div>
-              )}
-              {/* Toggle switch */}
-              <button onClick={()=>toggle(r.id)} style={{ width:44,height:24,borderRadius:12,border:'none',background:r.enabled?'#6366F1':'rgba(128,128,128,.3)',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0 }}>
-                <div style={{ width:18,height:18,borderRadius:'50%',background:'#fff',position:'absolute',top:3,left:r.enabled?23:3,transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,.2)' }}/>
-              </button>
-            </div>
-          </Card>
-        ))}
-      </div>
-      <Card style={{ padding:'16px 18px',marginBottom:20,background:'rgba(99,102,241,.08)',border:'1px solid rgba(99,102,241,.2)' }}>
-        <div style={{ fontSize:13,fontWeight:600,color:'#818CF8',marginBottom:6 }}>📧 Email delivery</div>
-        <div style={{ fontSize:12,color:c.mut,lineHeight:1.6 }}>Reminders are sent to all team members' registered emails. Make sure your Resend API key is configured in Vercel environment variables for emails to work.</div>
-      </Card>
-      <Btn onClick={save} style={{ minWidth:140 }}>{saved?'✓ Saved!':'Save reminders'}</Btn>
-    </div>
-  );
-}
-
-// ─── GOOGLE CALENDAR ──────────────────────────────────────────────────────────
-function CalendarPanel({ team, members, session }) {
-  const c=useC(); const [connected,setConnected]=useState(false); const [selectedMeeting,setSelectedMeeting]=useState(null);
-  const [importedMembers,setImportedMembers]=useState([]); const [step,setStep]=useState(1);
-  const MOCK = [
-    {id:'m1',title:team?.standup_name||'Supa Daily Standup',time:'9:00 AM',days:'Mon–Sat',attendees:['tanisk.pandey@xtransmatrix.com','deepak.nr@xtransmatrix.com','madhan.m@xtransmatrix.com','monica@xtransmatrix.com','sandhya.a@xtransmatrix.com','zeeba.kauser@xtransmatrix.com']},
-    {id:'m2',title:'Weekly Review',time:'3:00 PM',days:'Fridays',attendees:['tanisk.pandey@xtransmatrix.com','deepak.nr@xtransmatrix.com']},
-    {id:'m3',title:'Sprint Planning',time:'10:00 AM',days:'Mondays',attendees:['tanisk.pandey@xtransmatrix.com','madhan.m@xtransmatrix.com','sandhya.a@xtransmatrix.com']},
-  ];
-  const selectedMeet=MOCK.find(m=>m.id===selectedMeeting);
-
-  if(!connected) return (
-    <div style={{ textAlign:'center',padding:'40px 20px' }}>
-      <div style={{ fontSize:52,marginBottom:16 }}>📅</div>
-      <h3 style={{ fontSize:17,fontWeight:700,color:c.text,marginBottom:8 }}>Connect Google Calendar</h3>
-      <p style={{ fontSize:13,color:c.mut,marginBottom:28,lineHeight:1.7,maxWidth:400,margin:'0 auto 28px' }}>Sign in with your Google account to link your calendar. StandSync will find your standup meetings and let you select members directly from meeting invites.</p>
-      <Btn v="google" onClick={()=>setConnected(true)} style={{ padding:'13px 28px',fontSize:14,fontWeight:600,margin:'0 auto' }}>
-        <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-        Connect with Google
-      </Btn>
-      <div style={{ marginTop:20,padding:'14px 18px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:12,fontSize:12,color:c.mut,maxWidth:400,margin:'20px auto 0',textAlign:'left' }}>
-        <div style={{ fontWeight:700,color:'#FCD34D',marginBottom:6 }}>⚙️ Setup required first:</div>
-        <div>1. Go to console.cloud.google.com → New project</div>
-        <div>2. Enable Google Calendar API</div>
-        <div>3. Create OAuth 2.0 credentials</div>
-        <div>4. Add Client ID to Vercel as REACT_APP_GOOGLE_CLIENT_ID</div>
-        <div>5. Enable Google provider in Supabase Auth</div>
-      </div>
-    </div>
-  );
-
-  return (
-    <div>
-      <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:20 }}>
-        <div style={{ width:10,height:10,borderRadius:'50%',background:'#34D399' }}/>
-        <span style={{ fontSize:13,color:'#34D399',fontWeight:600 }}>Google Calendar connected</span>
-        <button onClick={()=>setConnected(false)} style={{ marginLeft:'auto',fontSize:12,color:c.mut,background:'none',border:'none',cursor:'pointer' }}>Disconnect</button>
-      </div>
-      {step===1&&(
-        <>
-          <Lbl>Your meetings — select one to track</Lbl>
-          <div style={{ display:'flex',flexDirection:'column',gap:10,marginBottom:16 }}>
-            {MOCK.map(m=>(
-              <div key={m.id} onClick={()=>setSelectedMeeting(m.id===selectedMeeting?null:m.id)} style={{ padding:'14px 16px',borderRadius:12,border:`1.5px solid ${m.id===selectedMeeting?'#6366F1':c.bord}`,background:m.id===selectedMeeting?'rgba(99,102,241,.1)':c.surf,cursor:'pointer',transition:'all .2s' }}>
-                <div style={{ display:'flex',alignItems:'center',gap:12 }}>
-                  <div style={{ width:38,height:38,borderRadius:10,background:m.id===selectedMeeting?'#6366F1':'rgba(99,102,241,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0 }}>📅</div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:14,fontWeight:600,color:c.text }}>{m.title}</div>
-                    <div style={{ fontSize:12,color:c.mut }}>{m.time} · {m.days} · {m.attendees.length} attendees</div>
-                  </div>
-                  {m.id===selectedMeeting&&<div style={{ width:22,height:22,borderRadius:'50%',background:'#6366F1',display:'flex',alignItems:'center',justifyContent:'center' }}><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg></div>}
-                </div>
-              </div>
-            ))}
-          </div>
-          {selectedMeeting&&<Btn onClick={()=>setStep(2)}>Select members from this meeting →</Btn>}
-        </>
-      )}
-      {step===2&&selectedMeet&&(
-        <>
-          <Lbl>Select members to add to StandSync</Lbl>
-          <p style={{ fontSize:13,color:c.mut,marginBottom:14 }}>These people are invited to "{selectedMeet.title}". Choose who to add.</p>
-          <div style={{ marginBottom:14 }}>
-            <button onClick={()=>setImportedMembers(selectedMeet.attendees)} style={{ fontSize:12,color:'#818CF8',background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.25)',borderRadius:8,padding:'6px 12px',cursor:'pointer',marginBottom:12 }}>Select all ({selectedMeet.attendees.length})</button>
-            {selectedMeet.attendees.map(email=>(
-              <div key={email} onClick={()=>setImportedMembers(p=>p.includes(email)?p.filter(x=>x!==email):[...p,email])} style={{ display:'flex',alignItems:'center',gap:12,padding:'10px 14px',borderRadius:10,border:`1px solid ${importedMembers.includes(email)?'#6366F1':c.bord}`,background:importedMembers.includes(email)?'rgba(99,102,241,.1)':c.surf,cursor:'pointer',marginBottom:8,transition:'all .15s' }}>
-                <Av member={{name:email.split('@')[0],color:MEMBER_COLORS[Math.floor(Math.random()*MEMBER_COLORS.length)]}} size={32}/>
-                <span style={{ flex:1,fontSize:13,color:c.text }}>{email}</span>
-                {importedMembers.includes(email)&&<div style={{ width:18,height:18,borderRadius:'50%',background:'#6366F1',display:'flex',alignItems:'center',justifyContent:'center' }}><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg></div>}
-              </div>
-            ))}
-          </div>
-          <div style={{ display:'flex',gap:8 }}>
-            <Btn v="ghost" onClick={()=>setStep(1)}>← Back</Btn>
-            <Btn onClick={()=>setStep(3)} disabled={!importedMembers.length}>Add {importedMembers.length} members →</Btn>
-          </div>
-        </>
-      )}
-      {step===3&&(
-        <div style={{ textAlign:'center',padding:'32px 20px' }}>
-          <div style={{ fontSize:52,marginBottom:16 }}>🎉</div>
-          <h3 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:8 }}>Calendar linked!</h3>
-          <p style={{ fontSize:13,color:c.mut,marginBottom:20 }}>{importedMembers.length} members added from {selectedMeet?.title}. Invites will be sent to their emails.</p>
-          <Btn onClick={()=>{setStep(1);setSelectedMeeting(null);setImportedMembers([]);}}>Done</Btn>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── SETTINGS PAGE ────────────────────────────────────────────────────────────
 function SettingsPage({ session, onBack, onSaved }) {
@@ -852,8 +608,35 @@ function HistTab({ history, members }) {
 
 function TeamSettingsTab({ team, members, session }) {
   const c=useC(); const [invEmail,setInvEmail]=useState(''); const [sending,setSending]=useState(false); const [sent,setSent]=useState(false);
+  const [roomCode,setRoomCode]=useState(null); const [showCode,setShowCode]=useState(false);
+  const loadCode=async()=>{ if(!SB.IS_LIVE)return; const code=await SB.getTeamCode(team.id); setRoomCode(code); setShowCode(true); };
   const sendInv=async()=>{ if(!invEmail.trim()||!invEmail.includes('@'))return; setSending(true); if(SB.IS_LIVE){const myName=session?.user?.user_metadata?.name||session?.user?.email;const {link}=await SB.inviteMember(team.id,team.name,invEmail.trim(),myName);await Email.sendInvite(invEmail.trim(),myName,team.name,link);} setSent(true);setSending(false);setTimeout(()=>{setSent(false);setInvEmail('');},3000); };
-  return(<div><Card style={{ padding:'20px 22px',marginBottom:16 }}><Lbl>Invite a team member</Lbl><p style={{ fontSize:13,color:c.mut,marginBottom:14 }}>They'll get an email with a join link.</p><div style={{ display:'flex',gap:10 }}><Inp value={invEmail} onChange={e=>setInvEmail(e.target.value)} placeholder="colleague@company.com" onKeyDown={e=>e.key==='Enter'&&sendInv()} style={{ flex:1 }}/><Btn onClick={sendInv} loading={sending} disabled={!invEmail.trim()} style={{ flexShrink:0 }}>{sent?'✓ Sent!':'Send invite'}</Btn></div></Card><Card style={{ padding:'20px 22px' }}><Lbl>Team members ({members.length})</Lbl>{members.map(m=><div key={m.id||m.email} style={{ display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:`1px solid ${c.bord}` }}><Av member={m} size={38} url={m.avatar_url}/><div style={{ flex:1 }}><div style={{ fontSize:13,fontWeight:600,color:c.text }}>{m.name||m.email}</div><div style={{ fontSize:11,color:c.mut }}>{m.email}</div></div><span style={{ fontSize:11,color:m.role==='manager'?'#818CF8':'#34D399',background:m.role==='manager'?'rgba(129,140,248,.12)':'rgba(52,211,153,.12)',padding:'3px 10px',borderRadius:20,textTransform:'capitalize' }}>{m.role}</span></div>)}</Card></div>);
+  return(<div>
+    {/* Room code card */}
+    <Card style={{ padding:'20px 22px',marginBottom:16,border:'1px solid rgba(99,102,241,.2)',background:'rgba(99,102,241,.05)' }}>
+      <div style={{ display:'flex',alignItems:'center',gap:12 }}>
+        <div style={{ fontSize:28,flexShrink:0 }}>🔑</div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:14,fontWeight:700,color:c.text,marginBottom:3 }}>Room code</div>
+          <div style={{ fontSize:12,color:c.mut }}>Share this with team members so they can join without an email invite.</div>
+        </div>
+        <Btn onClick={loadCode} style={{ flexShrink:0,padding:'7px 14px',fontSize:12 }}>Show code</Btn>
+      </div>
+      {showCode&&roomCode&&(
+        <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginTop:14 }}>
+          <div style={{ background:'rgba(99,102,241,.12)',border:'1px solid rgba(99,102,241,.3)',borderRadius:10,padding:'14px',textAlign:'center' }}>
+            <div style={{ fontSize:10,color:'#818CF8',fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6 }}>Room ID</div>
+            <div style={{ fontSize:24,fontWeight:800,color:'#818CF8',letterSpacing:'.15em' }}>{roomCode.room_id}</div>
+          </div>
+          <div style={{ background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.3)',borderRadius:10,padding:'14px',textAlign:'center' }}>
+            <div style={{ fontSize:10,color:'#34D399',fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6 }}>Password</div>
+            <div style={{ fontSize:24,fontWeight:800,color:'#34D399',letterSpacing:'.15em' }}>{roomCode.room_password}</div>
+          </div>
+        </div>
+      )}
+      {showCode&&!roomCode&&<div style={{ marginTop:10,fontSize:13,color:c.mut,textAlign:'center' }}>No room code found — this team was created before v5. Create a new team to get a code.</div>}
+    </Card>
+    <Card style={{ padding:'20px 22px',marginBottom:16 }}><Lbl>Invite a team member</Lbl><p style={{ fontSize:13,color:c.mut,marginBottom:14 }}>They'll get an email with a join link.</p><div style={{ display:'flex',gap:10 }}><Inp value={invEmail} onChange={e=>setInvEmail(e.target.value)} placeholder="colleague@company.com" onKeyDown={e=>e.key==='Enter'&&sendInv()} style={{ flex:1 }}/><Btn onClick={sendInv} loading={sending} disabled={!invEmail.trim()} style={{ flexShrink:0 }}>{sent?'✓ Sent!':'Send invite'}</Btn></div></Card><Card style={{ padding:'20px 22px' }}><Lbl>Team members ({members.length})</Lbl>{members.map(m=><div key={m.id||m.email} style={{ display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:`1px solid ${c.bord}` }}><Av member={m} size={38} url={m.avatar_url}/><div style={{ flex:1 }}><div style={{ fontSize:13,fontWeight:600,color:c.text }}>{m.name||m.email}</div><div style={{ fontSize:11,color:c.mut }}>{m.email}</div></div><span style={{ fontSize:11,color:m.role==='manager'?'#818CF8':'#34D399',background:m.role==='manager'?'rgba(129,140,248,.12)':'rgba(52,211,153,.12)',padding:'3px 10px',borderRadius:20,textTransform:'capitalize' }}>{m.role}</span></div>)}</Card></div>);
 }
 
 // ─── MANAGER VIEW ─────────────────────────────────────────────────────────────
@@ -925,8 +708,22 @@ export default function App() {
 
   useEffect(()=>{
     if(!SB.IS_LIVE){setAuthLoading(false);setView('home');return;}
-    SB.getSession().then(s=>{ setSession(s);setAuthLoading(false); if(s)setView(v=>v==='auth'?'home':v); });
-    return SB.onAuthChange((event,s)=>{ if(event==='SIGNED_OUT'){setSession(null);setTeam(null);setView('auth');} else if(s?.session){setSession(s.session);setView(v=>v==='auth'?'home':v);} });
+    // Get session once on mount — don't let auth events touch view
+    SB.getSession().then(s=>{
+      setSession(s);
+      setAuthLoading(false);
+      if(s) setView(v=>v==='auth'?'home':v);
+    });
+    // ONLY act on explicit sign-out — ignore TOKEN_REFRESHED, INITIAL_SESSION, etc.
+    return SB.onAuthChange((event,s)=>{
+      if(event==='SIGNED_OUT'){
+        setSession(null);setTeam(null);setView('auth');
+      } else if(event==='SIGNED_IN'&&s?.session&&!session){
+        setSession(s.session);
+      } else if(event==='TOKEN_REFRESHED'&&s?.session){
+        setSession(s.session); // just update session silently, never touch view
+      }
+    });
   },[]);
 
   useEffect(()=>{
