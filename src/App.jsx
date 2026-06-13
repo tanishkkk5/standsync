@@ -725,14 +725,26 @@ export default function App() {
   const [dark,setDark]=useState(()=>(localStorage.getItem('ss-theme')||'dark')==='dark');
   const toggle=useCallback(()=>setDark(d=>{const n=!d;localStorage.setItem('ss-theme',n?'dark':'light');document.body.style.background=n?'#060412':'#F1F5F9';return n;}),[]);
 
-  // SESSION: persisted to sessionStorage so tab switches never lose it
+  // SESSION: Supabase stores it in localStorage with key 'ss-auth'
+  // We read it synchronously so there is zero flicker on load or tab switch
   const [session,setSession]=useState(()=>{
-    try { const s=sessionStorage.getItem('ss_session'); return s?JSON.parse(s):null; } catch(e){ return null; }
+    try {
+      // Read directly from Supabase's localStorage key — instant, synchronous
+      const raw = localStorage.getItem('ss-auth');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed?.currentSession || parsed?.session || null;
+    } catch(e){ return null; }
   });
-  const [authLoading,setAuthLoading]=useState(false); // no loading screen — session from storage is instant
-  // VIEW: driven purely from sessionStorage — never flickers to auth on tab switch
+  const [authLoading,setAuthLoading]=useState(false);
   const [view,setView]=useState(()=>{
-    try { const s=sessionStorage.getItem('ss_session'); return s?'home':'auth'; } catch(e){ return 'auth'; }
+    try {
+      const raw = localStorage.getItem('ss-auth');
+      if (!raw) return 'auth';
+      const parsed = JSON.parse(raw);
+      const hasSession = !!(parsed?.currentSession || parsed?.session);
+      return hasSession ? 'home' : 'auth';
+    } catch(e){ return 'auth'; }
   });
   const [team,setTeam]=useState(null); const [myRole,setMyRole]=useState('member');
   const [members,setMembers]=useState(DEMO_MEMBERS); const [tasks,setTasks]=useState([]); const [standup,setStandup]=useState(null);
@@ -741,42 +753,26 @@ export default function App() {
   const isManager=myRole==='manager'||!SB.IS_LIVE;
   const showToast=useCallback((msg,type='success')=>setToast({msg,type}),[]);
 
-  // Persist session to sessionStorage whenever it changes
-  useEffect(()=>{
-    if(session){ try{ sessionStorage.setItem('ss_session',JSON.stringify(session)); }catch(e){} }
-    else { try{ sessionStorage.removeItem('ss_session'); }catch(e){} }
-  },[session]);
+  // Session persistence handled by Supabase client (localStorage key: ss-auth)
 
   useEffect(()=>{ const p=new URLSearchParams(window.location.search); const inv=p.get('invite'); if(inv)setInviteToken(inv); },[]);
 
   useEffect(()=>{
     if(!SB.IS_LIVE){ setView('home'); return; }
 
-    // Background session refresh — NEVER changes the view based on result
-    // The view is already correct from sessionStorage
-    SB.getSession().then(s=>{
-      if(s){
-        setSession(s); // refresh session data silently
-        try{ sessionStorage.setItem('ss_session',JSON.stringify(s)); }catch(e){}
-      }
-      // If null: do NOTHING to view — sessionStorage still has the session
-      // Supabase returns null briefly during token refresh, that is NOT a logout
-    });
+    // Silently confirm session in background — never redirects based on result
+    SB.getSession().then(s=>{ if(s) setSession(s); });
 
-    // Auth listener: ONLY react to explicit SIGNED_OUT
+    // Only SIGNED_OUT triggers a redirect — all other events ignored
     if(SB.supabase){
       const {data:{subscription}} = SB.supabase.auth.onAuthStateChange((event, s)=>{
         if(event==='SIGNED_OUT'){
-          // User explicitly clicked sign out — clear everything
           setSession(null); setTeam(null); setView('auth');
-          try{ sessionStorage.removeItem('ss_session'); }catch(e){}
         } else if(event==='SIGNED_IN' && s?.session){
-          // Fresh login from another tab
           setSession(s.session);
-          try{ sessionStorage.setItem('ss_session',JSON.stringify(s.session)); }catch(e){}
           setView(v=>v==='auth'?'home':v);
         }
-        // TOKEN_REFRESHED, INITIAL_SESSION, USER_UPDATED → ignore completely
+        // TOKEN_REFRESHED / INITIAL_SESSION / USER_UPDATED = ignored
       });
       return ()=>subscription.unsubscribe();
     }
