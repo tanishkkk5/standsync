@@ -163,13 +163,12 @@ function AuthPage({ onLogin, inviteToken }) {
   };
 
   const signInWithGoogle=async()=>{
-    if(!SB.IS_LIVE){setError('Supabase required for Google Sign-In');return;}
+    if(!SB.IS_LIVE){setError('To enable Google Sign-In: add REACT_APP_GOOGLE_CLIENT_ID to Vercel and enable Google provider in Supabase Auth settings.');return;}
+    if(!process.env.REACT_APP_GOOGLE_CLIENT_ID){setError('Google Sign-In not configured. Add REACT_APP_GOOGLE_CLIENT_ID to Vercel environment variables.');return;}
     setGLoading(true);
-    const {error:e}=await SB.supabase.auth.signInWithOAuth({
-      provider:'google',
-      options:{ redirectTo:window.location.origin, queryParams:{ access_type:'offline', prompt:'consent', hd:'' } }
-    });
+    const {error:e}=await SB.signInWithGoogle();
     if(e){setError(e.message);setGLoading(false);}
+    // On success: Supabase redirects to window.location.origin
   };
 
   return (
@@ -216,53 +215,50 @@ function AuthPage({ onLogin, inviteToken }) {
 
 // ─── HOME — multiple teams/projects ───────────────────────────────────────────
 function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
-  const c=useC(); const [teams,setTeams]=useState([]); const [loading,setLoading]=useState(true);
-  const [showCreate,setShowCreate]=useState(false); const [showJoin,setShowJoin]=useState(false);
+  const c=useC();
+  const [teams,setTeams]=useState([]); const [loading,setLoading]=useState(true);
+  const [view,setView]=useState('list'); // list | create | join
   const [step,setStep]=useState(1);
   const [teamName,setTeamName]=useState(''); const [standupName,setStandupName]=useState('');
-  const [standupTime,setStandupTime]=useState('09:00'); const [standupDays,setStandupDays]=useState(['Mon','Tue','Wed','Thu','Fri','Sat']);
   const [memberEmails,setMemberEmails]=useState(['']); const [creating,setCreating]=useState(false);
+  const [createdTeam,setCreatedTeam]=useState(null);
   const [roomId,setRoomId]=useState(''); const [roomPass,setRoomPass]=useState('');
   const [joinLoading,setJoinLoading]=useState(false); const [joinError,setJoinError]=useState('');
-  const [createdCode,setCreatedCode]=useState(null);
   const name=session?.user?.user_metadata?.name||session?.user?.email?.split('@')[0]||'there';
+  const ICONS=['⚡','🚀','🎯','🔥','💡','🌟','🏗️','🎨','🔬','📱'];
 
   useEffect(()=>{ if(!SB.IS_LIVE){setLoading(false);return;} SB.getMyTeams(session.user.id).then(d=>{setTeams(d);setLoading(false);}); },[session]);
 
-  const toggleDay=d=>setStandupDays(prev=>prev.includes(d)?prev.filter(x=>x!==d):[...prev,d].sort((a,b)=>['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].indexOf(a)-['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].indexOf(b)));
-
   const create=async()=>{
-    if(!teamName.trim()) return;
+    if(!teamName.trim())return;
     setCreating(true);
     const myName=session?.user?.user_metadata?.name||session?.user?.email;
-    let team=null;
     if(SB.IS_LIVE){
-      team=await SB.createTeam(teamName.trim(),session.user.id,session.user.email,myName,standupName.trim());
-      const validEmails=memberEmails.filter(e=>e.trim()&&e.includes('@'));
-      for(const em of validEmails){
-        try {
-          const {link}=await SB.inviteMember(team.id,teamName,em,myName);
-          try { await Promise.race([Email.sendInvite(em,myName,teamName,link),new Promise(r=>setTimeout(r,4000))]); } catch(e){}
-        } catch(e){ console.log('Invite failed for',em); }
+      const team=await SB.createTeam(teamName.trim(),session.user.id,session.user.email,myName,standupName.trim());
+      if(team){
+        // Send invites - with timeout so it never hangs
+        const validEmails=memberEmails.filter(e=>e.trim()&&e.includes('@'));
+        for(const em of validEmails){
+          try{
+            const {link}=await SB.inviteMember(team.id,teamName,em,myName);
+            await Promise.race([Email.sendInvite(em,myName,teamName,link),new Promise(r=>setTimeout(r,5000))]);
+          }catch(e){console.log('invite failed for',em);}
+        }
+        setCreatedTeam(team);
       }
-      // Get the room code to show user
-      const code = await SB.getTeamCode(team.id);
-      if(code) setCreatedCode({...code, teamName:teamName.trim()});
     } else {
-      team={id:'demo_'+Date.now(),name:teamName,standup_name:standupName||teamName};
+      setCreatedTeam({id:'demo',name:teamName,standup_name:standupName||teamName,default_room_id:'DEMO01',default_room_password:'1234'});
     }
     setCreating(false);
-    if(!createdCode) { setShowCreate(false); setStep(1); setTeamName(''); setStandupName(''); setMemberEmails(['']); onSelectTeam(team,'manager'); }
   };
 
   const joinTeam=async()=>{
     if(!roomId.trim()||!roomPass.trim()){setJoinError('Enter both Room ID and password');return;}
-    setJoinLoading(true); setJoinError('');
+    setJoinLoading(true);setJoinError('');
     if(SB.IS_LIVE){
       const myName=session?.user?.user_metadata?.name||session?.user?.email;
       const result=await SB.joinTeamByCode(roomId,roomPass,session.user.id,session.user.email,myName);
       if(result.error){setJoinError(result.error);setJoinLoading(false);return;}
-      setShowJoin(false);setRoomId('');setRoomPass('');
       onSelectTeam(result.team,'member');
     } else {
       setJoinError('Demo mode — connect Supabase to use Room ID join');
@@ -270,144 +266,164 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
     setJoinLoading(false);
   };
 
-  const PROJECT_ICONS = ['⚡','🚀','🎯','🔥','💡','🌟','🏗️','🎨','🔬','📱'];
+  const goToTeam=(team,role)=>{onSelectTeam(team,role);};
 
-  return (
-    <div style={{ minHeight:'100vh',position:'relative',zIndex:1,animation:'fadeIn .35s ease' }}>
+  // ── Team list ──────────────────────────────────────────────────────────────
+  if(view==='list') return(
+    <div style={{ minHeight:'100vh',position:'relative',zIndex:1,animation:'fadeIn .3s ease' }}>
       <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(24px)',position:'sticky',top:0,zIndex:100 }}>
-        <div style={{ maxWidth:900,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:12 }}>
+        <div style={{ maxWidth:920,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:12 }}>
           <Logo size={28}/><div style={{ flex:1 }}/><ThemeToggle/><ProfileMenu session={session} onSettings={onSettings} onLogout={onLogout}/>
         </div>
       </div>
-      <div style={{ maxWidth:900,margin:'0 auto',padding:'40px 24px' }}>
-        <h1 style={{ fontSize:26,fontWeight:800,color:c.text,letterSpacing:'-.025em',marginBottom:6 }}>Good morning, {name} 👋</h1>
-        <p style={{ color:c.mut,fontSize:15,marginBottom:28 }}>Your teams and projects — select one or join / create a new one.</p>
-        {!SB.IS_LIVE&&<div style={{ background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.3)',borderRadius:12,padding:'14px 18px',marginBottom:24,fontSize:13,color:'#FCD34D' }}>⚡ Demo mode — configure Supabase for real login and data persistence</div>}
-        {/* Join Team banner for new users with no teams */}
-        {!loading&&teams.length===0&&SB.IS_LIVE&&(
-          <div style={{ background:'rgba(99,102,241,.08)',border:'1px solid rgba(99,102,241,.25)',borderRadius:14,padding:'20px 24px',marginBottom:24,display:'flex',alignItems:'center',gap:16 }}>
-            <div style={{ fontSize:32 }}>🔑</div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:15,fontWeight:700,color:c.text,marginBottom:4 }}>Got a Room ID?</div>
-              <div style={{ fontSize:13,color:c.mut }}>If your manager shared a Room ID and password, click Join Team to get in instantly.</div>
+      <div style={{ maxWidth:920,margin:'0 auto',padding:'36px 24px' }}>
+        <h1 style={{ fontSize:24,fontWeight:800,color:c.text,marginBottom:6 }}>Good morning, {name} 👋</h1>
+        <p style={{ color:c.mut,fontSize:14,marginBottom:28 }}>Your teams and projects — select one or join / create.</p>
+        {!SB.IS_LIVE&&<div style={{ background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.3)',borderRadius:12,padding:'14px 18px',marginBottom:20,fontSize:13,color:'#FCD34D' }}>⚡ Demo mode — connect Supabase for real data</div>}
+
+        {/* New user banner */}
+        {!loading&&teams.length===0&&(
+          <div style={{ background:'rgba(99,102,241,.08)',border:'1px solid rgba(99,102,241,.25)',borderRadius:14,padding:'24px',marginBottom:24,textAlign:'center' }}>
+            <div style={{ fontSize:40,marginBottom:12 }}>👋</div>
+            <div style={{ fontSize:17,fontWeight:700,color:c.text,marginBottom:6 }}>Welcome to StandSync!</div>
+            <div style={{ fontSize:14,color:c.mut,marginBottom:20 }}>Create a new team or join an existing one with a Room ID.</div>
+            <div style={{ display:'flex',gap:12,justifyContent:'center',flexWrap:'wrap' }}>
+              <Btn onClick={()=>setView('create')} style={{ padding:'12px 28px',fontSize:14 }}>+ Create a team</Btn>
+              <Btn v="ghost" onClick={()=>setView('join')} style={{ padding:'12px 28px',fontSize:14 }}>🔑 Join with Room ID</Btn>
             </div>
-            <Btn onClick={()=>setShowJoin(true)} style={{ flexShrink:0 }}>🔑 Join a team</Btn>
           </div>
         )}
+
         {loading?<div style={{ display:'flex',justifyContent:'center',padding:40 }}><Spin/></div>:(
-          <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:14 }}>
+          <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(230px,1fr))',gap:14 }}>
             {teams.map((tm,i)=>(
-              <Card key={tm.team_id} onClick={()=>onSelectTeam(tm.teams,tm.role)} style={{ padding:'22px',cursor:'pointer' }}>
-                <div style={{ width:48,height:48,borderRadius:14,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:14,fontSize:22 }}>{PROJECT_ICONS[i%PROJECT_ICONS.length]}</div>
-                <div style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:4 }}>{tm.teams?.name}</div>
-                <div style={{ fontSize:12,color:c.mut,marginBottom:8,textTransform:'capitalize' }}>{tm.role} · {tm.teams?.standup_name||'Daily standup'}</div>
-                <div style={{ display:'flex',gap:6 }}><span style={{ fontSize:11,background:'rgba(99,102,241,.12)',color:'#818CF8',padding:'3px 8px',borderRadius:20 }}>Active</span></div>
+              <Card key={tm.team_id} onClick={()=>goToTeam(tm.teams,tm.role)} style={{ padding:'22px',cursor:'pointer' }}>
+                <div style={{ width:48,height:48,borderRadius:14,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:14,fontSize:22 }}>{ICONS[i%ICONS.length]}</div>
+                <div style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:3 }}>{tm.teams?.name}</div>
+                <div style={{ fontSize:12,color:c.mut,marginBottom:8 }}>{tm.role==='manager'?'Manager':'Member'} · {tm.teams?.standup_name||'Standup'}</div>
+                <span style={{ fontSize:11,background:'rgba(99,102,241,.12)',color:'#818CF8',padding:'3px 9px',borderRadius:20 }}>Active</span>
               </Card>
             ))}
-            <Card onClick={()=>setShowCreate(true)} style={{ padding:'22px',cursor:'pointer',border:`1.5px dashed ${c.bord}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:10,minHeight:140 }}>
-              <div style={{ width:40,height:40,borderRadius:'50%',background:'rgba(99,102,241,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22 }}>+</div>
-              <div style={{ fontSize:14,color:c.sub,fontWeight:600 }}>New team / project</div>
-              <div style={{ fontSize:12,color:c.mut,textAlign:'center' }}>Standup, sprint, or any meeting</div>
-            </Card>
-            {teams.length>0&&(
-              <Card onClick={()=>setShowJoin(true)} style={{ padding:'22px',cursor:'pointer',border:`1.5px dashed ${c.bord}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:10,minHeight:140 }}>
-                <div style={{ width:40,height:40,borderRadius:'50%',background:'rgba(99,102,241,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22 }}>🔑</div>
-                <div style={{ fontSize:14,color:c.sub,fontWeight:600 }}>Join a team</div>
-                <div style={{ fontSize:12,color:c.mut,textAlign:'center' }}>Enter Room ID + password</div>
+            {teams.length>0&&(<>
+              <Card onClick={()=>setView('create')} style={{ padding:'22px',cursor:'pointer',border:`1.5px dashed ${c.bord}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,minHeight:130 }}>
+                <div style={{ width:38,height:38,borderRadius:'50%',background:'rgba(99,102,241,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20 }}>+</div>
+                <div style={{ fontSize:13,color:c.sub,fontWeight:600 }}>New team</div>
               </Card>
-            )}
+              <Card onClick={()=>setView('join')} style={{ padding:'22px',cursor:'pointer',border:`1.5px dashed ${c.bord}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,minHeight:130 }}>
+                <div style={{ width:38,height:38,borderRadius:'50%',background:'rgba(99,102,241,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20 }}>🔑</div>
+                <div style={{ fontSize:13,color:c.sub,fontWeight:600 }}>Join a team</div>
+              </Card>
+            </>)}
           </div>
         )}
       </div>
+    </div>
+  );
 
-      {/* JOIN TEAM MODAL */}
-      {showJoin&&(
-        <Modal onClose={()=>{setShowJoin(false);setJoinError('');setRoomId('');setRoomPass('');}} title="Join a team" width={440}>
-          <div style={{ textAlign:'center',marginBottom:20 }}>
-            <div style={{ fontSize:40,marginBottom:8 }}>🔑</div>
-            <p style={{ fontSize:13,color:c.mut,lineHeight:1.6 }}>Ask your manager for the Room ID and password. They can find it in Team Settings.</p>
-          </div>
-          <Inp label="Room ID" value={roomId} onChange={e=>setRoomId(e.target.value.toUpperCase())} placeholder="e.g. XK9P2M" style={{ marginBottom:14,letterSpacing:'.1em',textTransform:'uppercase',fontSize:16,textAlign:'center' }} autoFocus/>
-          <Inp label="Room password" type="password" value={roomPass} onChange={e=>setRoomPass(e.target.value)} placeholder="4-digit PIN" style={{ marginBottom:18,textAlign:'center',fontSize:16,letterSpacing:'.15em' }} onKeyDown={e=>e.key==='Enter'&&joinTeam()}/>
-          {joinError&&<div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#F87171',marginBottom:14 }}>{joinError}</div>}
-          <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}>
-            <Btn v="ghost" onClick={()=>{setShowJoin(false);setJoinError('');setRoomId('');setRoomPass('');}}>Cancel</Btn>
-            <Btn onClick={joinTeam} loading={joinLoading} disabled={!roomId.trim()||!roomPass.trim()}>Join team →</Btn>
-          </div>
-          <div style={{ marginTop:16,padding:'12px 14px',background:'rgba(99,102,241,.08)',border:'1px solid rgba(99,102,241,.2)',borderRadius:10,fontSize:12,color:c.mut }}>
-            💡 Don't have a Room ID? Ask your manager to share it from Team Settings → Room code, or ask them to send you an email invite instead.
-          </div>
-        </Modal>
-      )}
+  // ── Join team ──────────────────────────────────────────────────────────────
+  if(view==='join') return(
+    <div style={{ minHeight:'100vh',position:'relative',zIndex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24,animation:'fadeIn .3s ease' }}>
+      <Card style={{ width:'100%',maxWidth:420,padding:32 }}>
+        <button onClick={()=>setView('list')} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:13,marginBottom:20,padding:0 }}>← Back</button>
+        <div style={{ textAlign:'center',marginBottom:24 }}>
+          <div style={{ fontSize:44,marginBottom:10 }}>🔑</div>
+          <h2 style={{ fontSize:20,fontWeight:700,color:c.text,marginBottom:6 }}>Join a team</h2>
+          <p style={{ fontSize:13,color:c.mut }}>Get the Room ID and password from your manager</p>
+        </div>
+        <Inp label="Room ID" value={roomId} onChange={e=>setRoomId(e.target.value.toUpperCase())} placeholder="e.g. AB3K9M" style={{ marginBottom:14,letterSpacing:'.12em',textTransform:'uppercase',fontSize:18,textAlign:'center',fontWeight:700 }} autoFocus/>
+        <Inp label="Room password" type="password" value={roomPass} onChange={e=>setRoomPass(e.target.value)} placeholder="4-digit PIN" style={{ marginBottom:18,textAlign:'center',fontSize:18,letterSpacing:'.15em' }} onKeyDown={e=>e.key==='Enter'&&joinTeam()}/>
+        {joinError&&<div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#F87171',marginBottom:14 }}>{joinError}</div>}
+        <Btn onClick={joinTeam} loading={joinLoading} disabled={!roomId.trim()||!roomPass.trim()} style={{ width:'100%',justifyContent:'center',padding:'12px',fontSize:15 }}>Join team →</Btn>
+        <div style={{ marginTop:16,fontSize:12,color:c.mut,textAlign:'center' }}>Don't have a Room ID? Ask your manager to share it from Team Settings</div>
+      </Card>
+    </div>
+  );
 
-      {/* ROOM CODE REVEAL after team creation */}
-      {createdCode&&(
-        <Modal onClose={()=>{setCreatedCode(null);setShowCreate(false);setStep(1);setTeamName('');setStandupName('');setMemberEmails(['']);}} title="Team created! 🎉" width={460}>
-          <p style={{ fontSize:13,color:c.mut,marginBottom:20,lineHeight:1.6 }}>Share these details with your team members so they can join instantly. They'll need both the Room ID and password.</p>
-          <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:20 }}>
-            <div style={{ background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.3)',borderRadius:12,padding:'16px',textAlign:'center' }}>
-              <div style={{ fontSize:11,color:'#818CF8',fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8 }}>Room ID</div>
-              <div style={{ fontSize:28,fontWeight:800,color:'#818CF8',letterSpacing:'.15em' }}>{createdCode.room_id}</div>
+  // ── Create team (3 steps) ──────────────────────────────────────────────────
+  // Show room code after creation
+  if(createdTeam) return(
+    <div style={{ minHeight:'100vh',position:'relative',zIndex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24,animation:'fadeIn .3s ease' }}>
+      <Card style={{ width:'100%',maxWidth:460,padding:32 }}>
+        <div style={{ textAlign:'center',marginBottom:24 }}>
+          <div style={{ fontSize:44,marginBottom:10 }}>🎉</div>
+          <h2 style={{ fontSize:20,fontWeight:700,color:c.text,marginBottom:6 }}>Team created!</h2>
+          <p style={{ fontSize:13,color:c.mut }}>Share these credentials with your team so they can join</p>
+        </div>
+        <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:20 }}>
+          <div style={{ background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.3)',borderRadius:12,padding:'16px',textAlign:'center' }}>
+            <div style={{ fontSize:10,color:'#818CF8',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',marginBottom:8 }}>Room ID</div>
+            <div style={{ fontSize:26,fontWeight:800,color:'#818CF8',letterSpacing:'.15em',fontFamily:'monospace' }}>{createdTeam.default_room_id||'—'}</div>
+          </div>
+          <div style={{ background:'rgba(52,211,153,.08)',border:'1px solid rgba(52,211,153,.25)',borderRadius:12,padding:'16px',textAlign:'center' }}>
+            <div style={{ fontSize:10,color:'#34D399',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',marginBottom:8 }}>Password</div>
+            <div style={{ fontSize:26,fontWeight:800,color:'#34D399',letterSpacing:'.2em',fontFamily:'monospace' }}>{createdTeam.default_room_password||'—'}</div>
+          </div>
+        </div>
+        <div style={{ background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:10,padding:'11px 14px',fontSize:12,color:'#FCD34D',marginBottom:20 }}>
+          ⚠️ These never change unless you delete the room. Find them anytime in Team Settings → Rooms.
+        </div>
+        <Btn onClick={()=>{
+          SB.getMyTeams(session.user.id).then(d=>setTeams(d));
+          onSelectTeam(createdTeam,'manager');
+        }} style={{ width:'100%',justifyContent:'center',padding:'12px',fontSize:15 }}>Go to dashboard →</Btn>
+      </Card>
+    </div>
+  );
+
+  return(
+    <div style={{ minHeight:'100vh',position:'relative',zIndex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24,animation:'fadeIn .3s ease' }}>
+      <Card style={{ width:'100%',maxWidth:500,padding:32 }}>
+        <button onClick={()=>{setView('list');setStep(1);setTeamName('');setStandupName('');setMemberEmails(['']);}} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:13,marginBottom:20,padding:0 }}>← Back</button>
+        <div style={{ textAlign:'center',marginBottom:24 }}>
+          <div style={{ fontSize:44,marginBottom:10 }}>🏗️</div>
+          <h2 style={{ fontSize:20,fontWeight:700,color:c.text,marginBottom:4 }}>Create a new team</h2>
+          <p style={{ fontSize:13,color:c.mut }}>Step {step} of 3</p>
+        </div>
+        {/* Step progress */}
+        <div style={{ display:'flex',gap:4,marginBottom:24 }}>
+          {[1,2,3].map(s=><div key={s} style={{ flex:1,height:4,borderRadius:2,background:step>=s?'#6366F1':'rgba(128,128,128,.2)',transition:'background .3s' }}/>)}
+        </div>
+
+        {step===1&&(<>
+          <Inp label="Team name" value={teamName} onChange={e=>setTeamName(e.target.value)} placeholder="e.g. xtransmatrix · Product" style={{ marginBottom:14 }} autoFocus/>
+          <Inp label="Standup / room name" value={standupName} onChange={e=>setStandupName(e.target.value)} placeholder="e.g. Supa Daily Standup" style={{ marginBottom:24 }}/>
+          <Btn onClick={()=>setStep(2)} disabled={!teamName.trim()} style={{ width:'100%',justifyContent:'center',padding:'12px',fontSize:15 }}>Next →</Btn>
+        </>)}
+
+        {step===2&&(<>
+          <p style={{ fontSize:13,color:c.mut,marginBottom:16 }}>Add team members by email. They'll get an invite link to join. You can also add more later.</p>
+          {memberEmails.map((em,i)=>(
+            <div key={i} style={{ display:'flex',gap:8,marginBottom:10 }}>
+              <Inp value={em} onChange={e=>setMemberEmails(p=>p.map((x,idx)=>idx===i?e.target.value:x))} placeholder={'member@company.com'} type="email" style={{ flex:1 }}/>
+              {memberEmails.length>1&&<button onClick={()=>setMemberEmails(p=>p.filter((_,idx)=>idx!==i))} style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',borderRadius:8,color:'#F87171',cursor:'pointer',padding:'0 12px',fontSize:18,flexShrink:0 }}>×</button>}
             </div>
-            <div style={{ background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.3)',borderRadius:12,padding:'16px',textAlign:'center' }}>
-              <div style={{ fontSize:11,color:'#34D399',fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8 }}>Password</div>
-              <div style={{ fontSize:28,fontWeight:800,color:'#34D399',letterSpacing:'.15em' }}>{createdCode.room_password}</div>
-            </div>
+          ))}
+          <button onClick={()=>setMemberEmails(p=>[...p,''])} style={{ background:'none',border:'none',color:'#818CF8',cursor:'pointer',fontSize:13,fontWeight:600,marginBottom:20,padding:0 }}>+ Add another email</button>
+          <div style={{ display:'flex',gap:10 }}>
+            <Btn v="ghost" onClick={()=>setStep(1)} style={{ flex:1,justifyContent:'center' }}>← Back</Btn>
+            <Btn onClick={()=>setStep(3)} style={{ flex:1,justifyContent:'center' }}>Next →</Btn>
           </div>
-          <div style={{ background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:10,padding:'12px 14px',fontSize:12,color:'#FCD34D',marginBottom:20 }}>
-            ⚠️ Save these somewhere safe — you can always find them again in Team Settings → Room code.
-          </div>
-          <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}>
-            <Btn onClick={()=>{
-              const t=teams.find(x=>x.teams?.name===createdCode.teamName);
-              setCreatedCode(null);setShowCreate(false);setStep(1);setTeamName('');setStandupName('');setMemberEmails(['']);
-              SB.getMyTeams(session.user.id).then(d=>setTeams(d));
-            }} style={{ background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none' }}>Go to dashboard →</Btn>
-          </div>
-        </Modal>
-      )}
+        </>)}
 
-      {/* CREATE TEAM MODAL */}
-      {showCreate&&!createdCode&&(
-        <Modal onClose={()=>{setShowCreate(false);setStep(1);}} title={`Create team — Step ${step} of 3`} width={540}>
-          {step===1&&(
-            <>
-              <Inp label="Team / project name" value={teamName} onChange={e=>setTeamName(e.target.value)} placeholder="e.g. xtransmatrix · Product Team" style={{ marginBottom:14 }} autoFocus/>
-              <Inp label="Standup name" value={standupName} onChange={e=>setStandupName(e.target.value)} placeholder="e.g. Supa Daily Standup" style={{ marginBottom:20 }}/>
-              <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}><Btn v="ghost" onClick={()=>setShowCreate(false)}>Cancel</Btn><Btn onClick={()=>setStep(2)} disabled={!teamName.trim()}>Next →</Btn></div>
-            </>
-          )}
-          {step===2&&(
-            <>
-              <Lbl>Standup schedule</Lbl>
-              <div style={{ display:'flex',gap:6,flexWrap:'wrap',marginBottom:16 }}>
-                {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>(
-                  <button key={d} onClick={()=>toggleDay(d)} style={{ padding:'7px 12px',borderRadius:8,border:`1.5px solid ${standupDays.includes(d)?'#6366F1':c.bord}`,background:standupDays.includes(d)?'rgba(99,102,241,.15)':'transparent',color:standupDays.includes(d)?'#818CF8':c.mut,cursor:'pointer',fontSize:13,fontWeight:standupDays.includes(d)?700:400,transition:'all .15s' }}>{d}</button>
-                ))}
-              </div>
-              <Inp label="Standup time" type="time" value={standupTime} onChange={e=>setStandupTime(e.target.value)} style={{ marginBottom:20 }}/>
-              <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}><Btn v="ghost" onClick={()=>setStep(1)}>← Back</Btn><Btn onClick={()=>setStep(3)}>Next →</Btn></div>
-            </>
-          )}
-          {step===3&&(
-            <>
-              <p style={{ fontSize:13,color:c.mut,marginBottom:16 }}>Add team members by email. They'll receive an invite link. You can also share the Room ID after creation.</p>
-              {memberEmails.map((em,i)=>(
-                <div key={i} style={{ display:'flex',gap:8,marginBottom:10 }}>
-                  <Inp value={em} onChange={e=>setMemberEmails(p=>p.map((x,idx)=>idx===i?e.target.value:x))} placeholder={`member${i+1}@company.com`} type="email" style={{ flex:1 }}/>
-                  {memberEmails.length>1&&<button onClick={()=>setMemberEmails(p=>p.filter((_,idx)=>idx!==i))} style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',borderRadius:8,color:'#F87171',cursor:'pointer',padding:'0 12px',fontSize:16 }}>×</button>}
-                </div>
-              ))}
-              <button onClick={()=>setMemberEmails(p=>[...p,''])} style={{ background:'none',border:'none',color:'#818CF8',cursor:'pointer',fontSize:13,fontWeight:600,marginBottom:20,padding:0 }}>+ Add another</button>
-              <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}><Btn v="ghost" onClick={()=>setStep(2)}>← Back</Btn><Btn onClick={create} loading={creating}>Create & invite</Btn></div>
-            </>
-          )}
-        </Modal>
-      )}
+        {step===3&&(<>
+          <div style={{ background:c.surf,border:`1px solid ${c.bord}`,borderRadius:12,padding:'16px 18px',marginBottom:20 }}>
+            <div style={{ fontSize:13,fontWeight:700,color:c.text,marginBottom:8 }}>Review</div>
+            <div style={{ fontSize:13,color:c.sub,marginBottom:4 }}>Team: <strong>{teamName}</strong></div>
+            <div style={{ fontSize:13,color:c.sub,marginBottom:4 }}>Standup: <strong>{standupName||teamName}</strong></div>
+            <div style={{ fontSize:13,color:c.sub }}>Inviting: <strong>{memberEmails.filter(e=>e.trim()&&e.includes('@')).length} member{memberEmails.filter(e=>e.trim()&&e.includes('@')).length!==1?'s':''}</strong> by email</div>
+          </div>
+          <div style={{ background:'rgba(99,102,241,.08)',border:'1px solid rgba(99,102,241,.2)',borderRadius:10,padding:'11px 14px',fontSize:12,color:'#818CF8',marginBottom:20 }}>
+            A unique Room ID and password will be generated so anyone can join without an email invite.
+          </div>
+          <div style={{ display:'flex',gap:10 }}>
+            <Btn v="ghost" onClick={()=>setStep(2)} style={{ flex:1,justifyContent:'center' }}>← Back</Btn>
+            <Btn onClick={create} loading={creating} style={{ flex:2,justifyContent:'center',padding:'12px' }}>Create team</Btn>
+          </div>
+        </>)}
+      </Card>
     </div>
   );
 }
-
 
 // ─── SETTINGS PAGE ────────────────────────────────────────────────────────────
 function SettingsPage({ session, onBack, onSaved }) {
@@ -611,66 +627,161 @@ function HistTab({ history, members }) {
   return(<div><div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20 }}><StatCard label="Standups" value={history.length} color="#818CF8" icon="📅"/><StatCard label="Total tasks" value={totAll} color="#38BDF8" icon="📋"/><StatCard label="Total done" value={doneAll} color="#34D399" icon="✅"/><StatCard label="Avg completion" value={avgPct+'%'} color="#F472B6" icon="🎯"/></div>{history.length===0?<Card style={{ padding:'40px',textAlign:'center' }}><div style={{ fontSize:36,marginBottom:12 }}>📅</div><div style={{ color:c.mut,fontSize:14 }}>History appears after your first standup</div></Card>:history.map(s=>{ const t=s.tasks||[],d=t.filter(x=>x.status==='done').length,b=t.filter(x=>x.status==='blocked').length,pct=t.length?Math.round(d/t.length*100):0,isOpen=open===s.id; return(<Card key={s.id} style={{ marginBottom:10,overflow:'hidden' }}><button onClick={()=>setOpen(isOpen?null:s.id)} style={{ width:'100%',display:'flex',alignItems:'center',gap:12,padding:'14px 18px',background:'transparent',border:'none',cursor:'pointer',color:c.text }}><div style={{ width:7,height:7,borderRadius:'50%',background:pct===100?'#34D399':'#818CF8',flexShrink:0 }}/><span style={{ flex:1,fontSize:14,fontWeight:500,textAlign:'left' }}>{fmt(s.date)}</span>{b>0&&<span style={{ fontSize:11,color:'#F87171',background:'rgba(239,68,68,.12)',padding:'2px 8px',borderRadius:20 }}>⚠️ {b}</span>}<span style={{ fontSize:11,color:c.mut,background:'rgba(128,128,128,.1)',padding:'2px 10px',borderRadius:20 }}>{d}/{t.length} · {pct}%</span><span style={{ color:c.mut,transform:isOpen?'rotate(180deg)':'none',transition:'transform .2s',fontSize:16 }}>⌃</span></button>{isOpen&&<div style={{ borderTop:`1px solid ${c.bord}` }}>{t.map(task=>{ const m=members.find(x=>x.email===task.assignee_email); return(<div key={task.id} style={{ display:'flex',alignItems:'center',gap:10,padding:'9px 18px',borderBottom:`1px solid ${c.bord}` }}><div style={{ width:6,height:6,borderRadius:'50%',background:getPriority(task.priority).color,flexShrink:0 }}/><span style={{ flex:1,fontSize:12,color:task.status==='done'?c.mut:c.sub,textDecoration:task.status==='done'?'line-through':'none' }}>{task.title}</span>{task.timeline&&<span style={{ fontSize:10,color:c.mut }}>{task.timeline}</span>}{m&&<Av member={m} size={22}/>}<SBadge status={task.status}/></div>); })}</div>}</Card>); })}</div>);
 }
 
-function TeamSettingsTab({ team, members, session }) {
-  const c=useC(); const [invEmail,setInvEmail]=useState(''); const [sending,setSending]=useState(false); const [sent,setSent]=useState(false);
-  const [roomCode,setRoomCode]=useState(null); const [showCode,setShowCode]=useState(false);
-  const loadCode=async()=>{ if(!SB.IS_LIVE)return; const code=await SB.getTeamCode(team.id); setRoomCode(code); setShowCode(true); };
+function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
+  const c=useC();
+  const [invEmail,setInvEmail]=useState(''); const [sending,setSending]=useState(false); const [sent,setSent]=useState(false);
+  const [rooms,setRooms]=useState([]); const [loadingRooms,setLoadingRooms]=useState(true);
+  const [newRoomName,setNewRoomName]=useState(''); const [creatingRoom,setCreatingRoom]=useState(false);
+  const [editMember,setEditMember]=useState(null); // {id, name, designation, role}
+  const [editDesg,setEditDesg]=useState(''); const [editRole,setEditRole]=useState('');
+  const [saving,setSaving]=useState(false);
+  const [tab,setTab]=useState('members'); // members | rooms | invite
+
+  useEffect(()=>{
+    if(!SB.IS_LIVE)return;
+    SB.getTeamRooms(team.id).then(r=>{ setRooms(r); setLoadingRooms(false); });
+  },[team.id]);
+
   const sendInv=async()=>{
     if(!invEmail.trim()||!invEmail.includes('@'))return;
     setSending(true);
-    try {
+    try{
       if(SB.IS_LIVE){
         const myName=session?.user?.user_metadata?.name||session?.user?.email;
         const {link}=await SB.inviteMember(team.id,team.name,invEmail.trim(),myName);
-        // Email send with timeout - CORS may block Resend from browser, that's OK
-        // The invite link still works even without the email
-        try {
-          await Promise.race([
-            Email.sendInvite(invEmail.trim(),myName,team.name,link),
-            new Promise(r=>setTimeout(r,5000)) // 5s timeout
-          ]);
-        } catch(emailErr) {
-          console.log('Email send failed (CORS) - invite link still created:', link);
-        }
+        await Promise.race([Email.sendInvite(invEmail.trim(),myName,team.name,link),new Promise(r=>setTimeout(r,5000))]);
       }
-    } catch(err) {
-      console.error('Invite error:', err);
-    }
+    }catch(e){}
     setSent(true);setSending(false);
     setTimeout(()=>{setSent(false);setInvEmail('');},3000);
   };
-  return(<div>
-    {/* Room code card */}
-    <Card style={{ padding:'20px 22px',marginBottom:16,border:'1px solid rgba(99,102,241,.2)',background:'rgba(99,102,241,.05)' }}>
-      <div style={{ display:'flex',alignItems:'center',gap:12 }}>
-        <div style={{ fontSize:28,flexShrink:0 }}>🔑</div>
-        <div style={{ flex:1 }}>
-          <div style={{ fontSize:14,fontWeight:700,color:c.text,marginBottom:3 }}>Room code</div>
-          <div style={{ fontSize:12,color:c.mut }}>Share this with team members so they can join without an email invite.</div>
-        </div>
-        <Btn onClick={loadCode} style={{ flexShrink:0,padding:'7px 14px',fontSize:12 }}>Show code</Btn>
+
+  const addRoom=async()=>{
+    if(!newRoomName.trim())return;
+    setCreatingRoom(true);
+    const room=await SB.createRoom(team.id,newRoomName.trim(),session?.user?.id);
+    if(room) setRooms(p=>[...p,room]);
+    setNewRoomName('');setCreatingRoom(false);
+  };
+
+  const deleteRoom=async(roomDbId)=>{
+    await SB.deleteRoom(roomDbId);
+    setRooms(p=>p.filter(r=>r.id!==roomDbId));
+  };
+
+  const saveDesignation=async()=>{
+    if(!editMember)return;
+    setSaving(true);
+    await SB.updateMemberDesignation(editMember.id,editDesg,editRole);
+    onMembersUpdate&&onMembersUpdate();
+    setEditMember(null);setSaving(false);
+  };
+
+  const TABS=[{id:'members',l:'Members',i:'👥'},{id:'rooms',l:'Rooms & codes',i:'🔑'},{id:'invite',l:'Invite',i:'📧'}];
+
+  return(
+    <div>
+      <div style={{ display:'flex',gap:6,marginBottom:20 }}>
+        {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{ padding:'7px 14px',borderRadius:8,border:`1px solid ${tab===t.id?'#6366F1':c.bord}`,background:tab===t.id?'rgba(99,102,241,.15)':'transparent',color:tab===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:13,fontWeight:tab===t.id?700:400,display:'flex',alignItems:'center',gap:6 }}><span>{t.i}</span>{t.l}</button>)}
       </div>
-      {showCode&&roomCode&&(
-        <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginTop:14 }}>
-          <div style={{ background:'rgba(99,102,241,.12)',border:'1px solid rgba(99,102,241,.3)',borderRadius:10,padding:'14px',textAlign:'center' }}>
-            <div style={{ fontSize:10,color:'#818CF8',fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6 }}>Room ID</div>
-            <div style={{ fontSize:24,fontWeight:800,color:'#818CF8',letterSpacing:'.15em' }}>{roomCode.room_id}</div>
-          </div>
-          <div style={{ background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.3)',borderRadius:10,padding:'14px',textAlign:'center' }}>
-            <div style={{ fontSize:10,color:'#34D399',fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6 }}>Password</div>
-            <div style={{ fontSize:24,fontWeight:800,color:'#34D399',letterSpacing:'.15em' }}>{roomCode.room_password}</div>
-          </div>
+
+      {/* ── MEMBERS TAB ── */}
+      {tab==='members'&&(
+        <Card style={{ padding:'20px 22px' }}>
+          <Lbl>Team members ({members.length}) — click to edit designation</Lbl>
+          {members.map(m=>(
+            <div key={m.id||m.email}>
+              <div style={{ display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:`1px solid ${c.bord}` }}>
+                <Av member={m} size={40} url={m.avatar_url}/>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13,fontWeight:600,color:c.text }}>{m.name||m.email}</div>
+                  <div style={{ fontSize:11,color:c.mut }}>{m.email}</div>
+                  <div style={{ fontSize:11,color:'#818CF8',marginTop:2 }}>{m.designation||m.role}</div>
+                </div>
+                <span style={{ fontSize:11,color:m.role==='manager'?'#818CF8':'#34D399',background:m.role==='manager'?'rgba(129,140,248,.12)':'rgba(52,211,153,.12)',padding:'3px 9px',borderRadius:20,textTransform:'capitalize' }}>{m.role}</span>
+                {session?.user?.id!==m.user_id&&(
+                  <button onClick={()=>{setEditMember(m);setEditDesg(m.designation||'');setEditRole(m.role||'member');}} style={{ fontSize:12,color:c.mut,background:c.surf,border:`1px solid ${c.bord}`,borderRadius:7,cursor:'pointer',padding:'4px 10px' }}>Edit</button>
+                )}
+              </div>
+              {editMember?.id===m.id&&(
+                <div style={{ padding:'14px',background:'rgba(99,102,241,.06)',borderRadius:10,margin:'8px 0',display:'flex',flexDirection:'column',gap:10 }}>
+                  <Inp label="Designation" value={editDesg} onChange={e=>setEditDesg(e.target.value)} placeholder="e.g. Frontend Developer, QA Lead..."/>
+                  <Sel label="Role" value={editRole} onChange={e=>setEditRole(e.target.value)}>
+                    <option value="member">Member</option>
+                    <option value="manager">Manager</option>
+                  </Sel>
+                  <div style={{ display:'flex',gap:8 }}>
+                    <Btn v="ghost" onClick={()=>setEditMember(null)} style={{ flex:1,justifyContent:'center' }}>Cancel</Btn>
+                    <Btn onClick={saveDesignation} loading={saving} style={{ flex:2,justifyContent:'center' }}>Save changes</Btn>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </Card>
+      )}
+
+      {/* ── ROOMS TAB ── */}
+      {tab==='rooms'&&(
+        <div>
+          <Card style={{ padding:'20px 22px',marginBottom:14 }}>
+            <Lbl>Create a new room</Lbl>
+            <p style={{ fontSize:13,color:c.mut,marginBottom:12 }}>Each room gets a unique Room ID and password. Members join using these credentials.</p>
+            <div style={{ display:'flex',gap:10 }}>
+              <Inp value={newRoomName} onChange={e=>setNewRoomName(e.target.value)} placeholder="e.g. Sprint Planning, Design Review..." onKeyDown={e=>e.key==='Enter'&&addRoom()} style={{ flex:1 }}/>
+              <Btn onClick={addRoom} loading={creatingRoom} disabled={!newRoomName.trim()} style={{ flexShrink:0 }}>+ Create</Btn>
+            </div>
+          </Card>
+          {loadingRooms?<div style={{ display:'flex',justifyContent:'center',padding:24 }}><Spin/></div>:
+            rooms.length===0?<Card style={{ padding:'32px',textAlign:'center' }}><div style={{ fontSize:32,marginBottom:8 }}>🔑</div><div style={{ color:c.mut,fontSize:13 }}>No rooms yet — create one above</div></Card>:
+            rooms.map(room=>(
+              <Card key={room.id} style={{ padding:'18px 20px',marginBottom:10 }}>
+                <div style={{ display:'flex',alignItems:'center',gap:12 }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14,fontWeight:700,color:c.text,marginBottom:6 }}>{room.name}</div>
+                    <div style={{ display:'flex',gap:10,flexWrap:'wrap' }}>
+                      <div style={{ background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.25)',borderRadius:8,padding:'6px 12px',textAlign:'center' }}>
+                        <div style={{ fontSize:9,color:'#818CF8',fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:3 }}>Room ID</div>
+                        <div style={{ fontSize:16,fontWeight:800,color:'#818CF8',letterSpacing:'.12em',fontFamily:'monospace' }}>{room.room_id}</div>
+                      </div>
+                      <div style={{ background:'rgba(52,211,153,.08)',border:'1px solid rgba(52,211,153,.2)',borderRadius:8,padding:'6px 12px',textAlign:'center' }}>
+                        <div style={{ fontSize:9,color:'#34D399',fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:3 }}>Password</div>
+                        <div style={{ fontSize:16,fontWeight:800,color:'#34D399',letterSpacing:'.2em',fontFamily:'monospace' }}>{room.room_password}</div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize:11,color:c.mut,marginTop:8 }}>These credentials are permanent until you delete this room</div>
+                  </div>
+                  <button onClick={()=>deleteRoom(room.id)} style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',borderRadius:8,color:'#F87171',cursor:'pointer',padding:'6px 12px',fontSize:12,flexShrink:0 }}>Delete</button>
+                </div>
+              </Card>
+            ))
+          }
         </div>
       )}
-      {showCode&&!roomCode&&<div style={{ marginTop:10,fontSize:13,color:c.mut,textAlign:'center' }}>No room code found — this team was created before v5. Create a new team to get a code.</div>}
-    </Card>
-    <Card style={{ padding:'20px 22px',marginBottom:16 }}><Lbl>Invite a team member</Lbl><p style={{ fontSize:13,color:c.mut,marginBottom:14 }}>They'll get an email with a join link.</p><div style={{ display:'flex',gap:10 }}><Inp value={invEmail} onChange={e=>setInvEmail(e.target.value)} placeholder="colleague@company.com" onKeyDown={e=>e.key==='Enter'&&sendInv()} style={{ flex:1 }}/><Btn onClick={sendInv} loading={sending} disabled={!invEmail.trim()} style={{ flexShrink:0 }}>{sent?'✓ Sent!':'Send invite'}</Btn></div></Card><Card style={{ padding:'20px 22px' }}><Lbl>Team members ({members.length})</Lbl>{members.map(m=><div key={m.id||m.email} style={{ display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:`1px solid ${c.bord}` }}><Av member={m} size={38} url={m.avatar_url}/><div style={{ flex:1 }}><div style={{ fontSize:13,fontWeight:600,color:c.text }}>{m.name||m.email}</div><div style={{ fontSize:11,color:c.mut }}>{m.email}</div></div><span style={{ fontSize:11,color:m.role==='manager'?'#818CF8':'#34D399',background:m.role==='manager'?'rgba(129,140,248,.12)':'rgba(52,211,153,.12)',padding:'3px 10px',borderRadius:20,textTransform:'capitalize' }}>{m.role}</span></div>)}</Card></div>);
-}
 
+      {/* ── INVITE TAB ── */}
+      {tab==='invite'&&(
+        <Card style={{ padding:'20px 22px' }}>
+          <Lbl>Invite by email</Lbl>
+          <p style={{ fontSize:13,color:c.mut,marginBottom:14 }}>They'll receive an email with a join link.</p>
+          <div style={{ display:'flex',gap:10 }}>
+            <Inp value={invEmail} onChange={e=>setInvEmail(e.target.value)} placeholder="colleague@company.com" onKeyDown={e=>e.key==='Enter'&&sendInv()} style={{ flex:1 }}/>
+            <Btn onClick={sendInv} loading={sending} disabled={!invEmail.trim()} style={{ flexShrink:0 }}>{sent?'✓ Sent!':'Send invite'}</Btn>
+          </div>
+          <div style={{ marginTop:16,padding:'12px 14px',background:'rgba(99,102,241,.06)',border:`1px solid ${c.bord}`,borderRadius:10,fontSize:12,color:c.mut }}>
+            Tip: Share the Room ID instead (Rooms tab) so members can join instantly without waiting for email.
+          </div>
+        </Card>
+      )}
+
+      {/* Edit designation modal */}
+    </div>
+  );
+}
 // ─── MANAGER VIEW ─────────────────────────────────────────────────────────────
 const MGR_TABS=[{id:'live',l:'Live board',i:'⚡'},{id:'team',l:'Team',i:'👥'},{id:'perf',l:'Performance',i:'📊'},{id:'ai',l:'AI Assistant',i:'🤖'},{id:'chat',l:'Chat',i:'💬'},{id:'cal',l:'Calendar',i:'📅'},{id:'remind',l:'Reminders',i:'🔔'},{id:'hist',l:'History',i:'🗂️'},{id:'tset',l:'Settings',i:'⚙️'}];
 
-function ManagerView({ session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme }) {
+function ManagerView({ session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers }) {
   const c=useC(); const [tab,setTab]=useState('live');
   const blocked=tasks.filter(t=>t.status==='blocked').length;
   const name=session?.user?.user_metadata?.name||session?.user?.email?.split('@')[0]||'Manager';
@@ -705,7 +816,7 @@ function ManagerView({ session, team, tasks, members, history, standup, onStatus
         {tab==='cal'&&<CalendarPanel team={team} members={members} session={session}/>}
         {tab==='remind'&&<RemindersPanel team={team} members={members} session={session}/>}
         {tab==='hist'&&<HistTab history={history} members={members}/>}
-        {tab==='tset'&&<TeamSettingsTab team={team} members={members} session={session}/>}
+        {tab==='tset'&&<TeamSettingsTab team={team} members={members} session={session} onMembersUpdate={()=>{if(setMembers&&SB.IS_LIVE)SB.getTeamMembers(team.id).then(m=>setMembers(m||[]))}}/>}
       </div>
     </div>
   );
@@ -815,7 +926,7 @@ export default function App() {
       {/* App views: show when session exists OR demo mode */}
       {(session||!SB.IS_LIVE)&&view==='home'&&<HomeView session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onSelectTeam={handleSelectTeam} onLogout={handleLogout} onSettings={()=>setView('settings')}/>}
       {(session||!SB.IS_LIVE)&&view==='settings'&&<SettingsPage session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onBack={()=>setView(team?'standup':'home')} onSaved={d=>showToast('Profile saved')}/>}
-      {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>setView('home')} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme}/>}
+      {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>setView('home')} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers}/>}
       {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<MemberView user={userForView} myMember={myMember} tasks={tasks} onAdd={handleAddTask} onStatus={handleStatus} onBlocker={handleBlocker} onBack={()=>setView('home')} onSettings={()=>setView('settings')} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} members={members} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme}/>}
     </ThemeCtx.Provider>
   );
