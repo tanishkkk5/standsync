@@ -1,10 +1,17 @@
 // src/lib/supabase.js
 import { createClient } from '@supabase/supabase-js';
 
-const URL  = process.env.REACT_APP_SUPABASE_URL  || '';
-const KEY  = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
-export const supabase = (URL && KEY) ? createClient(URL, KEY) : null;
-export const IS_LIVE  = !!supabase;
+const SUPA_URL = process.env.REACT_APP_SUPABASE_URL  || '';
+const SUPA_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
+export const supabase = (SUPA_URL && SUPA_KEY) ? createClient(SUPA_URL, SUPA_KEY, {
+  auth: {
+    persistSession: true,        // keep session in localStorage
+    autoRefreshToken: true,      // silently refresh tokens
+    detectSessionInUrl: false,   // STOP re-checking URL on tab focus — this was the bug
+    storageKey: 'ss-auth',       // our own key so nothing else touches it
+  }
+}) : null;
+export const IS_LIVE = !!supabase;
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export async function signUp(email, password, meta) {
