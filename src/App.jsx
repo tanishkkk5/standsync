@@ -340,13 +340,12 @@ function AIAssistant({ tasks, members, history, session, myTasks, teamName }) {
 
   const QUICK = ['What should I focus on today?','How\'s my progress?','Any blockers?','Team summary','Who\'s performing best?'];
 
+  const cleanAI=(t)=>t.replace(/\*\*(.+?)\*\*/g,'$1').replace(/\*(.+?)\*/g,'$1').replace(/^#{1,6}\s+/gm,'').replace(/`(.+?)`/g,'$1').replace(/^[-*]\s+/gm,'• ');
   const formatText=(text)=>{
-    return text.split('\n').map((line,i)=>{
-      if(line.startsWith('**')&&line.endsWith('**')) return <div key={i} style={{ fontWeight:700,color:c.text,marginBottom:4 }}>{line.slice(2,-2)}</div>;
-      if(line.startsWith('• ')) return <div key={i} style={{ paddingLeft:12,marginBottom:2,color:c.sub }}>{line}</div>;
-      if(line.startsWith('- ')) return <div key={i} style={{ paddingLeft:12,marginBottom:2,color:c.sub }}>• {line.slice(2)}</div>;
-      if(line==='') return <div key={i} style={{ height:6 }}/>;
-      return <div key={i} style={{ marginBottom:2,color:c.sub,lineHeight:1.55 }}>{line}</div>;
+    return cleanAI(text).split('\n').map((line,i)=>{
+      if(line.trim()==='') return <div key={i} style={{ height:6 }}/>;
+      if(line.startsWith('• ')) return <div key={i} style={{ paddingLeft:14,marginBottom:3,color:c.sub,lineHeight:1.6,display:'flex',gap:6 }}><span style={{flexShrink:0}}>•</span><span>{line.slice(2)}</span></div>;
+      return <div key={i} style={{ marginBottom:3,color:c.sub,lineHeight:1.6 }}>{line}</div>;
     });
   };
 
@@ -927,7 +926,7 @@ export default function App() {
   useEffect(()=>{
     if(!SB.IS_LIVE){setAuthLoading(false);setView('home');return;}
     SB.getSession().then(s=>{ setSession(s);setAuthLoading(false); if(s)setView(v=>v==='auth'?'home':v); });
-    return SB.onAuthChange((_,s)=>{ setSession(s?.session||null); if(s?.session)setView(v=>v==='auth'?'home':v); else setView('auth'); });
+    return SB.onAuthChange((event,s)=>{ if(event==='SIGNED_OUT'){setSession(null);setTeam(null);setView('auth');} else if(s?.session){setSession(s.session);setView(v=>v==='auth'?'home':v);} });
   },[]);
 
   useEffect(()=>{
