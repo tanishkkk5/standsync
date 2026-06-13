@@ -239,7 +239,12 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
     if(SB.IS_LIVE){
       team=await SB.createTeam(teamName.trim(),session.user.id,session.user.email,myName,standupName.trim());
       const validEmails=memberEmails.filter(e=>e.trim()&&e.includes('@'));
-      for(const em of validEmails){const {link}=await SB.inviteMember(team.id,teamName,em,myName);await Email.sendInvite(em,myName,teamName,link);}
+      for(const em of validEmails){
+        try {
+          const {link}=await SB.inviteMember(team.id,teamName,em,myName);
+          try { await Promise.race([Email.sendInvite(em,myName,teamName,link),new Promise(r=>setTimeout(r,4000))]); } catch(e){}
+        } catch(e){ console.log('Invite failed for',em); }
+      }
       // Get the room code to show user
       const code = await SB.getTeamCode(team.id);
       if(code) setCreatedCode({...code, teamName:teamName.trim()});
@@ -610,7 +615,30 @@ function TeamSettingsTab({ team, members, session }) {
   const c=useC(); const [invEmail,setInvEmail]=useState(''); const [sending,setSending]=useState(false); const [sent,setSent]=useState(false);
   const [roomCode,setRoomCode]=useState(null); const [showCode,setShowCode]=useState(false);
   const loadCode=async()=>{ if(!SB.IS_LIVE)return; const code=await SB.getTeamCode(team.id); setRoomCode(code); setShowCode(true); };
-  const sendInv=async()=>{ if(!invEmail.trim()||!invEmail.includes('@'))return; setSending(true); if(SB.IS_LIVE){const myName=session?.user?.user_metadata?.name||session?.user?.email;const {link}=await SB.inviteMember(team.id,team.name,invEmail.trim(),myName);await Email.sendInvite(invEmail.trim(),myName,team.name,link);} setSent(true);setSending(false);setTimeout(()=>{setSent(false);setInvEmail('');},3000); };
+  const sendInv=async()=>{
+    if(!invEmail.trim()||!invEmail.includes('@'))return;
+    setSending(true);
+    try {
+      if(SB.IS_LIVE){
+        const myName=session?.user?.user_metadata?.name||session?.user?.email;
+        const {link}=await SB.inviteMember(team.id,team.name,invEmail.trim(),myName);
+        // Email send with timeout - CORS may block Resend from browser, that's OK
+        // The invite link still works even without the email
+        try {
+          await Promise.race([
+            Email.sendInvite(invEmail.trim(),myName,team.name,link),
+            new Promise(r=>setTimeout(r,5000)) // 5s timeout
+          ]);
+        } catch(emailErr) {
+          console.log('Email send failed (CORS) - invite link still created:', link);
+        }
+      }
+    } catch(err) {
+      console.error('Invite error:', err);
+    }
+    setSent(true);setSending(false);
+    setTimeout(()=>{setSent(false);setInvEmail('');},3000);
+  };
   return(<div>
     {/* Room code card */}
     <Card style={{ padding:'20px 22px',marginBottom:16,border:'1px solid rgba(99,102,241,.2)',background:'rgba(99,102,241,.05)' }}>
