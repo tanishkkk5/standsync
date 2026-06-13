@@ -1,3 +1,4 @@
+// src/lib/supabase.js
 import { createClient } from '@supabase/supabase-js';
 
 const URL  = process.env.REACT_APP_SUPABASE_URL  || '';
@@ -5,6 +6,7 @@ const KEY  = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 export const supabase = (URL && KEY) ? createClient(URL, KEY) : null;
 export const IS_LIVE  = !!supabase;
 
+// ── Auth ──────────────────────────────────────────────────────────────────────
 export async function signUp(email, password, meta) {
   if (!supabase) return { error: { message: 'Supabase not configured' } };
   return supabase.auth.signUp({ email, password, options: { data: meta } });
@@ -49,6 +51,7 @@ export async function getSession() {
   return data.session;
 }
 
+// ── Teams ─────────────────────────────────────────────────────────────────────
 export async function createTeam(name, ownerId, ownerEmail, ownerName) {
   const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + Math.random().toString(36).slice(2,6);
   const { data: team } = await supabase.from('teams').insert({ name, slug, owner_id: ownerId }).select().single();
@@ -68,6 +71,7 @@ export async function getTeamMembers(teamId) {
   return data || [];
 }
 
+// ── Invites ───────────────────────────────────────────────────────────────────
 export async function inviteMember(teamId, teamName, email, inviterName) {
   const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
   const { data } = await supabase.from('invites').insert({
@@ -89,6 +93,7 @@ export async function acceptInvite(token, userId, email, name) {
   return { teamId: invite.team_id, teamName: invite.teams?.name };
 }
 
+// ── Standups & Tasks ──────────────────────────────────────────────────────────
 export async function getOrCreateStandup(teamId, date) {
   let { data, error } = await supabase.from('standups').select('*').eq('team_id', teamId).eq('date', date).single();
   if (error?.code === 'PGRST116') {
@@ -126,6 +131,7 @@ export function subscribeToTasks(standupId, cb) {
   return () => supabase.removeChannel(ch);
 }
 
+// ── Storage (avatars) ─────────────────────────────────────────────────────────
 export async function uploadAvatar(userId, file) {
   const ext = file.name.split('.').pop();
   const path = `${userId}.${ext}`;
@@ -133,4 +139,45 @@ export async function uploadAvatar(userId, file) {
   if (error) return null;
   const { data } = supabase.storage.from('avatars').getPublicUrl(path);
   return data.publicUrl;
+}
+
+// ── Team join via Room ID + password ─────────────────────────────────────────
+export async function createTeamWithCode(name, ownerId, ownerEmail, ownerName, standupName) {
+  const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + Math.random().toString(36).slice(2,6);
+  // Room ID: 6 uppercase letters easy to share
+  const room_id = Math.random().toString(36).slice(2,8).toUpperCase();
+  // Room password: 4 digit PIN
+  const room_password = String(Math.floor(1000 + Math.random() * 9000));
+  const { data: team } = await supabase.from('teams')
+    .insert({ name, slug, owner_id: ownerId, standup_name: standupName||name, room_id, room_password })
+    .select().single();
+  if (team) {
+    await supabase.from('team_members').insert({
+      team_id: team.id, user_id: ownerId, email: ownerEmail,
+      name: ownerName, role: 'manager', status: 'active'
+    });
+  }
+  return team;
+}
+
+export async function joinTeamByCode(roomId, password, userId, email, name) {
+  const { data: team, error } = await supabase.from('teams')
+    .select('*')
+    .eq('room_id', roomId.toUpperCase().trim())
+    .eq('room_password', password.trim())
+    .single();
+  if (error || !team) return { error: 'Invalid Room ID or password. Please check and try again.' };
+  // Check if already a member
+  const { data: existing } = await supabase.from('team_members')
+    .select('id').eq('team_id', team.id).eq('user_id', userId).single();
+  if (existing) return { team, alreadyMember: true };
+  await supabase.from('team_members').insert({
+    team_id: team.id, user_id: userId, email, name, role: 'member', status: 'active'
+  });
+  return { team };
+}
+
+export async function getTeamCode(teamId) {
+  const { data } = await supabase.from('teams').select('room_id,room_password').eq('id', teamId).single();
+  return data;
 }
