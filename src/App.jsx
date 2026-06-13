@@ -729,8 +729,8 @@ export default function App() {
   const [session,setSession]=useState(()=>{
     try { const s=sessionStorage.getItem('ss_session'); return s?JSON.parse(s):null; } catch(e){ return null; }
   });
-  const [authLoading,setAuthLoading]=useState(true);
-  // VIEW: never starts as auth — starts as home if session exists
+  const [authLoading,setAuthLoading]=useState(false); // no loading screen — session from storage is instant
+  // VIEW: driven purely from sessionStorage — never flickers to auth on tab switch
   const [view,setView]=useState(()=>{
     try { const s=sessionStorage.getItem('ss_session'); return s?'home':'auth'; } catch(e){ return 'auth'; }
   });
@@ -750,30 +750,33 @@ export default function App() {
   useEffect(()=>{ const p=new URLSearchParams(window.location.search); const inv=p.get('invite'); if(inv)setInviteToken(inv); },[]);
 
   useEffect(()=>{
-    if(!SB.IS_LIVE){setAuthLoading(false);setView('home');return;}
-    // Verify session with Supabase on mount
+    if(!SB.IS_LIVE){ setView('home'); return; }
+
+    // Background session refresh — NEVER changes the view based on result
+    // The view is already correct from sessionStorage
     SB.getSession().then(s=>{
       if(s){
-        setSession(s);
-        // Only move to home if on auth page — never move away from standup/settings
-        setView(v=>v==='auth'?'home':v);
-      } else {
-        // Clear cached session only if Supabase confirms it's invalid
-        try{ sessionStorage.removeItem('ss_session'); }catch(e){}
-        setSession(null);
-        setView('auth');
+        setSession(s); // refresh session data silently
+        try{ sessionStorage.setItem('ss_session',JSON.stringify(s)); }catch(e){}
       }
-      setAuthLoading(false);
+      // If null: do NOTHING to view — sessionStorage still has the session
+      // Supabase returns null briefly during token refresh, that is NOT a logout
     });
-    // Auth listener: ONLY handle explicit SIGNED_OUT
-    // Do NOT handle any other events — they cause the tab-switch bug
+
+    // Auth listener: ONLY react to explicit SIGNED_OUT
     if(SB.supabase){
-      const {data:{subscription}} = SB.supabase.auth.onAuthStateChange((event)=>{
+      const {data:{subscription}} = SB.supabase.auth.onAuthStateChange((event, s)=>{
         if(event==='SIGNED_OUT'){
-          setSession(null);setTeam(null);setView('auth');
+          // User explicitly clicked sign out — clear everything
+          setSession(null); setTeam(null); setView('auth');
           try{ sessionStorage.removeItem('ss_session'); }catch(e){}
+        } else if(event==='SIGNED_IN' && s?.session){
+          // Fresh login from another tab
+          setSession(s.session);
+          try{ sessionStorage.setItem('ss_session',JSON.stringify(s.session)); }catch(e){}
+          setView(v=>v==='auth'?'home':v);
         }
-        // All other events (TOKEN_REFRESHED, INITIAL_SESSION, etc.) = do nothing to view
+        // TOKEN_REFRESHED, INITIAL_SESSION, USER_UPDATED → ignore completely
       });
       return ()=>subscription.unsubscribe();
     }
@@ -804,7 +807,7 @@ export default function App() {
 
   useEffect(()=>{document.body.style.background=dark?'#060412':'#F1F5F9';},[dark]);
 
-  if(authLoading) return(<><style>{CSS}</style><BgEl/><div style={{ position:'relative',zIndex:1,minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center' }}><Spin size={36}/></div></>);
+  // authLoading removed — session is instant from sessionStorage
 
   return(
     <ThemeCtx.Provider value={{dark,toggle}}>
