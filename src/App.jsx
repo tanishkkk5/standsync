@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, createContext, useCo
 import * as SB from './lib/supabase';
 import * as Email from './lib/email';
 import { askAI } from './lib/ai';
-import { getPriority, getStatus, PRIORITIES, STATUSES, TODAY, FAQ, CHAT_THEMES, MEMBER_COLORS, GOOGLE_CONFIG } from './lib/constants';
+import { getPriority, getStatus, PRIORITIES, STATUSES, TODAY, FAQ, CHAT_THEMES, MEMBER_COLORS } from './lib/constants';
 
 // ─── THEME ────────────────────────────────────────────────────────────────────
 const ThemeCtx = createContext({ dark:true, toggle:()=>{} });
@@ -192,7 +192,7 @@ function AuthPage({ onLogin, inviteToken }) {
               <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
               Continue with Google
             </Btn>
-            {!GOOGLE_CONFIG.ENABLED&&<div style={{ fontSize:11,color:c.mut,textAlign:'center',marginBottom:12 }}>⚙️ Add REACT_APP_GOOGLE_CLIENT_ID to enable Google Sign-In</div>}
+            {!!!process.env.REACT_APP_GOOGLE_CLIENT_ID&&<div style={{ fontSize:11,color:c.mut,textAlign:'center',marginBottom:12 }}>⚙️ Add REACT_APP_GOOGLE_CLIENT_ID to enable Google Sign-In</div>}
             <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:16 }}><div style={{ flex:1,height:1,background:c.bord }}/><span style={{ fontSize:12,color:c.mut }}>or</span><div style={{ flex:1,height:1,background:c.bord }}/></div>
           </>
         )}
@@ -421,6 +421,192 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
           </div>
         </>)}
       </Card>
+    </div>
+  );
+}
+
+// ─── FLOATING AI BUBBLE ───────────────────────────────────────────────
+function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamName='Team' }) {
+  const c=useC(); const [open,setOpen]=useState(false);
+  const [msgs,setMsgs]=useState([{id:'w',role:'assistant',text:'Hi! I am your StandSync AI. Ask me about tasks, blockers, team progress, or what to focus on today.'}]);
+  const [input,setInput]=useState(''); const [loading,setLoading]=useState(false);
+  const bottomRef=useRef(); const name=session?.user?.user_metadata?.name||'User';
+  useEffect(()=>{ if(open) bottomRef.current?.scrollIntoView({behavior:'smooth'}); },[msgs,open]);
+  const send=async()=>{
+    if(!input.trim()||loading) return;
+    const userMsg={id:'u'+Date.now(),role:'user',text:input.trim()};
+    setMsgs(p=>[...p,userMsg]); setInput(''); setLoading(true);
+    try{ const reply=await askAI(input.trim(),{tasks,members,history,teamName,userName:name,myTasks}); setMsgs(p=>[...p,{id:'a'+Date.now(),role:'assistant',text:reply}]); }
+    catch(e){ setMsgs(p=>[...p,{id:'e'+Date.now(),role:'assistant',text:'Sorry, try again!'}]); }
+    setLoading(false);
+  };
+  const QUICK=['Focus today?','Team progress?','Any blockers?','My tasks'];
+  return (
+    <>
+      <button onClick={()=>setOpen(!open)} style={{ position:'fixed',bottom:24,right:24,zIndex:800,width:52,height:52,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,boxShadow:'0 4px 24px rgba(99,102,241,.5)',transition:'transform .2s',transform:open?'scale(.9)':'scale(1)' }}>{open?'\u2715':'\uD83E\uDD16'}</button>
+      {open&&(
+        <div style={{ position:'fixed',bottom:88,right:24,zIndex:799,width:320,maxHeight:460,background:c.dark?'rgba(12,10,32,.97)':'#fff',border:`1px solid ${c.bord}`,borderRadius:18,display:'flex',flexDirection:'column',boxShadow:'0 8px 40px rgba(0,0,0,.4)',overflow:'hidden',animation:'popIn .2s ease' }}>
+          <div style={{ padding:'12px 14px',borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',gap:8,background:'rgba(99,102,241,.08)',flexShrink:0 }}>
+            <div style={{ width:30,height:30,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>\uD83E\uDD16</div>
+            <div style={{ flex:1 }}><div style={{ fontSize:13,fontWeight:700,color:c.text }}>StandSync AI</div><div style={{ fontSize:10,color:'#34D399' }}>Online</div></div>
+          </div>
+          <div style={{ padding:'7px 10px',display:'flex',gap:5,flexWrap:'wrap',borderBottom:`1px solid ${c.bord}`,flexShrink:0 }}>
+            {QUICK.map(q=><button key={q} onClick={()=>setInput(q)} style={{ fontSize:11,padding:'3px 9px',borderRadius:20,border:`1px solid ${c.bord}`,background:c.surf,color:c.mut,cursor:'pointer',whiteSpace:'nowrap' }}>{q}</button>)}
+          </div>
+          <div style={{ flex:1,overflowY:'auto',padding:'10px',display:'flex',flexDirection:'column',gap:7 }}>
+            {msgs.map(m=>(
+              <div key={m.id} style={{ display:'flex',flexDirection:m.role==='user'?'row-reverse':'row' }}>
+                <div style={{ maxWidth:'88%',background:m.role==='user'?'linear-gradient(135deg,#6366F1,#818CF8)':c.surf,color:m.role==='user'?'#fff':c.text,padding:'8px 12px',borderRadius:m.role==='user'?'13px 13px 3px 13px':'13px 13px 13px 3px',fontSize:12,lineHeight:1.5,border:m.role==='user'?'none':`1px solid ${c.bord}` }}>
+                  {m.text.split('\n').map((l,i)=><div key={i}>{l||<br/>}</div>)}
+                </div>
+              </div>
+            ))}
+            {loading&&<div style={{ display:'flex',gap:5,padding:'7px 11px',background:c.surf,borderRadius:'13px 13px 13px 3px',width:'fit-content',border:`1px solid ${c.bord}` }}>{[0,1,2].map(i=><div key={i} style={{ width:6,height:6,borderRadius:'50%',background:'#818CF8',animation:`bounce .8s ease ${i*.15}s infinite` }}/>)}</div>}
+            <div ref={bottomRef}/>
+          </div>
+          <div style={{ padding:'9px 10px',borderTop:`1px solid ${c.bord}`,display:'flex',gap:7,flexShrink:0 }}>
+            <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()} placeholder="Ask me anything..." style={{ flex:1,background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:9,padding:'8px 11px',color:c.text,fontSize:12,outline:'none' }}/>
+            <button onClick={send} disabled={!input.trim()||loading} style={{ width:34,height:34,borderRadius:9,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',color:'#fff',cursor:input.trim()&&!loading?'pointer':'not-allowed',opacity:input.trim()&&!loading?1:.5,display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0 }}>\u2191</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── RICH CHAT ──────────────────────────────────────────────────────────
+function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='default', onChangeTheme }) {
+  const c=useC(); const [msg,setMsg]=useState(''); const [showGif,setShowGif]=useState(false);
+  const [gifSearch,setGifSearch]=useState(''); const [gifs,setGifs]=useState([]); const [gifLoading,setGifLoading]=useState(false);
+  const [showTheme,setShowTheme]=useState(false);
+  const bottomRef=useRef(); const fileRef=useRef();
+  const myEmail=session?.user?.email||'demo@standsync.app';
+  const myName=session?.user?.user_metadata?.name||myEmail.split('@')[0];
+  const theme=CHAT_THEMES.find(t=>t.id===chatTheme)||CHAT_THEMES[0];
+  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:'smooth'}); },[messages]);
+  const sendMsg=(text,type='text',url='')=>{
+    if(type==='text'&&!text.trim())return;
+    onSend({id:'m'+Date.now(),text:type==='text'?text.trim():'',type,url,sender_email:myEmail,sender_name:myName,created_at:new Date().toISOString()});
+    if(type==='text')setMsg(''); setShowGif(false);
+  };
+  const searchGifs=async(q)=>{
+    if(!q.trim())return; setGifLoading(true);
+    try{ const r=await fetch('https://api.giphy.com/v1/gifs/search?api_key='+GIPHY_KEY+'&q='+encodeURIComponent(q)+'&limit=12&rating=g'); const d=await r.json(); setGifs(d.data||[]); }
+    catch(e){ setGifs([]); }
+    setGifLoading(false);
+  };
+  const handleImage=(e)=>{
+    const file=e.target.files[0]; if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>sendMsg('','image',ev.target.result);
+    reader.readAsDataURL(file);
+  };
+  const renderMsg=(m)=>{
+    if(m.type==='image') return <img src={m.url} alt="img" style={{ maxWidth:180,maxHeight:180,borderRadius:8,objectFit:'cover' }}/>;
+    if(m.type==='gif') return <img src={m.url} alt="gif" style={{ maxWidth:180,borderRadius:8 }}/>;
+    return <span>{m.text}</span>;
+  };
+  const grouped=messages.reduce((acc,m)=>{ const date=new Date(m.created_at).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); if(!acc.length||acc[acc.length-1].date!==date)acc.push({date,msgs:[]}); acc[acc.length-1].msgs.push(m); return acc; },[]);
+  return (
+    <div style={{ display:'flex',flexDirection:'column',height:'calc(100vh - 160px)',minHeight:400,borderRadius:14,overflow:'hidden',border:`1px solid ${c.bord}`,position:'relative' }}>
+      <div style={{ padding:'11px 14px',background:c.nav,borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',gap:8,flexShrink:0 }}>
+        <div style={{ display:'flex' }}>{members.slice(0,4).map((m,i)=><div key={m.id||m.email} style={{ marginLeft:i>0?-5:0 }}><Av member={m} size={24} url={m.avatar_url}/></div>)}</div>
+        <div style={{ flex:1 }}><span style={{ fontSize:13,fontWeight:700,color:c.text }}>Team Chat</span><span style={{ fontSize:11,color:c.mut,marginLeft:8 }}>{members.length} members</span></div>
+        <button onClick={()=>setShowTheme(!showTheme)} style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14 }}>\uD83C\uDFA8</button>
+        {showTheme&&<div style={{ position:'absolute',right:10,top:52,background:c.dark?'rgba(18,15,50,.98)':'#fff',border:`1px solid ${c.bord}`,borderRadius:12,padding:10,zIndex:200,backdropFilter:'blur(20px)',boxShadow:'0 8px 24px rgba(0,0,0,.3)',width:240 }}><div style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8 }}>Chat theme</div><div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6 }}>{CHAT_THEMES.map(t=><button key={t.id} onClick={()=>{onChangeTheme(t.id);setShowTheme(false);}} style={{ padding:'9px 5px',borderRadius:9,border:`2px solid ${chatTheme===t.id?t.accent:c.bord}`,background:t.bg,cursor:'pointer',textAlign:'center' }}><div style={{ fontSize:10,fontWeight:600,color:chatTheme===t.id?t.accent:'rgba(255,255,255,.6)' }}>{t.label}</div></button>)}</div></div>}
+      </div>
+      <div style={{ flex:1,overflowY:'auto',padding:'12px',display:'flex',flexDirection:'column',gap:3,background:theme.bg }}>
+        {messages.length===0&&<div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.35)',gap:8,paddingTop:32 }}><div style={{ fontSize:36 }}>\uD83D\uDCAC</div><div style={{ fontSize:13 }}>No messages yet</div></div>}
+        {grouped.map(group=>(
+          <div key={group.date}>
+            <div style={{ textAlign:'center',margin:'10px 0 6px',fontSize:11,color:'rgba(255,255,255,.3)',display:'flex',alignItems:'center',gap:6 }}><div style={{ flex:1,height:1,background:'rgba(255,255,255,.1)' }}/>{group.date}<div style={{ flex:1,height:1,background:'rgba(255,255,255,.1)' }}/></div>
+            {group.msgs.map(m=>{ const isMe=m.sender_email===myEmail; const member=members.find(x=>x.email===m.sender_email); const color=member?.color||theme.accent; return(
+              <div key={m.id} style={{ display:'flex',gap:7,alignItems:'flex-end',marginBottom:3,flexDirection:isMe?'row-reverse':'row' }}>
+                {!isMe&&<Av member={{name:m.sender_name,color}} size={24} url={member?.avatar_url}/>}
+                <div style={{ maxWidth:'74%' }}>
+                  {!isMe&&<div style={{ fontSize:10,color:'rgba(255,255,255,.4)',marginBottom:2,marginLeft:3 }}>{m.sender_name}</div>}
+                  <div style={{ background:isMe?`linear-gradient(135deg,${theme.accent},${theme.accent}bb)`:'rgba(255,255,255,.12)',color:'#fff',padding:m.type!=='text'?5:'8px 12px',borderRadius:isMe?'13px 13px 3px 13px':'13px 13px 13px 3px',fontSize:13,backdropFilter:'blur(10px)' }}>{renderMsg(m)}</div>
+                  <div style={{ fontSize:10,color:'rgba(255,255,255,.28)',marginTop:2,textAlign:isMe?'right':'left',paddingLeft:isMe?0:3,paddingRight:isMe?3:0 }}>{new Date(m.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>
+                </div>
+              </div>
+            );})}
+          </div>
+        ))}
+        <div ref={bottomRef}/>
+      </div>
+      {showGif&&<div style={{ padding:'9px 11px',background:c.nav,borderTop:`1px solid ${c.bord}`,flexShrink:0 }}>
+        <div style={{ display:'flex',gap:7,marginBottom:7 }}>
+          <input value={gifSearch} onChange={e=>setGifSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&searchGifs(gifSearch)} placeholder="Search GIFs..." style={{ flex:1,background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:8,padding:'6px 11px',color:c.text,fontSize:12,outline:'none' }}/>
+          <Btn onClick={()=>searchGifs(gifSearch)} loading={gifLoading} style={{ padding:'6px 12px',fontSize:11 }}>Search</Btn>
+          <button onClick={()=>setShowGif(false)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:18 }}>&times;</button>
+        </div>
+        {gifs.length>0&&<div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:4,maxHeight:130,overflowY:'auto' }}>{gifs.map(g=><img key={g.id} src={g.images.fixed_height_small.url} alt={g.title} onClick={()=>sendMsg('','gif',g.images.fixed_height.url)} style={{ width:'100%',height:66,objectFit:'cover',borderRadius:6,cursor:'pointer' }} onMouseEnter={e=>e.target.style.opacity='.7'} onMouseLeave={e=>e.target.style.opacity='1'}/>)}</div>}
+        {gifs.length===0&&!gifLoading&&gifSearch&&<div style={{ fontSize:12,color:c.mut,textAlign:'center',padding:'6px 0' }}>No GIFs found</div>}
+      </div>}
+      <div style={{ padding:'9px 11px',background:c.nav,borderTop:`1px solid ${c.bord}`,display:'flex',gap:7,alignItems:'center',flexShrink:0 }}>
+        <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} style={{ display:'none' }}/>
+        <button onClick={()=>fileRef.current.click()} style={{ width:32,height:32,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0 }} title="Image">\uD83D\uDDBC\uFE0F</button>
+        <button onClick={()=>setShowGif(!showGif)} style={{ width:32,height:32,borderRadius:8,border:`1px solid ${showGif?'#6366F1':c.bord}`,background:showGif?'rgba(99,102,241,.15)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:showGif?'#818CF8':c.mut,flexShrink:0 }}>GIF</button>
+        <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&sendMsg(msg)} placeholder="Message your team..." style={{ flex:1,background:c.inp,border:`1.5px solid ${c.inpB}`,borderRadius:9,padding:'8px 12px',color:c.text,fontSize:13,outline:'none' }}/>
+        <button onClick={()=>sendMsg(msg)} disabled={!msg.trim()} style={{ width:34,height:34,borderRadius:9,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',color:'#fff',cursor:msg.trim()?'pointer':'not-allowed',opacity:msg.trim()?1:.5,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>\u2191</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── REMINDERS ─────────────────────────────────────────────────────────────
+function RemindersPanel() {
+  const c=useC();
+  const [reminders,setReminders]=useState([
+    {id:'r1',label:'Standup starting soon',enabled:true,minutes:10},
+    {id:'r2',label:'Task deadline reminder',enabled:true,minutes:60},
+    {id:'r3',label:'EOD incomplete tasks',enabled:true,time:'18:00'},
+    {id:'r4',label:'Blocker follow-up',enabled:false,minutes:120},
+  ]);
+  const [saved,setSaved]=useState(false);
+  const toggle=id=>setReminders(p=>p.map(r=>r.id===id?{...r,enabled:!r.enabled}:r));
+  const updateMins=(id,v)=>setReminders(p=>p.map(r=>r.id===id?{...r,minutes:parseInt(v)||0}:r));
+  const save=()=>{setSaved(true);setTimeout(()=>setSaved(false),2000);};
+  return(
+    <div>
+      <div style={{ fontSize:15,fontWeight:700,color:c.text,marginBottom:4 }}>Reminders</div>
+      <div style={{ fontSize:13,color:c.mut,marginBottom:18 }}>Email reminders for your team. Requires REACT_APP_RESEND_KEY.</div>
+      <div style={{ display:'flex',flexDirection:'column',gap:10,marginBottom:18 }}>
+        {reminders.map(r=>(
+          <Card key={r.id} style={{ padding:'14px 16px' }}>
+            <div style={{ display:'flex',alignItems:'center',gap:10 }}>
+              <div style={{ flex:1 }}><div style={{ fontSize:13,fontWeight:600,color:c.text,marginBottom:2 }}>{r.label}</div><div style={{ fontSize:12,color:c.mut }}>{r.time?`Fires at ${r.time} if pending`:`${r.minutes} minutes before`}</div></div>
+              {!r.time&&r.enabled&&<div style={{ display:'flex',alignItems:'center',gap:5 }}><input type="number" value={r.minutes} onChange={e=>updateMins(r.id,e.target.value)} min="5" max="480" style={{ width:56,background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:7,padding:'4px 7px',color:c.text,fontSize:12,outline:'none',textAlign:'center' }}/><span style={{ fontSize:11,color:c.mut }}>min</span></div>}
+              <button onClick={()=>toggle(r.id)} style={{ width:42,height:22,borderRadius:11,border:'none',background:r.enabled?'#6366F1':'rgba(128,128,128,.3)',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0 }}><div style={{ width:16,height:16,borderRadius:'50%',background:'#fff',position:'absolute',top:3,left:r.enabled?23:3,transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,.2)' }}/></button>
+            </div>
+          </Card>
+        ))}
+      </div>
+      <Btn onClick={save}>{saved?'\u2713 Saved!':'Save reminders'}</Btn>
+    </div>
+  );
+}
+
+// ─── GOOGLE CALENDAR ─────────────────────────────────────────────────────
+function CalendarPanel({ team }) {
+  const c=useC(); const [connected,setConnected]=useState(false); const [selectedMeeting,setSelectedMeeting]=useState(null); const [step,setStep]=useState(1); const [importedMembers,setImportedMembers]=useState([]);
+  const MOCK=[{id:'m1',title:team?.standup_name||'Daily Standup',time:'9:00 AM',days:'Mon-Sat',attendees:['tanisk.pandey@xtransmatrix.com','deepak.nr@xtransmatrix.com']},{id:'m2',title:'Weekly Review',time:'3:00 PM',days:'Fridays',attendees:['tanisk.pandey@xtransmatrix.com']}];
+  const selectedMeet=MOCK.find(m=>m.id===selectedMeeting);
+  if(!connected) return(
+    <div style={{ textAlign:'center',padding:'40px 20px' }}>
+      <div style={{ fontSize:44,marginBottom:14 }}>\uD83D\uDCC5</div>
+      <h3 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:8 }}>Connect Google Calendar</h3>
+      <p style={{ fontSize:13,color:c.mut,marginBottom:22,lineHeight:1.7,maxWidth:360,margin:'0 auto 22px' }}>Link your Google Calendar to find standup meetings and import attendees.</p>
+      <Btn v="ghost" onClick={()=>setConnected(true)} style={{ margin:'0 auto' }}>Connect with Google</Btn>
+      <p style={{ fontSize:11,color:c.mut,marginTop:14 }}>Requires REACT_APP_GOOGLE_CLIENT_ID in Vercel</p>
+    </div>
+  );
+  return(
+    <div>
+      <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:18 }}><div style={{ width:8,height:8,borderRadius:'50%',background:'#34D399' }}/><span style={{ fontSize:13,color:'#34D399',fontWeight:600 }}>Google Calendar connected</span><button onClick={()=>setConnected(false)} style={{ marginLeft:'auto',fontSize:12,color:c.mut,background:'none',border:'none',cursor:'pointer' }}>Disconnect</button></div>
+      {step===1&&(<><Lbl>Select your standup meeting</Lbl><div style={{ display:'flex',flexDirection:'column',gap:10,marginBottom:14 }}>{MOCK.map(m=><div key={m.id} onClick={()=>setSelectedMeeting(m.id===selectedMeeting?null:m.id)} style={{ padding:'12px 14px',borderRadius:11,border:`1.5px solid ${m.id===selectedMeeting?'#6366F1':c.bord}`,background:m.id===selectedMeeting?'rgba(99,102,241,.1)':c.surf,cursor:'pointer',transition:'all .2s' }}><div style={{ display:'flex',alignItems:'center',gap:9 }}><div style={{ width:32,height:32,borderRadius:9,background:'rgba(99,102,241,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16 }}>\uD83D\uDCC5</div><div style={{ flex:1 }}><div style={{ fontSize:13,fontWeight:600,color:c.text }}>{m.title}</div><div style={{ fontSize:11,color:c.mut }}>{m.time} \u00b7 {m.days} \u00b7 {m.attendees.length} attendees</div></div>{m.id===selectedMeeting&&<div style={{ width:18,height:18,borderRadius:'50%',background:'#6366F1',display:'flex',alignItems:'center',justifyContent:'center' }}><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg></div>}</div></div>)}</div>{selectedMeeting&&<Btn onClick={()=>setStep(2)}>Select members \u2192</Btn>}</>)}
+      {step===2&&selectedMeet&&(<><Lbl>Select members to add</Lbl><button onClick={()=>setImportedMembers(selectedMeet.attendees)} style={{ fontSize:12,color:'#818CF8',background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.25)',borderRadius:8,padding:'4px 11px',cursor:'pointer',marginBottom:10 }}>Select all</button>{selectedMeet.attendees.map(email=><div key={email} onClick={()=>setImportedMembers(p=>p.includes(email)?p.filter(x=>x!==email):[...p,email])} style={{ display:'flex',alignItems:'center',gap:10,padding:'9px 12px',borderRadius:9,border:`1px solid ${importedMembers.includes(email)?'#6366F1':c.bord}`,background:importedMembers.includes(email)?'rgba(99,102,241,.1)':c.surf,cursor:'pointer',marginBottom:7 }}><Av member={{name:email.split('@')[0],color:'#818CF8'}} size={30}/><span style={{ flex:1,fontSize:13,color:c.text }}>{email}</span></div>)}<div style={{ display:'flex',gap:8,marginTop:10 }}><Btn v="ghost" onClick={()=>setStep(1)}>\u2190 Back</Btn><Btn onClick={()=>setStep(3)} disabled={!importedMembers.length}>Add {importedMembers.length} \u2192</Btn></div></>)}
+      {step===3&&<div style={{ textAlign:'center',padding:'20px 0' }}><div style={{ fontSize:40,marginBottom:10 }}>\uD83C\uDF89</div><h3 style={{ color:c.text,marginBottom:6 }}>Done!</h3><p style={{ color:c.mut,fontSize:13,marginBottom:14 }}>{importedMembers.length} members added.</p><Btn onClick={()=>{setStep(1);setSelectedMeeting(null);setImportedMembers([]);}}>Done</Btn></div>}
     </div>
   );
 }
@@ -858,7 +1044,7 @@ export default function App() {
     } catch(e){ return 'auth'; }
   });
   const [team,setTeam]=useState(null); const [myRole,setMyRole]=useState('member');
-  const [members,setMembers]=useState(DEMO_MEMBERS); const [tasks,setTasks]=useState([]); const [standup,setStandup]=useState(null);
+  const [members,setMembers]=useState(SB.IS_LIVE?[]:DEMO_MEMBERS); const [tasks,setTasks]=useState([]); const [standup,setStandup]=useState(null);
   const [history,setHistory]=useState([]); const [messages,setMessages]=useState([]); const [chatTheme,setChatTheme]=useState('default');
   const [toast,setToast]=useState(null); const [emailBusy,setEmailBusy]=useState(false); const [inviteToken,setInviteToken]=useState(null);
   const isManager=myRole==='manager'||!SB.IS_LIVE;
