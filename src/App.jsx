@@ -2437,33 +2437,26 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
   );
 }
 // ─── MANAGER VIEW ─────────────────────────────────────────────────────────────
-// Minimal SVG icon set — 16×16, stroke-based
-const I={
-  live:   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="8" cy="8" r="3"/><path d="M3.3 3.3a7 7 0 0 0 0 9.4M12.7 3.3a7 7 0 0 1 0 9.4"/></svg>,
-  team:   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="6" cy="5" r="2.5"/><path d="M1.5 14c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4"/><circle cx="12" cy="5.5" r="2"/><path d="M14.5 14c0-2-1.5-3-3-3"/></svg>,
-  perf:   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M2 12 L5 8 L8 10 L11 5 L14 7"/><path d="M2 14h12"/></svg>,
-  analysis:<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="2" y="9" width="3" height="5" rx="1"/><rect x="6.5" y="6" width="3" height="8" rx="1"/><rect x="11" y="3" width="3" height="11" rx="1"/></svg>,
-  ai:     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="3" y="3" width="10" height="8" rx="2.5"/><path d="M6 8h4M8 6v4M5.5 11l-2 2M10.5 11l2 2"/></svg>,
-  chat:   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M2 3h12a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H5l-3 2V4a1 1 0 0 1 1-1z"/></svg>,
-  cal:    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="2" y="3" width="12" height="12" rx="2"/><path d="M2 7h12M5 2v2M11 2v2"/><circle cx="5.5" cy="10.5" r=".7" fill="currentColor"/><circle cx="8" cy="10.5" r=".7" fill="currentColor"/><circle cx="10.5" cy="10.5" r=".7" fill="currentColor"/></svg>,
-  notes:  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="3" y="2" width="10" height="13" rx="2"/><path d="M5.5 6h5M5.5 9h5M5.5 12h3"/></svg>,
-  remind: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M8 2a5 5 0 0 1 5 5v3l1 1.5H2L3 10V7a5 5 0 0 1 5-5z"/><path d="M6.5 13a1.5 1.5 0 0 0 3 0"/></svg>,
-  hist:   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M2.5 8a5.5 5.5 0 1 1 1.5 3.8"/><path d="M2.5 4.5V8H6"/></svg>,
-  tset:   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M7 2h2l.5 1.5a4.5 4.5 0 0 1 1.5.87l1.6-.5 1 1.73-1.1 1.2a4.5 4.5 0 0 1 0 1.4l1.1 1.2-1 1.73-1.6-.5a4.5 4.5 0 0 1-1.5.87L9 14H7l-.5-1.5a4.5 4.5 0 0 1-1.5-.87l-1.6.5-1-1.73 1.1-1.2a4.5 4.5 0 0 1 0-1.4L2.4 6.6l1-1.73 1.6.5A4.5 4.5 0 0 1 6.5 3.5L7 2z"/><circle cx="8" cy="8" r="2"/></svg>,
-  pip:    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="1.5" y="3" width="13" height="10" rx="2"/><rect x="8" y="8" width="5.5" height="4" rx="1" fill="currentColor" stroke="none" opacity=".5"/></svg>,
+// Tab icons — plain text symbols, no JSX at module level
+const ICONS_MAP={
+  live:'◉', team:'⚇', perf:'↗', analysis:'▤', ai:'✦',
+  chat:'◌', cal:'⊟', notes:'≡', remind:'◔', hist:'↺', tset:'⚙', pip:'⧉'
 };
+// I object maps to same strings for backward compat
+const I=ICONS_MAP;
+
 const MGR_TABS=[
-  {id:'live',     l:'Live board',    ic:I.live},
-  {id:'team',     l:'Team',          ic:I.team},
-  {id:'perf',     l:'Performance',   ic:I.perf},
-  {id:'analysis', l:'Analysis',      ic:I.analysis},
-  {id:'ai',       l:'AI',            ic:I.ai},
-  {id:'chat',     l:'Chat',          ic:I.chat},
-  {id:'cal',      l:'Calendar',      ic:I.cal},
-  {id:'notes',    l:'Notes',         ic:I.notes},
-  {id:'remind',   l:'Reminders',     ic:I.remind},
-  {id:'hist',     l:'History',       ic:I.hist},
-  {id:'tset',     l:'Settings',      ic:I.tset},
+  {id:'live',     l:'Live board',    ic:'◉'},
+  {id:'team',     l:'Team',          ic:'⚇'},
+  {id:'perf',     l:'Performance',   ic:'↗'},
+  {id:'analysis', l:'Analysis',      ic:'▤'},
+  {id:'ai',       l:'AI',            ic:'✦'},
+  {id:'chat',     l:'Chat',          ic:'◌'},
+  {id:'cal',      l:'Calendar',      ic:'⊟'},
+  {id:'notes',    l:'Notes',         ic:'≡'},
+  {id:'remind',   l:'Reminders',     ic:'◔'},
+  {id:'hist',     l:'History',       ic:'↺'},
+  {id:'tset',     l:'Settings',      ic:'⚙'},
 ];
 
 function ManagerView({ session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers, openPip, pipOpen }) {
