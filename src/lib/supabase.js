@@ -7,7 +7,6 @@ export const supabase = (SUPA_URL && SUPA_KEY) ? createClient(SUPA_URL, SUPA_KEY
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,   // needed for Google OAuth redirect
-    flowType: 'pkce',
     storageKey: 'ss-auth',
   }
 }) : null;
