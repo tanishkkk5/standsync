@@ -1,24 +1,26 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
-import { createClient } from '@supabase/supabase-js';
 import * as Email from './lib/email';
 import { askAI } from './lib/ai';
 import { getPriority, getStatus, PRIORITIES, STATUSES, TODAY, FAQ, CHAT_THEMES, MEMBER_COLORS } from './lib/constants';
 
-// Polyfills before supabase
-try { if(typeof global==='undefined') window.global=window; } catch(e) {}
-try { if(typeof globalThis==='undefined') window.globalThis=window; } catch(e) {}
-
-// Safe Supabase init
+// Supabase loaded from CDN to avoid TDZ bundling bug in supabase-js
+// _sc is populated by initSupabase() called on mount
 const _SURL = process.env.REACT_APP_SUPABASE_URL || '';
 const _SKEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 let _sc = null;
-try {
-  if(_SURL && _SKEY && _SURL.startsWith('http')) {
-    _sc = createClient(_SURL, _SKEY, {
-      auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storageKey:'ss-auth' }
-    });
-  }
-} catch(err) { console.warn('Supabase init failed:', err.message); }
+
+function initSupabase() {
+  if (_sc || !_SURL || !_SKEY) return;
+  try {
+    if (window.supabase && window.supabase.createClient) {
+      _sc = window.supabase.createClient(_SURL, _SKEY, {
+        auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storageKey:'ss-auth' }
+      });
+      SB.supabase = _sc;
+      SB.IS_LIVE = true;
+    }
+  } catch(e) { console.warn('Supabase init error:', e.message); }
+}
 
 const SB = {
   supabase:_sc, IS_LIVE:!!_sc,
@@ -2649,6 +2651,8 @@ class ErrorBoundary extends React.Component {
 }
 
 export default function App() {
+  // Init supabase from CDN on first render (avoids TDZ bundling crash)
+  useEffect(() => { initSupabase(); }, []);
   const [dark,setDark]=useState(()=>(localStorage.getItem('ss-theme')||'dark')==='dark');
   const toggle=useCallback(()=>setDark(d=>{const n=!d;localStorage.setItem('ss-theme',n?'dark':'light');document.body.style.background=n?'#060412':'#F1F5F9';return n;}),[]);
 
