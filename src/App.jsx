@@ -2526,187 +2526,58 @@ function ManagerView({ session, team, tasks, members, history, standup, onStatus
 
 // ─── PIP TASK WINDOW ─────────────────────────────────────────────────────────
 // Floats over Google Meet / any video call so you can write tasks without switching windows
-// ─── REAL PIP — uses window.open() so it survives tab switches + minimizing ──
-// The popup window is a self-contained HTML page with inline styles
+// ─── PIP MODE ────────────────────────────────────────────────────────────────
 function usePip({ tasks, onAdd, onStatus, session, team, standup }) {
-  const pipRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
-
+  const winRef = useRef(null);
   const myEmail = session?.user?.email || '';
-  const myName  = session?.user?.user_metadata?.name || myEmail.split('@')[0];
+  const myName = session?.user?.user_metadata?.name || myEmail.split('@')[0];
 
-  // Sync tasks into popup whenever they change
-  useEffect(() => {
-    if (!pipRef.current || pipRef.current.closed) return;
-    try { pipRef.current.postMessage({ type: 'tasks', tasks, myEmail }, '*'); } catch(e) {}
+  // Sync tasks to pip window whenever they change
+  useEffect(()=>{
+    if (winRef.current && !winRef.current.closed) {
+      winRef.current.postMessage({ type:'tasks', tasks, myEmail }, '*');
+    }
   }, [tasks, myEmail]);
 
   const openPip = () => {
-    if (pipRef.current && !pipRef.current.closed) {
-      pipRef.current.focus();
-      return;
-    }
-
-    const w = 340, h = 520;
-    const left = (window.screen?.width || window.innerWidth || 1200) - w - 20;
-    const top  = (window.screen?.height || window.innerHeight || 800) - h - 60;
-
-    const popup = window.open(
-      '', 'standsync-pip',
-      `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no,status=no`
+    if (winRef.current && !winRef.current.closed) { winRef.current.focus(); return; }
+    const w=340, h=520;
+    const left = Math.max(0, (window.screen.width||1200) - w - 20);
+    const top  = Math.max(0, (window.screen.height||800) - h - 60);
+    const win  = window.open(
+      '/pip.html', 'standsync_pip',
+      'width='+w+',height='+h+',left='+left+',top='+top+',resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no,status=no'
     );
+    if (!win) { alert('Allow popups for this site to use PiP mode.'); return; }
 
-    if (!popup) { alert('Popup blocked. Allow popups for standsync-olive.vercel.app in your browser settings.'); return; }
+    // Send data once window loads
+    win.addEventListener('load', function() {
+      win.postMessage({ type:'init', tasks, myEmail, myName, teamName: team ? team.name : 'Team' }, '*');
+    });
 
-    // Write the full PiP HTML directly into the popup
-    popup.document.write(`<!DOCTYPE html><html>
-<head>
-<meta charset="utf-8">
-<title>StandSync — PiP Tasks</title>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#07051A;color:#F0ECFF;height:100vh;display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased}
-  .header{padding:12px 14px;background:rgba(124,110,245,.15);border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:10;cursor:default;user-select:none;flex-shrink:0}
-  .logo{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#6B5FE4,#9B8AFB);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-  .title{font-size:13px;font-weight:700;flex:1;letter-spacing:-.01em}
-  .team{font-size:10px;color:rgba(240,236,255,.45)}
-  .progress{font-size:11px;color:#A78BFA;font-weight:600;flex-shrink:0}
-  .tasks{flex:1;overflow-y:auto;padding:8px}
-  .task{display:flex;align-items:flex-start;gap:9px;padding:8px 10px;border-radius:10px;margin-bottom:5px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);transition:background .15s}
-  .task:hover{background:rgba(255,255,255,.07)}
-  .cb{width:18px;height:18px;border-radius:50%;flex-shrink:0;margin-top:1px;border:2px solid rgba(128,128,128,.35);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
-  .cb.done{border-color:#34D399;background:#34D399}
-  .cb.done::after{content:'';display:block;width:7px;height:5px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translate(1px,-1px)}
-  .cb.inprog{border-color:#38BDF8;background:rgba(56,189,248,.15)}
-  .cb.blocked{border-color:#EF4444;background:rgba(239,68,68,.15)}
-  .task-text{font-size:12px;line-height:1.4;flex:1;word-break:break-word}
-  .task-text.done{text-decoration:line-through;opacity:.45}
-  .badge{font-size:9px;padding:1px 6px;border-radius:20px;flex-shrink:0;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
-  .badge.critical{background:rgba(239,68,68,.2);color:#F87171}
-  .badge.high{background:rgba(249,115,22,.2);color:#FB923C}
-  .badge.medium{background:rgba(245,158,11,.15);color:#FCD34D}
-  .badge.low{background:rgba(16,185,129,.15);color:#6EE7B7}
-  .empty{text-align:center;padding:32px 16px;color:rgba(240,236,255,.3);font-size:12px;line-height:1.7}
-  .input-area{padding:10px;border-top:1px solid rgba(255,255,255,.07);display:flex;gap:8px;flex-shrink:0;background:rgba(255,255,255,.02)}
-  input{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:9px;padding:8px 11px;color:#F0ECFF;font-size:12px;outline:none;font-family:inherit}
-  input:focus{border-color:rgba(124,110,245,.5)}
-  input::placeholder{color:rgba(240,236,255,.3)}
-  button.send{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#6B5FE4,#9B8AFB);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;transition:opacity .15s}
-  button.send:disabled{opacity:.35;cursor:default}
-  ::-webkit-scrollbar{width:3px}
-  ::-webkit-scrollbar-thumb{background:rgba(124,110,245,.3);border-radius:3px}
-  .bar-bg{height:3px;background:rgba(255,255,255,.08);border-radius:2px;margin:0 14px 0}
-  .bar-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,#6B5FE4,#34D399);transition:width .4s}
-</style>
-</head>
-<body>
-<div class="header">
-  <div class="logo">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-  </div>
-  <div style="flex:1">
-    <div class="title">StandSync PiP</div>
-    <div class="team" id="team-name">Loading...</div>
-  </div>
-  <div class="progress" id="progress">0/0</div>
-</div>
-<div class="bar-bg"><div class="bar-fill" id="bar" style="width:0%"></div></div>
-<div class="tasks" id="task-list"><div class="empty">⏳ Connecting to your tasks...</div></div>
-<div class="input-area">
-  <input id="inp" placeholder="Add a task..." onkeydown="if(event.key==='Enter')addTask()"/>
-  <button class="send" id="send-btn" onclick="addTask()" disabled>↑</button>
-</div>
-<script>
-  var tasks=[], myEmail='${myEmail}', myName='${myName}', teamName='${team?.name||'Team'}';
-  var inp=document.getElementById('inp');
-  inp.addEventListener('input',function(){document.getElementById('send-btn').disabled=!inp.value.trim();});
-
-  document.getElementById('team-name').textContent=teamName;
-
-  var statusNext={todo:'in-progress','in-progress':'done',done:'todo',blocked:'todo'};
-  var statusClass={todo:'',"in-progress":"inprog",done:"done",blocked:"blocked"};
-  var priorityOrder=['critical','high','medium','low'];
-
-  function render(){
-    var mine=tasks.filter(function(t){return t.assignee_email===myEmail;});
-    var done=mine.filter(function(t){return t.status==='done';}).length;
-    var pct=mine.length?Math.round(done/mine.length*100):0;
-    document.getElementById('progress').textContent=done+'/'+mine.length;
-    document.getElementById('bar').style.width=pct+'%';
-    var html='';
-    if(mine.length===0){html='<div class="empty">No tasks yet.<br>Add one below.</div>';}
-    else{mine.forEach(function(t){
-      html+='<div class="task"><div class="cb '+statusClass[t.status]+'" onclick="toggle('+JSON.stringify(t.id)+','+JSON.stringify(statusNext[t.status])+')"></div>';
-      html+='<span class="task-text '+(t.status==='done'?'done':'')+'">'+(t.title||'').replace(/</g,'&lt;')+'</span>';
-      html+='<span class="badge '+(t.priority||'medium')+'">'+( t.priority||'med')+'</span></div>';
-    });}
-    document.getElementById('task-list').innerHTML=html;
-  }
-
-  function toggle(id, next){
-    window.opener&&window.opener.postMessage({type:'status',id:id,status:next},'*');
-    tasks=tasks.map(function(t){return t.id===id?Object.assign({},t,{status:next}):t;});
-    render();
-  }
-
-  function addTask(){
-    var v=inp.value.trim(); if(!v)return;
-    window.opener&&window.opener.postMessage({type:'addTask',title:v,myEmail:myEmail,myName:myName},'*');
-    inp.value=''; document.getElementById('send-btn').disabled=true;
-    // Optimistic add
-    tasks.push({id:'tmp'+Date.now(),title:v,status:'todo',priority:'medium',assignee_email:myEmail,assignee_name:myName});
-    render();
-  }
-
-  window.addEventListener('message',function(e){
-    if(e.data&&e.data.type==='tasks'){tasks=e.data.tasks||[];myEmail=e.data.myEmail||myEmail;render();}
-  });
-</script>
-</body></html>`);
-    popup.document.close();
-
-    // Listen for messages from popup
-    const handleMsg = (e) => {
+    // Listen for messages from pip window
+    const handler = (e) => {
       if (!e.data) return;
       if (e.data.type === 'status') onStatus(e.data.id, e.data.status);
-      if (e.data.type === 'addTask') {
-        onAdd({ title: e.data.title, status: 'todo', priority: 'medium',
-          assignee_email: e.data.myEmail, assignee_name: e.data.myName,
-          standup_id: standup?.id, team_id: team?.id });
-      }
+      if (e.data.type === 'addTask') onAdd({
+        title: e.data.title, status:'todo', priority:'medium',
+        assignee_email: e.data.myEmail, assignee_name: e.data.myName,
+        standup_id: standup ? standup.id : null,
+        team_id: team ? team.id : null,
+      });
     };
-    window.addEventListener('message', handleMsg);
+    window.addEventListener('message', handler);
+    win.onbeforeunload = () => { window.removeEventListener('message', handler); setIsOpen(false); winRef.current = null; };
 
-    popup.onbeforeunload = () => {
-      window.removeEventListener('message', handleMsg);
-      setIsOpen(false);
-      pipRef.current = null;
-    };
-
-    // Send initial tasks
-    setTimeout(() => {
-      if (!popup.closed) {
-        popup.postMessage({ type: 'tasks', tasks, myEmail }, '*');
-      }
-    }, 800);
-
-    pipRef.current = popup;
+    winRef.current = win;
     setIsOpen(true);
   };
 
-  const closePip = () => {
-    if (pipRef.current && !pipRef.current.closed) pipRef.current.close();
-    pipRef.current = null;
-    setIsOpen(false);
-  };
-
-  return { openPip, closePip, isOpen };
+  return { openPip, isOpen };
 }
 
-// Thin wrapper component kept for render tree
-function PipWindow({ tasks, onAdd, onStatus, session, team, standup, onClose }) {
-  return null; // actual PiP uses usePip hook above
-}
+function PipWindow() { return null; }
 
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
