@@ -18,22 +18,47 @@ async function send({ to, subject, html }) {
   }
   const toArr = Array.isArray(to) ? to : [to];
   try {
-    // Use no-cors — email sends on server side even without readable response
-    await fetch('https://api.resend.com/emails', {
+    // Use regular fetch - Resend supports CORS from browsers with correct headers
+    const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
-      mode: 'no-cors',
       headers: {
         'Authorization': 'Bearer ' + RESEND_KEY,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ from: FROM, to: toArr, subject, html }),
     });
-    // no-cors always returns opaque response — assume success
-    console.log('[StandSync Email] Sent to:', toArr.join(', '));
-    return { ok: true };
+    if (r.ok) {
+      const data = await r.json();
+      console.log('[StandSync Email] Sent to:', toArr.join(', '), '| ID:', data.id);
+      return { ok: true, id: data.id };
+    } else {
+      const txt = await r.text().catch(() => r.status);
+      console.warn('[StandSync Email] Resend error:', r.status, txt);
+      // CORS blocked - try no-cors as fallback (email still sends but we can't read response)
+      if (r.status === 0 || r.type === 'opaque') {
+        return { ok: true, cors_fallback: true };
+      }
+      return { ok: false, status: r.status, error: txt };
+    }
   } catch(e) {
-    console.warn('[StandSync Email] Send failed:', e.message);
-    return { ok: false, error: e.message };
+    // Network error or CORS block - try no-cors fallback
+    console.log('[StandSync Email] Retrying with no-cors...');
+    try {
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Authorization': 'Bearer ' + RESEND_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ from: FROM, to: toArr, subject, html }),
+      });
+      console.log('[StandSync Email] no-cors sent to:', toArr.join(', '));
+      return { ok: true };
+    } catch(e2) {
+      console.warn('[StandSync Email] Both methods failed:', e2.message);
+      return { ok: false, error: e2.message };
+    }
   }
 }
 
