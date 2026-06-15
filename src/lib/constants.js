@@ -1,313 +1,43 @@
-import { createClient } from '@supabase/supabase-js';
+export const PRIORITIES = [
+  { value:'critical', label:'Critical', color:'#EF4444', bg:'rgba(239,68,68,0.14)'  },
+  { value:'high',     label:'High',     color:'#F97316', bg:'rgba(249,115,22,0.14)' },
+  { value:'medium',   label:'Medium',   color:'#F59E0B', bg:'rgba(245,158,11,0.14)' },
+  { value:'low',      label:'Low',      color:'#10B981', bg:'rgba(16,185,129,0.14)' },
+];
+export const STATUSES = [
+  { value:'todo',        label:'To do',       color:'#94A3B8', bg:'rgba(148,163,184,0.12)' },
+  { value:'in-progress', label:'In progress', color:'#38BDF8', bg:'rgba(56,189,248,0.12)'  },
+  { value:'done',        label:'Done',        color:'#34D399', bg:'rgba(52,211,153,0.12)'  },
+  { value:'blocked',     label:'Blocked',     color:'#EF4444', bg:'rgba(239,68,68,0.12)'   },
+];
+export const CHAT_THEMES = [
+  { id:'default',  label:'Default',  bg:'linear-gradient(135deg,#060412,#0C0820)', accent:'#818CF8' },
+  { id:'ocean',    label:'Ocean',    bg:'linear-gradient(135deg,#0C1445,#0A2A4A)', accent:'#38BDF8' },
+  { id:'forest',   label:'Forest',   bg:'linear-gradient(135deg,#052E16,#064E3B)', accent:'#34D399' },
+  { id:'sunset',   label:'Sunset',   bg:'linear-gradient(135deg,#4A0404,#7C2D12)', accent:'#FB923C' },
+  { id:'lavender', label:'Lavender', bg:'linear-gradient(135deg,#2E1065,#4C1D95)', accent:'#E879F9' },
+  { id:'light',    label:'Light',    bg:'linear-gradient(135deg,#F0F4FF,#E0E7FF)', accent:'#6366F1' },
+];
+export const MEMBER_COLORS = ['#818CF8','#38BDF8','#34D399','#F472B6','#FB923C','#E879F9','#F59E0B','#06B6D4'];
+export const getPriority = v => PRIORITIES.find(p=>p.value===v)||PRIORITIES[2];
+export const getStatus   = v => STATUSES.find(s=>s.value===v)||STATUSES[0];
+export const TODAY = () => new Date().toISOString().split('T')[0];
+export const GIPHY_KEY = process.env.REACT_APP_GIPHY_KEY || 'dc6zaTOxFJmzC';
 
-const SUPA_URL = process.env.REACT_APP_SUPABASE_URL  || '';
-const SUPA_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
-export const supabase = (SUPA_URL && SUPA_KEY) ? createClient(SUPA_URL, SUPA_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,   // needed for Google OAuth redirect
-    flowType: 'pkce',
-    storageKey: 'ss-auth',
-  }
-}) : null;
-export const IS_LIVE = !!supabase;
-
-// ── Auth ──────────────────────────────────────────────────────────────────────
-export async function signUp(email, password, meta) {
-  if (!supabase) return { error: { message: 'Supabase not configured' } };
-  return supabase.auth.signUp({ email, password, options: { data: meta } });
-}
-export async function signIn(email, password) {
-  if (!supabase) return { error: { message: 'Supabase not configured' } };
-  return supabase.auth.signInWithPassword({ email, password });
-}
-export async function signInWithGoogle() {
-  if (!supabase) return { error: { message: 'Supabase not configured' } };
-  // redirectTo must EXACTLY match what you set in:
-  // 1. Supabase → Auth → URL Configuration → Site URL
-  // 2. Google Cloud Console → OAuth → Authorized redirect URIs
-  //    (add: https://YOUR_PROJECT.supabase.co/auth/v1/callback)
-  const redirectTo = window.location.origin;
-  return supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo,
-      scopes: 'email profile',
-      queryParams: {
-        access_type: 'offline',
-        prompt: 'select_account',
-      },
-    },
-  });
-}
-export async function signOut() {
-  if (!supabase) return;
-  return supabase.auth.signOut();
-}
-export async function resetPassword(email) {
-  if (!supabase) return { error: { message: 'Supabase not configured' } };
-  return supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin + '/reset-password',
-  });
-}
-export async function updatePassword(password) {
-  if (!supabase) return { error: { message: 'Supabase not configured' } };
-  return supabase.auth.updateUser({ password });
-}
-export async function updateProfile(data) {
-  if (!supabase) return { error: { message: 'Supabase not configured' } };
-  return supabase.auth.updateUser({ data });
-}
-export async function getSession() {
-  if (!supabase) return null;
-  const { data } = await supabase.auth.getSession();
-  return data.session;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const ROOM_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-
-// Room ID: team name prefix + random suffix e.g. DATAC-K3M
-function genRoomId(teamName) {
-  const prefix = (teamName || 'TEAM').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 5).padEnd(3, 'X');
-  // Use timestamp base36 + random for guaranteed uniqueness
-  const ts = Date.now().toString(36).slice(-2).toUpperCase();
-  let rnd = '';
-  for (let i = 0; i < 2; i++) rnd += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)];
-  return prefix + '-' + ts + rnd;
-}
-
-// Password: XXX-XXX format (6 alphanumeric split by dash) — memorable and unique
-function genRoomPass() {
-  let p1 = '', p2 = '';
-  for (let i = 0; i < 3; i++) p1 += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)];
-  for (let i = 0; i < 3; i++) p2 += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)];
-  return p1 + '-' + p2;
-}
-const COLORS = ['#818CF8','#38BDF8','#34D399','#F472B6','#FB923C','#E879F9','#F59E0B','#06B6D4','#8B5CF6','#EC4899'];
-
-// ── Teams ─────────────────────────────────────────────────────────────────────
-export async function createTeam(name, ownerId, ownerEmail, ownerName, standupName) {
-  const { data: team, error } = await supabase
-    .from('teams')
-    .insert({ name, owner_id: ownerId, standup_name: standupName || name })
-    .select().single();
-  if (error) {
-    console.error('createTeam DB error:', error.code, error.message, error.details, error.hint);
-    return { __error: error.message || 'Database error' };
-  }
-  if (!team) return { __error: 'No data returned from teams insert' };
-
-  // Add owner as manager
-  await supabase.from('team_members').insert({
-    team_id: team.id, user_id: ownerId, email: ownerEmail,
-    name: ownerName, role: 'manager', designation: 'Team Manager',
-    status: 'active', color: '#818CF8',
-  });
-
-  // Create default room with unique ID
-  const room_id = genRoomId(name);
-  const room_password = genRoomPass();
-  const { data: room } = await supabase.from('rooms').insert({
-    team_id: team.id,
-    name: standupName || (name + ' - Main Room'),
-    room_id,
-    room_password,
-    created_by: ownerId,
-  }).select().single();
-
-  return { ...team, default_room_id: room_id, default_room_password: room_password, default_room_db_id: room?.id };
-}
-
-export async function getMyTeams(userId) {
-  const { data } = await supabase
-    .from('team_members')
-    .select('team_id, role, designation, teams(*)')
-    .eq('user_id', userId)
-    .eq('status', 'active');
-  return data || [];
-}
-
-export async function getTeamMembers(teamId) {
-  const { data } = await supabase
-    .from('team_members')
-    .select('*')
-    .eq('team_id', teamId)
-    .eq('status', 'active')
-    .order('created_at');
-  return data || [];
-}
-
-export async function updateMemberDesignation(teamMemberId, designation, role) {
-  const updates = {};
-  if (designation !== undefined) updates.designation = designation;
-  if (role !== undefined) updates.role = role;
-  const { data } = await supabase
-    .from('team_members')
-    .update(updates)
-    .eq('id', teamMemberId)
-    .select().single();
-  return data;
-}
-
-export async function removeMember(teamMemberId) {
-  return supabase.from('team_members').update({ status: 'left' }).eq('id', teamMemberId);
-}
-
-// ── Rooms ─────────────────────────────────────────────────────────────────────
-export async function getTeamRooms(teamId) {
-  const { data } = await supabase.from('rooms').select('*').eq('team_id', teamId).order('created_at');
-  return data || [];
-}
-
-export async function createRoom(teamId, roomName, createdBy) {
-  const room_id = genRoomId(roomName);
-  const room_password = genRoomPass();
-  const { data } = await supabase.from('rooms').insert({
-    team_id: teamId, name: roomName, room_id, room_password, created_by: createdBy,
-  }).select().single();
-  return data;
-}
-
-export async function deleteRoom(roomDbId) {
-  return supabase.from('rooms').delete().eq('id', roomDbId);
-}
-
-// Join team via Room ID + password — room_id/password are permanent
-export async function joinTeamByCode(roomId, password, userId, email, name) {
-  const { data: room, error } = await supabase
-    .from('rooms')
-    .select('*, teams(*)')
-    .eq('room_id', roomId.toUpperCase().trim())
-    .eq('room_password', password.trim().toUpperCase())
-    .single();
-
-  if (error || !room) return { error: 'Invalid Room ID or password. Check with your manager.' };
-  const team = room.teams;
-  if (!team) return { error: 'Team not found.' };
-
-  // Already a member?
-  const { data: existing } = await supabase
-    .from('team_members')
-    .select('id, status')
-    .eq('team_id', team.id)
-    .eq('user_id', userId)
-    .single();
-
-  if (existing) {
-    if (existing.status === 'left') {
-      await supabase.from('team_members').update({ status: 'active' }).eq('id', existing.id);
-    }
-    return { team, alreadyMember: true };
-  }
-
-  const color = COLORS[Math.floor(Math.random() * COLORS.length)];
-  await supabase.from('team_members').insert({
-    team_id: team.id, user_id: userId, email, name,
-    role: 'member', designation: 'Team Member', status: 'active', color,
-  });
-  return { team };
-}
-
-// ── Invites ───────────────────────────────────────────────────────────────────
-export async function inviteMember(teamId, teamName, email, inviterName) {
-  const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
-  const { data } = await supabase.from('invites').insert({
-    team_id: teamId, email, token, invited_by: inviterName,
-    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-  }).select().single();
-  return { invite: data, token, link: window.location.origin + '?invite=' + token };
-}
-
-export async function getInvite(token) {
-  const { data } = await supabase.from('invites').select('*, teams(name)').eq('token', token).single();
-  return data;
-}
-
-export async function acceptInvite(token, userId, email, name) {
-  const invite = await getInvite(token);
-  if (!invite) return { error: 'Invalid invite' };
-  const color = COLORS[Math.floor(Math.random() * COLORS.length)];
-  await supabase.from('team_members').upsert({
-    team_id: invite.team_id, user_id: userId, email, name,
-    role: 'member', designation: 'Team Member', status: 'active', color,
-  });
-  await supabase.from('invites').update({ accepted_at: new Date().toISOString() }).eq('token', token);
-  return { teamId: invite.team_id, teamName: invite.teams?.name };
-}
-
-// ── Standups & Tasks ──────────────────────────────────────────────────────────
-export async function getOrCreateStandup(teamId, date) {
-  if (!teamId) return null;
-  // Try to find existing standup for this team+date
-  const { data: existing } = await supabase
-    .from('standups')
-    .select('*')
-    .eq('team_id', teamId)
-    .eq('date', date)
-    .maybeSingle();
-  if (existing) return existing;
-  // Create new standup
-  const { data: created, error } = await supabase
-    .from('standups')
-    .insert({ team_id: teamId, date })
-    .select()
-    .single();
-  if (error) {
-    console.error('getOrCreateStandup error:', error.message);
-    // If conflict (race condition), fetch again
-    const { data: retry } = await supabase
-      .from('standups')
-      .select('*')
-      .eq('team_id', teamId)
-      .eq('date', date)
-      .maybeSingle();
-    return retry;
-  }
-  return created;
-}
-
-export async function getTasks(standupId) {
-  if (!standupId) return [];
-  const { data } = await supabase.from('tasks').select('*').eq('standup_id', standupId).order('created_at');
-  return data || [];
-}
-
-export async function addTask(task) {
-  const { data } = await supabase.from('tasks').insert(task).select().single();
-  return data;
-}
-
-export async function updateTask(id, updates) {
-  const { data } = await supabase.from('tasks').update(updates).eq('id', id).select().single();
-  return data;
-}
-
-export async function getPastStandups(teamId, limit = 30) {
-  const { data } = await supabase
-    .from('standups')
-    .select('*, tasks(*)')
-    .eq('team_id', teamId)
-    .order('date', { ascending: false })
-    .limit(limit);
-  return data || [];
-}
-
-export function subscribeToTasks(standupId, cb) {
-  if (!supabase) return () => {};
-  const ch = supabase.channel('tasks-' + standupId)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: 'standup_id=eq.' + standupId }, cb)
-    .subscribe();
-  return () => supabase.removeChannel(ch);
-}
-
-// ── Storage ───────────────────────────────────────────────────────────────────
-export async function uploadAvatar(userId, file) {
-  const ext = file.name.split('.').pop();
-  const path = userId + '.' + ext;
-  const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
-  if (error) return null;
-  const { data } = supabase.storage.from('avatars').getPublicUrl(path);
-  return data.publicUrl;
-}
+export const FAQ = [
+  { q:'How does the daily standup work?', a:'Every morning, open StandSync, enter your team, and add tasks assigned to you during the standup. Set priority and timeline. The manager sees every task appear in real time on the Live Board.' },
+  { q:'How do I join a team?', a:'Two ways: (1) Ask your manager for the Room ID and 4-digit password — enter them on the Join Team screen. (2) Ask your manager to send an email invite — click the link in the email and create your account.' },
+  { q:'What is a Room ID?', a:'Every team room has a unique 6-character Room ID (like AB3K9M) and a 4-digit password. Managers can create multiple rooms per team — one for daily standup, one for sprint planning, etc. These credentials never change unless the room is deleted.' },
+  { q:'How do I create multiple rooms for my team?', a:'Go to Team Settings → Rooms → Create a new room. Give it a name (e.g. "Sprint Planning") and a unique Room ID and password will be generated automatically. Share these with the people you want in that room.' },
+  { q:'How do I change an employee\'s designation?', a:'Go to Team Settings → Members → click Edit next to any member. You can update their designation (e.g. "Frontend Developer") and role (Member or Manager).' },
+  { q:'How do the AI assistant features work?', a:'The floating AI bubble appears on every page. Click it and ask anything: "What should I focus on today?", "How is the team doing?", "Any blockers?". It uses Google Gemini (free) and always has your latest task data as context.' },
+  { q:'How do emails work?', a:'📧 Digest: sends each member their task list for the day. 🕕 EOD: sends pending-task reminders to members and a full summary to the manager. ⚠️ Blocker alerts fire instantly when a member reports a blocker. All emails require the REACT_APP_RESEND_KEY Vercel environment variable.' },
+  { q:'How do I send GIFs and images in chat?', a:'In team chat, click the GIF button to search Giphy, or click the image icon to upload a photo from your device. Requires REACT_APP_GIPHY_KEY in Vercel environment variables for better search (a free public key is used by default).' },
+  { q:'How do I switch between dark and light mode?', a:'Click the sun/moon icon in any header, or go to Settings → Appearance. Your preference is saved and persists across sessions.' },
+  { q:'Why did I get logged out when switching tabs?', a:'This is now fixed in v5. The app stores your session in localStorage so tab switches, browser minimise, and screen lock no longer log you out. Only clicking Sign Out will end your session.' },
+  { q:'Can I be in multiple teams?', a:'Yes — you can create or join as many teams as you like. Switch between them from the Home screen.' },
+  { q:'How do I change my password?', a:'Go to Settings → Security → enter a new password (min 6 characters) → Save.' },
+  { q:'How do I upload a profile photo?', a:'Go to Settings → Profile → click the pencil icon on your avatar → select a photo from your device. It is stored securely in Supabase Storage.' },
+  { q:'What happens to unfinished tasks?', a:'Tasks stay on the board until marked done. The EOD email flags pending tasks. Unfinished tasks do not auto-carry to the next day — team members add fresh tasks each morning.' },
+  { q:'Is my team\'s data private?', a:'Yes. Each team\'s data is completely isolated using Row Level Security in Supabase. Other teams cannot see your tasks, members, or history.' },
+];
