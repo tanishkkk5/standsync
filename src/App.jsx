@@ -738,13 +738,30 @@ function CalendarPanel({ team }) {
   const c=useC(); const [connected,setConnected]=useState(false); const [selectedMeeting,setSelectedMeeting]=useState(null); const [step,setStep]=useState(1); const [importedMembers,setImportedMembers]=useState([]);
   const MOCK=[{id:'m1',title:team?.standup_name||'Daily Standup',time:'9:00 AM',days:'Mon-Sat',attendees:['tanisk.pandey@xtransmatrix.com','deepak.nr@xtransmatrix.com','madhan.m@xtransmatrix.com']}];
   const selectedMeet=MOCK.find(m=>m.id===selectedMeeting);
+  const connectGoogle=async()=>{
+    if(!process.env.REACT_APP_GOOGLE_CLIENT_ID){
+      alert('To connect Google Calendar:\n\n1. Go to console.cloud.google.com\n2. Create a project → Enable Google Calendar API\n3. Create OAuth 2.0 credentials (Web app)\n4. Add redirect URI: '+window.location.origin+'\n5. Add to Vercel: REACT_APP_GOOGLE_CLIENT_ID\n6. Enable Google provider in Supabase Auth settings');
+      return;
+    }
+    // Trigger Google OAuth which will also grant Calendar scope
+    await SB.signInWithGoogle();
+  };
   if(!connected) return(
     <div style={{ textAlign:'center',padding:'40px 20px' }}>
       <div style={{ fontSize:44,marginBottom:14 }}>📅</div>
       <h3 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:8 }}>Connect Google Calendar</h3>
-      <p style={{ fontSize:13,color:c.mut,marginBottom:22,lineHeight:1.7,maxWidth:360,margin:'0 auto 22px' }}>Link your Google Calendar to find standup meetings and import attendees.</p>
-      <Btn v="ghost" onClick={()=>setConnected(true)} style={{ margin:'0 auto' }}>Connect with Google</Btn>
-      <p style={{ fontSize:11,color:c.mut,marginTop:14 }}>Requires REACT_APP_GOOGLE_CLIENT_ID in Vercel</p>
+      <p style={{ fontSize:13,color:c.mut,marginBottom:22,lineHeight:1.7,maxWidth:380,margin:'0 auto 22px' }}>Link your Google Calendar to find your standup meetings and import attendees as team members.</p>
+      {!process.env.REACT_APP_GOOGLE_CLIENT_ID?(
+        <div style={{ maxWidth:440,margin:'0 auto' }}>
+          <div style={{ background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:12,padding:'16px 18px',marginBottom:16,textAlign:'left' }}>
+            <div style={{ fontSize:13,fontWeight:700,color:'#FCD34D',marginBottom:10 }}>Setup required — 5 minutes:</div>
+            {['1. Go to console.cloud.google.com → New project','2. APIs & Services → Enable "Google Calendar API"','3. OAuth consent screen → External → fill in name','4. Credentials → OAuth 2.0 Client ID → Web app','5. Authorised redirect URIs → add: '+window.location.origin,'6. Copy Client ID → Vercel env: REACT_APP_GOOGLE_CLIENT_ID','7. Supabase → Auth → Providers → Google → paste Client ID + Secret'].map((s,i)=><div key={i} style={{ fontSize:12,color:c.mut,marginBottom:4,display:'flex',gap:6 }}><span style={{ color:'#FCD34D',flexShrink:0 }}>{s.slice(0,2)}</span><span>{s.slice(3)}</span></div>)}
+          </div>
+          <Btn onClick={connectGoogle} style={{ margin:'0 auto' }}>Connect with Google</Btn>
+        </div>
+      ):(
+        <Btn onClick={connectGoogle} style={{ margin:'0 auto' }}>Connect with Google</Btn>
+      )}
     </div>
   );
   return(
@@ -961,7 +978,7 @@ function HistTab({ history, members }) {
 
 function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
   const c=useC();
-  const [invEmail,setInvEmail]=useState(''); const [sending,setSending]=useState(false); const [sent,setSent]=useState(false);
+  const [invEmail,setInvEmail]=useState(''); const [sending,setSending]=useState(false); const [sent,setSent]=useState(false); const [lastInviteLink,setLastInviteLink]=useState(''); const [copied,setCopied]=useState(false);
   const [rooms,setRooms]=useState([]); const [loadingRooms,setLoadingRooms]=useState(true);
   const [newRoomName,setNewRoomName]=useState(''); const [creatingRoom,setCreatingRoom]=useState(false);
   const [editMember,setEditMember]=useState(null); // {id, name, designation, role}
@@ -981,11 +998,12 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
       if(SB.IS_LIVE){
         const myName=session?.user?.user_metadata?.name||session?.user?.email;
         const {link}=await SB.inviteMember(team.id,team.name,invEmail.trim(),myName);
-        await Promise.race([Email.sendInvite(invEmail.trim(),myName,team.name,link),new Promise(r=>setTimeout(r,5000))]);
+        setLastInviteLink(link); // Always show link so manager can share manually
+        try{ await Promise.race([Email.sendInvite(invEmail.trim(),myName,team.name,link),new Promise(r=>setTimeout(r,5000))]); }catch(e){}
       }
-    }catch(e){}
+    }catch(e){ console.error('invite error:',e); }
     setSent(true);setSending(false);
-    setTimeout(()=>{setSent(false);setInvEmail('');},3000);
+    setTimeout(()=>{setSent(false);},3000);
   };
 
   const addRoom=async()=>{
@@ -1093,17 +1111,33 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
 
       {/* ── INVITE TAB ── */}
       {tab==='invite'&&(
-        <Card style={{ padding:'20px 22px' }}>
-          <Lbl>Invite by email</Lbl>
-          <p style={{ fontSize:13,color:c.mut,marginBottom:14 }}>They'll receive an email with a join link.</p>
-          <div style={{ display:'flex',gap:10 }}>
-            <Inp value={invEmail} onChange={e=>setInvEmail(e.target.value)} placeholder="colleague@company.com" onKeyDown={e=>e.key==='Enter'&&sendInv()} style={{ flex:1 }}/>
-            <Btn onClick={sendInv} loading={sending} disabled={!invEmail.trim()} style={{ flexShrink:0 }}>{sent?'✓ Sent!':'Send invite'}</Btn>
-          </div>
-          <div style={{ marginTop:16,padding:'12px 14px',background:'rgba(99,102,241,.06)',border:`1px solid ${c.bord}`,borderRadius:10,fontSize:12,color:c.mut }}>
-            Tip: Share the Room ID instead (Rooms tab) so members can join instantly without waiting for email.
-          </div>
-        </Card>
+        <div>
+          <Card style={{ padding:'20px 22px',marginBottom:12 }}>
+            <Lbl>Create invite link</Lbl>
+            <p style={{ fontSize:13,color:c.mut,marginBottom:12 }}>Enter their email to generate a join link. Share the link directly via WhatsApp, Slack, or email — it works instantly.</p>
+            <div style={{ display:'flex',gap:10,marginBottom:12 }}>
+              <Inp value={invEmail} onChange={e=>setInvEmail(e.target.value)} placeholder="colleague@company.com" onKeyDown={e=>e.key==='Enter'&&sendInv()} style={{ flex:1 }}/>
+              <Btn onClick={sendInv} loading={sending} disabled={!invEmail.trim()} style={{ flexShrink:0 }}>{sent?'✓ Created!':'Create invite'}</Btn>
+            </div>
+            {lastInviteLink&&(
+              <div style={{ padding:'12px 14px',background:'rgba(99,102,241,.08)',border:'1px solid rgba(99,102,241,.25)',borderRadius:10 }}>
+                <div style={{ fontSize:11,fontWeight:700,color:'#818CF8',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em' }}>Share this link</div>
+                <div style={{ fontSize:11,color:c.text,wordBreak:'break-all',marginBottom:8,fontFamily:'monospace',background:c.surf,padding:'8px 10px',borderRadius:6,border:`1px solid ${c.bord}` }}>{lastInviteLink}</div>
+                <button onClick={()=>{navigator.clipboard&&navigator.clipboard.writeText(lastInviteLink);setCopied(true);setTimeout(()=>setCopied(false),2000);}} style={{ fontSize:12,color:'#818CF8',background:'rgba(99,102,241,.12)',border:'1px solid rgba(99,102,241,.25)',borderRadius:7,cursor:'pointer',padding:'5px 12px',fontWeight:600 }}>{copied?'✓ Copied!':'Copy link'}</button>
+                <div style={{ fontSize:11,color:c.mut,marginTop:6 }}>They click this link, create an account, and join your team automatically.</div>
+              </div>
+            )}
+            {!process.env.REACT_APP_RESEND_KEY&&(
+              <div style={{ marginTop:10,padding:'9px 12px',background:'rgba(245,158,11,.07)',border:'1px solid rgba(245,158,11,.2)',borderRadius:8,fontSize:12,color:'#FCD34D' }}>
+                ⚠️ Email delivery needs REACT_APP_RESEND_KEY in Vercel. Use the copy link above to share manually.
+              </div>
+            )}
+          </Card>
+          <Card style={{ padding:'14px 20px' }}>
+            <div style={{ fontSize:13,color:c.sub,fontWeight:600,marginBottom:3 }}>Faster option</div>
+            <div style={{ fontSize:13,color:c.mut }}>Share the Room ID + password from the <strong style={{ color:'#818CF8' }}>Rooms tab</strong> — members join instantly without any link.</div>
+          </Card>
+        </div>
       )}
 
       {/* Edit designation modal */}
@@ -1234,21 +1268,20 @@ export default function App() {
       try {
         const sd=await SB.getOrCreateStandup(team.id,TODAY());
         setStandup(sd);
-        const [t,past,mems]=await Promise.all([
+        const [t,past,mems,msgs]=await Promise.all([
           SB.getTasks(sd?.id),
           SB.getPastStandups(team.id,30),
-          SB.getTeamMembers(team.id)
+          SB.getTeamMembers(team.id),
+          SB.getChatMessages(team.id,100),
         ]);
         setTasks(t||[]);
         setHistory((past||[]).filter(p=>p.date!==TODAY()));
-        // Always show at least the current user
+        setMessages(msgs||[]);
         if(mems&&mems.length>0){
           setMembers(mems);
         } else {
-          // Fallback: show current user while members load
           const fallback=[{id:'me',user_id:session?.user?.id,email:session?.user?.email||'',name:session?.user?.user_metadata?.name||session?.user?.email?.split('@')[0]||'You',role:'manager',designation:'Team Manager',color:'#818CF8',status:'active'}];
           setMembers(fallback);
-          // Retry after 1s in case of schema cache delay
           setTimeout(()=>SB.getTeamMembers(team.id).then(m=>{if(m&&m.length>0)setMembers(m);}),1500);
         }
       } catch(err) {
@@ -1259,6 +1292,8 @@ export default function App() {
   },[team]);
 
   useEffect(()=>{ if(!standup||!SB.IS_LIVE)return; return SB.subscribeToTasks(standup.id,({eventType:et,new:n,old:o})=>{setTasks(p=>et==='INSERT'?[...p,n]:et==='UPDATE'?p.map(t=>t.id===n.id?n:t):p.filter(t=>t.id!==o.id));}); },[standup]);
+  // Real-time chat subscription
+  useEffect(()=>{ if(!team||!SB.IS_LIVE)return; return SB.subscribeToMessages(team.id,(msg)=>{setMessages(p=>{if(p.find(m=>m.id===msg.id))return p;return [...p,msg];});}); },[team]);
 
   const handleAddTask=useCallback(async(d)=>{ if(!SB.IS_LIVE){setTasks(p=>[...p,{id:'demo_'+Date.now(),...d,created_at:new Date().toISOString()}]);return;} await SB.addTask({...d,standup_id:standup?.id}); },[standup]);
   const handleStatus=useCallback(async(id,status)=>{ const u={status,...(status==='done'?{completed_at:new Date().toISOString()}:{})}; if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));return;} await SB.updateTask(id,u); },[]);
@@ -1284,7 +1319,20 @@ export default function App() {
   const handleLogin=useCallback(async(sess)=>{ setSession(sess); if(inviteToken&&SB.IS_LIVE){const r=await SB.acceptInvite(inviteToken,sess.user.id,sess.user.email,sess.user.user_metadata?.name||sess.user.email);if(r.teamId)showToast(`✅ Joined: ${r.teamName}`);window.history.replaceState({},'',window.location.pathname);setInviteToken(null);} setView('home'); },[inviteToken,showToast]);
   const handleSelectTeam=useCallback((t,role)=>{ setTeam(t);setMyRole(role);setView('standup'); if(!SB.IS_LIVE){setMembers(DEMO_MEMBERS);setTasks([]);} },[]);
   const handleLogout=useCallback(()=>{ SB.signOut();setSession(null);setTeam(null);setView('auth'); },[]);
-  const handleSendMessage=useCallback(m=>setMessages(p=>[...p,m]),[]);
+  const handleSendMessage=useCallback(async(m)=>{
+    if(SB.IS_LIVE&&team){
+      // Save to DB — real-time subscription will broadcast to all members
+      const saved=await SB.sendChatMessage(team.id,m);
+      if(saved){
+        // Real-time will add it via subscription, but add locally for instant feedback
+        setMessages(p=>{if(p.find(x=>x.id===saved.id))return p;return[...p,{...m,id:saved.id,created_at:saved.created_at}];});
+      } else {
+        setMessages(p=>[...p,m]); // fallback
+      }
+    } else {
+      setMessages(p=>[...p,m]);
+    }
+  },[team]);
 
   const myMember=members.find(m=>m.user_id===(session?.user?.id||'u1'));
   const userForView={email:session?.user?.email||'tanisk.pandey@xtransmatrix.com',name:session?.user?.user_metadata?.name||'Tanisk Pandey'};
