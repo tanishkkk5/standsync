@@ -725,7 +725,7 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
   const [msgs,setMsgs]=useState([{id:'w',role:'assistant',text:'Hi! Ask me about your tasks, team progress, or what to focus on today.'}]);
   const [input,setInput]=useState(''); const [loading,setLoading]=useState(false);
   // Draggable position
-  const [pos,setPos]=useState({x:window.innerWidth-80,y:window.innerHeight-80});
+  const [pos,setPos]=useState(()=>{ try{return {x:(window.innerWidth||800)-80,y:(window.innerHeight||600)-80};}catch(e){return {x:720,y:520};} });
   const [dragging,setDragging]=useState(false);
   const [dragStart,setDragStart]=useState({mx:0,my:0,px:0,py:0});
   const [moved,setMoved]=useState(false);
@@ -2555,8 +2555,8 @@ function usePip({ tasks, onAdd, onStatus, session, team, standup }) {
     }
 
     const w = 340, h = 520;
-    const left = window.screen.width - w - 20;
-    const top  = window.screen.height - h - 60;
+    const left = (window.screen?.width || window.innerWidth || 1200) - w - 20;
+    const top  = (window.screen?.height || window.innerHeight || 800) - h - 60;
 
     const popup = window.open(
       '', 'standsync-pip',
@@ -2725,6 +2725,26 @@ const DEMO_MEMBERS=[
   {id:'dm5',user_id:'u5',email:'sandhya.a@xtransmatrix.com',name:'Sandhya A',role:'member',color:'#FB923C'},
   {id:'dm6',user_id:'u6',email:'zeeba.kauser@xtransmatrix.com',name:'Zeeba Kauser',role:'member',color:'#E879F9'},
 ];
+
+class ErrorBoundary extends React.Component {
+  constructor(p){ super(p); this.state={crashed:false,err:''}; }
+  static getDerivedStateFromError(e){ return {crashed:true,err:e?.message||'Unknown error'}; }
+  componentDidCatch(e,info){ console.error('StandSync crash:',e,info); }
+  render(){
+    if(this.state.crashed){
+      return(
+        <div style={{ minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'#06040F',color:'#F0ECFF',padding:32,textAlign:'center' }}>
+          <div style={{ fontSize:48,marginBottom:16 }}>⚡</div>
+          <h2 style={{ fontSize:20,fontWeight:700,marginBottom:8 }}>StandSync ran into an issue</h2>
+          <p style={{ fontSize:13,color:'rgba(240,236,255,.5)',marginBottom:24,maxWidth:360 }}>{this.state.err}</p>
+          <button onClick={()=>{ localStorage.clear(); window.location.href='/'; }} style={{ padding:'10px 24px',borderRadius:10,background:'linear-gradient(135deg,#6B5FE4,#9B8AFB)',color:'#fff',border:'none',cursor:'pointer',fontSize:14,fontWeight:600 }}>Clear cache &amp; reload</button>
+          <button onClick={()=>window.location.reload()} style={{ marginTop:10,padding:'8px 20px',borderRadius:10,background:'transparent',color:'rgba(240,236,255,.5)',border:'1px solid rgba(255,255,255,.1)',cursor:'pointer',fontSize:13 }}>Just reload</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function App() {
   const [dark,setDark]=useState(()=>(localStorage.getItem('ss-theme')||'dark')==='dark');
