@@ -622,14 +622,22 @@ function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], te
 
 // ─── RICH CHAT ──────────────────────────────────────────────────────────
 function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='default', onChangeTheme, isManager=false }) {
-  const c=useC(); const [msg,setMsg]=useState(''); const [showGif,setShowGif]=useState(false); const [activeSpace,setActiveSpace]=useState('general');
+  const c=useC();
+  const [msg,setMsg]=useState(''); const [showGif,setShowGif]=useState(false);
+  const [activeSpace,setActiveSpace]=useState('general');
   const [gifSearch,setGifSearch]=useState(''); const [gifs,setGifs]=useState([]); const [gifLoading,setGifLoading]=useState(false); const [gifError,setGifError]=useState('');
   const [showTheme,setShowTheme]=useState(false);
   const [showNewSpace,setShowNewSpace]=useState(false); const [newSpaceName,setNewSpaceName]=useState(''); const [newSpacePrivate,setNewSpacePrivate]=useState(false);
   const [customSpaces,setCustomSpaces]=useState(()=>{ try{return JSON.parse(localStorage.getItem('ss-spaces')||'[]');}catch{return[];} });
-  const bottomRef=useRef(); const fileRef=useRef();
+  const [pinnedMsgs,setPinnedMsgs]=useState([]);
+  const [showPinned,setShowPinned]=useState(false);
+  const [showFiles,setShowFiles]=useState(false);
+  const [contextMenu,setContextMenu]=useState(null); // {msgId, x, y}
+  const [showSidebar,setShowSidebar]=useState(false); // right info sidebar
+  const bottomRef=useRef(); const fileRef=useRef(); const attachRef=useRef();
   const myEmail=session?.user?.email||'demo@standsync.app';
   const myName=session?.user?.user_metadata?.name||myEmail.split('@')[0];
+  const myAvatar=session?.user?.user_metadata?.avatar_url;
   const theme=CHAT_THEMES.find(t=>t.id===chatTheme)||CHAT_THEMES[0];
 
   const addCustomSpace=()=>{
@@ -657,10 +665,10 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
     return (m.space||'general')===activeSpace;
   });
 
-  const sendMsg=(text,type='text',url='')=>{
+  const sendMsg=(text,type='text',url='',filename='',filesize=0)=>{
     if(type==='text'&&!text.trim())return;
     const isDM=activeSpace.startsWith('dm-');
-    onSend({id:'m'+Date.now(),text:type==='text'?text.trim():'',type,url,
+    onSend({id:'m'+Date.now(),text:type==='text'?text.trim():'',type,url,filename,filesize,
       sender_email:myEmail,sender_name:myName,created_at:new Date().toISOString(),
       space:activeSpace,
       dm_to:isDM?activeSpace.slice(3):undefined,
@@ -687,17 +695,42 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
     }catch(e){setGifError('Could not connect to Giphy. Check your internet connection.');}
     setGifLoading(false);
   };
-  const handleImage=(e)=>{
+  // Handle all file types
+  const handleFile=(e,type='image')=>{
     const file=e.target.files[0]; if(!file)return;
+    const isImage=file.type.startsWith('image/');
+    const isVideo=file.type.startsWith('video/');
+    const isAudio=file.type.startsWith('audio/');
+    const isPDF=file.type==='application/pdf';
+    const msgType=isImage?'image':isVideo?'video':isAudio?'audio':isPDF?'pdf':'file';
     const reader=new FileReader();
-    reader.onload=ev=>sendMsg('','image',ev.target.result);
+    reader.onload=ev=>sendMsg('',msgType,ev.target.result,file.name,file.size);
     reader.readAsDataURL(file);
   };
+  const handleImage=(e)=>handleFile(e,'image');
+  const handleAttach=(e)=>handleFile(e,'file');
+
+  const fmtSize=(b)=>b>1048576?(b/1048576).toFixed(1)+'MB':b>1024?(b/1024).toFixed(0)+'KB':b+'B';
+
   const renderMsg=(m)=>{
-    if(m.type==='image') return <img src={m.url} alt="img" style={{ maxWidth:180,maxHeight:180,borderRadius:8,objectFit:'cover' }}/>;
-    if(m.type==='gif') return <img src={m.url} alt="gif" style={{ maxWidth:180,borderRadius:8 }}/>;
-    return <span>{m.text}</span>;
+    if(m.type==='image') return <img src={m.url} alt="img" style={{ maxWidth:200,maxHeight:200,borderRadius:8,objectFit:'cover',cursor:'pointer' }} onClick={()=>window.open(m.url,'_blank')}/>;
+    if(m.type==='gif') return <img src={m.url} alt="gif" style={{ maxWidth:200,borderRadius:8 }}/>;
+    if(m.type==='video') return <video src={m.url} controls style={{ maxWidth:240,borderRadius:8 }}/>;
+    if(m.type==='audio') return <audio src={m.url} controls style={{ maxWidth:240 }}/>;
+    if(m.type==='pdf') return <div style={{ display:'flex',alignItems:'center',gap:9,padding:'8px 12px',background:'rgba(255,255,255,.08)',borderRadius:8,cursor:'pointer' }} onClick={()=>window.open(m.url,'_blank')}><span style={{ fontSize:22 }}>📄</span><div><div style={{ fontSize:12,fontWeight:600 }}>{m.filename||'document.pdf'}</div><div style={{ fontSize:10,opacity:.6 }}>{m.filesize?fmtSize(m.filesize):'PDF'}</div></div></div>;
+    if(m.type==='file') return <div style={{ display:'flex',alignItems:'center',gap:9,padding:'8px 12px',background:'rgba(255,255,255,.08)',borderRadius:8,cursor:'pointer' }} onClick={()=>window.open(m.url,'_blank')}><span style={{ fontSize:22 }}>📎</span><div><div style={{ fontSize:12,fontWeight:600 }}>{m.filename||'file'}</div><div style={{ fontSize:10,opacity:.6 }}>{m.filesize?fmtSize(m.filesize):''}</div></div></div>;
+    // Linkify URLs in text
+    const parts=m.text.split(/(https?:\/\/[^\s]+)/g);
+    return <span>{parts.map((p,i)=>p.match(/^https?:\/\//)?<a key={i} href={p} target="_blank" rel="noreferrer" style={{ color:'#93C5FD',textDecoration:'underline' }}>{p}</a>:<span key={i}>{p}</span>)}</span>;
   };
+
+  const pinMsg=(m)=>{ setPinnedMsgs(p=>p.find(x=>x.id===m.id)?p.filter(x=>x.id!==m.id):[...p,m]); setContextMenu(null); };
+  const isPinned=(id)=>pinnedMsgs.some(m=>m.id===id);
+
+  // Shared files/links
+  const sharedFiles=spaceMessages.filter(m=>['image','pdf','video','audio','file'].includes(m.type));
+  const sharedLinks=spaceMessages.filter(m=>m.type==='text'&&m.text.match(/https?:\/\//));
+
   const grouped=spaceMessages.reduce((acc,m)=>{ const date=new Date(m.created_at).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); if(!acc.length||acc[acc.length-1].date!==date)acc.push({date,msgs:[]}); acc[acc.length-1].msgs.push(m); return acc; },[]);
   return (
     <div style={{ display:'flex',height:'calc(100vh - 160px)',minHeight:400,borderRadius:14,overflow:'hidden',border:`1px solid ${c.bord}` }}>
@@ -768,28 +801,103 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
             {activeSpace.startsWith('dm-')?'Direct message':members.length+' members'}
           </span>
         </div>
-        <button onClick={()=>setShowTheme(!showTheme)} style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14 }}>🎨</button>
+        <button onClick={()=>setShowFiles(!showFiles)} title="Files & links" style={{ width:28,height:28,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:c.mut }}>🗂️</button>
+        <button onClick={()=>setShowTheme(!showTheme)} style={{ width:28,height:28,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13 }}>🎨</button>
         {showTheme&&<div style={{ position:'absolute',right:10,top:52,background:c.dark?'rgba(18,15,50,.98)':'#fff',border:`1px solid ${c.bord}`,borderRadius:12,padding:10,zIndex:200,backdropFilter:'blur(20px)',boxShadow:'0 8px 24px rgba(0,0,0,.3)',width:240 }}><div style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8 }}>Chat theme</div><div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6 }}>{CHAT_THEMES.map(t=><button key={t.id} onClick={()=>{onChangeTheme(t.id);setShowTheme(false);}} style={{ padding:'9px 5px',borderRadius:9,border:`2px solid ${chatTheme===t.id?t.accent:c.bord}`,background:t.bg,cursor:'pointer',textAlign:'center' }}><div style={{ fontSize:10,fontWeight:600,color:chatTheme===t.id?t.accent:'rgba(255,255,255,.6)' }}>{t.label}</div></button>)}</div></div>}
       </div>
-      <div style={{ flex:1,overflowY:'auto',padding:'12px',display:'flex',flexDirection:'column',gap:3,background:theme.bg }}>
-        {spaceMessages.length===0&&<div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.35)',gap:8,paddingTop:32 }}><div style={{ fontSize:36 }}>{activeSpace.startsWith('dm-')?'👤':'💬'}</div><div style={{ fontSize:13 }}>{activeSpace.startsWith('dm-')?'Start a direct message':'No messages in this space yet'}</div></div>}
-        {grouped.map(group=>(
-          <div key={group.date}>
-            <div style={{ textAlign:'center',margin:'10px 0 6px',fontSize:11,color:'rgba(255,255,255,.3)',display:'flex',alignItems:'center',gap:6 }}><div style={{ flex:1,height:1,background:'rgba(255,255,255,.1)' }}/>{group.date}<div style={{ flex:1,height:1,background:'rgba(255,255,255,.1)' }}/></div>
-            {group.msgs.map(m=>{ const isMe=m.sender_email===myEmail; const member=members.find(x=>x.email===m.sender_email); const color=member?.color||theme.accent; return(
-              <div key={m.id} style={{ display:'flex',gap:7,alignItems:'flex-end',marginBottom:3,flexDirection:isMe?'row-reverse':'row' }}>
-                {!isMe&&<Av member={{name:m.sender_name,color}} size={24} url={member?.avatar_url}/>}
-                <div style={{ maxWidth:'74%' }}>
-                  {!isMe&&<div style={{ fontSize:10,color:'rgba(255,255,255,.4)',marginBottom:2,marginLeft:3 }}>{m.sender_name}</div>}
-                  <div style={{ background:isMe?`linear-gradient(135deg,${theme.accent},${theme.accent}bb)`:'rgba(255,255,255,.12)',color:'#fff',padding:m.type!=='text'?5:'8px 12px',borderRadius:isMe?'13px 13px 3px 13px':'13px 13px 13px 3px',fontSize:13,backdropFilter:'blur(10px)' }}>{renderMsg(m)}</div>
-                  <div style={{ fontSize:10,color:'rgba(255,255,255,.28)',marginTop:2,textAlign:isMe?'right':'left',paddingLeft:isMe?0:3,paddingRight:isMe?3:0 }}>{new Date(m.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>
+      {/* Pinned messages bar */}
+      {pinnedMsgs.length>0&&(
+        <div style={{ padding:'7px 14px',background:'rgba(245,158,11,.08)',borderBottom:`1px solid rgba(245,158,11,.2)`,display:'flex',alignItems:'center',gap:8,flexShrink:0,cursor:'pointer' }} onClick={()=>setShowPinned(!showPinned)}>
+          <span style={{ fontSize:12 }}>📌</span><span style={{ fontSize:12,color:'#FCD34D',fontWeight:600 }}>{pinnedMsgs.length} pinned message{pinnedMsgs.length!==1?'s':''}</span>
+          <span style={{ fontSize:11,color:'rgba(255,255,255,.4)',marginLeft:'auto' }}>{showPinned?'▲':'▼'}</span>
+        </div>
+      )}
+      {showPinned&&pinnedMsgs.length>0&&(
+        <div style={{ padding:'8px 14px',background:'rgba(245,158,11,.05)',borderBottom:`1px solid ${c.bord}`,maxHeight:120,overflowY:'auto',flexShrink:0 }}>
+          {pinnedMsgs.map(m=>(
+            <div key={m.id} style={{ display:'flex',alignItems:'center',gap:8,padding:'4px 0',borderBottom:`1px solid rgba(255,255,255,.05)` }}>
+              <span style={{ fontSize:11,color:'#FCD34D',flexShrink:0 }}>📌</span>
+              <span style={{ fontSize:12,color:'rgba(255,255,255,.7)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{m.sender_name}: {m.text||'[attachment]'}</span>
+              <button onClick={()=>pinMsg(m)} style={{ background:'none',border:'none',color:'rgba(255,255,255,.4)',cursor:'pointer',fontSize:13,flexShrink:0 }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display:'flex',flex:1,minHeight:0 }}>
+        {/* Messages */}
+        <div style={{ flex:1,overflowY:'auto',padding:'12px',display:'flex',flexDirection:'column',gap:3,background:theme.bg }} onClick={()=>setContextMenu(null)}>
+          {spaceMessages.length===0&&<div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.35)',gap:8,paddingTop:32 }}><div style={{ fontSize:36 }}>{activeSpace.startsWith('dm-')?'👤':'💬'}</div><div style={{ fontSize:13 }}>{activeSpace.startsWith('dm-')?'Start a direct message':'No messages in this space yet'}</div></div>}
+          {grouped.map(group=>(
+            <div key={group.date}>
+              <div style={{ textAlign:'center',margin:'10px 0 6px',fontSize:11,color:'rgba(255,255,255,.3)',display:'flex',alignItems:'center',gap:6 }}><div style={{ flex:1,height:1,background:'rgba(255,255,255,.1)' }}/>{group.date}<div style={{ flex:1,height:1,background:'rgba(255,255,255,.1)' }}/></div>
+              {group.msgs.map(m=>{ const isMe=m.sender_email===myEmail; const member=members.find(x=>x.email===m.sender_email); const color=member?.color||theme.accent; const avatarUrl=member?.avatar_url||(isMe?myAvatar:undefined); return(
+                <div key={m.id} style={{ display:'flex',gap:7,alignItems:'flex-end',marginBottom:4,flexDirection:isMe?'row-reverse':'row',position:'relative' }}
+                  onContextMenu={e=>{e.preventDefault();setContextMenu({msgId:m.id,msg:m,x:e.clientX,y:e.clientY});}}>
+                  {!isMe&&<Av member={{name:m.sender_name,color}} size={26} url={avatarUrl}/>}
+                  {isMe&&<Av member={{name:myName,color:'#818CF8'}} size={26} url={myAvatar}/>}
+                  <div style={{ maxWidth:'72%' }}>
+                    {!isMe&&<div style={{ fontSize:10,color:'rgba(255,255,255,.45)',marginBottom:2,marginLeft:3 }}>{m.sender_name}</div>}
+                    <div style={{ position:'relative' }}>
+                      <div style={{ background:isMe?`linear-gradient(135deg,${theme.accent},${theme.accent}bb)`:'rgba(255,255,255,.12)',color:'#fff',padding:m.type!=='text'?6:'9px 13px',borderRadius:isMe?'14px 14px 4px 14px':'14px 14px 14px 4px',fontSize:13,backdropFilter:'blur(10px)' }}>{renderMsg(m)}</div>
+                      {isPinned(m.id)&&<span style={{ position:'absolute',top:-6,right:-6,fontSize:11 }}>📌</span>}
+                    </div>
+                    <div style={{ fontSize:10,color:'rgba(255,255,255,.28)',marginTop:2,textAlign:isMe?'right':'left',paddingLeft:isMe?0:3,paddingRight:isMe?3:0 }}>{new Date(m.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>
+                  </div>
                 </div>
-              </div>
-            );})}
+              );})}
+            </div>
+          ))}
+          <div ref={bottomRef}/>
+        </div>
+        {/* Files/Links sidebar panel */}
+        {showFiles&&(
+          <div style={{ width:220,flexShrink:0,borderLeft:`1px solid ${c.bord}`,background:c.dark?'rgba(10,8,30,.95)':'rgba(230,234,255,.9)',display:'flex',flexDirection:'column',overflow:'hidden' }}>
+            <div style={{ padding:'12px 14px',borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',justifyContent:'space-between' }}>
+              <span style={{ fontSize:13,fontWeight:700,color:c.text }}>Files & Links</span>
+              <button onClick={()=>setShowFiles(false)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:16 }}>×</button>
+            </div>
+            <div style={{ flex:1,overflowY:'auto',padding:'10px' }}>
+              {sharedFiles.length>0&&(<>
+                <div style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8 }}>Files ({sharedFiles.length})</div>
+                {sharedFiles.map(m=>(
+                  <div key={m.id} onClick={()=>window.open(m.url,'_blank')} style={{ display:'flex',alignItems:'center',gap:8,padding:'8px',borderRadius:8,background:c.surf,marginBottom:6,cursor:'pointer',border:`1px solid ${c.bord}` }}>
+                    <span style={{ fontSize:20,flexShrink:0 }}>{m.type==='image'?'🖼️':m.type==='pdf'?'📄':m.type==='video'?'🎬':m.type==='audio'?'🎵':'📎'}</span>
+                    <div style={{ flex:1,minWidth:0 }}>
+                      <div style={{ fontSize:11,fontWeight:600,color:c.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{m.filename||m.type}</div>
+                      <div style={{ fontSize:10,color:c.mut }}>{m.sender_name} · {new Date(m.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
+                    </div>
+                  </div>
+                ))}
+              </>)}
+              {sharedLinks.length>0&&(<>
+                <div style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',margin:'10px 0 8px' }}>Links ({sharedLinks.length})</div>
+                {sharedLinks.map(m=>{
+                  const urls=m.text.match(/https?:\/\/[^\s]+/g)||[];
+                  return urls.map((url,i)=>(
+                    <a key={m.id+i} href={url} target="_blank" rel="noreferrer" style={{ display:'block',padding:'8px',borderRadius:8,background:c.surf,marginBottom:6,border:`1px solid ${c.bord}`,textDecoration:'none' }}>
+                      <div style={{ fontSize:11,fontWeight:600,color:'#93C5FD',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{url}</div>
+                      <div style={{ fontSize:10,color:c.mut }}>{m.sender_name}</div>
+                    </a>
+                  ));
+                })}
+              </>)}
+              {sharedFiles.length===0&&sharedLinks.length===0&&<div style={{ fontSize:12,color:c.mut,textAlign:'center',marginTop:20 }}>No files or links shared yet</div>}
+            </div>
           </div>
-        ))}
-        <div ref={bottomRef}/>
+        )}
       </div>
+      {/* Context menu */}
+      {contextMenu&&(
+        <div style={{ position:'fixed',left:Math.min(contextMenu.x,window.innerWidth-160),top:Math.min(contextMenu.y,window.innerHeight-120),zIndex:999,background:c.dark?'rgba(18,15,50,.98)':'#fff',border:`1px solid ${c.bord}`,borderRadius:10,padding:6,boxShadow:'0 4px 20px rgba(0,0,0,.3)',minWidth:150,backdropFilter:'blur(20px)' }} onClick={e=>e.stopPropagation()}>
+          {[
+            {l:isPinned(contextMenu.msg.id)?'Unpin message':'📌 Pin message',a:()=>pinMsg(contextMenu.msg)},
+            {l:'📋 Copy text',a:()=>{navigator.clipboard&&navigator.clipboard.writeText(contextMenu.msg.text||'');setContextMenu(null);}},
+            {l:'↩️ Reply',a:()=>{setMsg('@'+contextMenu.msg.sender_name+' ');setContextMenu(null);}},
+          ].map(item=>(
+            <button key={item.l} onClick={item.a} style={{ display:'block',width:'100%',padding:'8px 12px',borderRadius:7,border:'none',background:'transparent',color:c.text,cursor:'pointer',fontSize:13,textAlign:'left' }} onMouseEnter={e=>e.target.style.background=c.surfH} onMouseLeave={e=>e.target.style.background='transparent'}>{item.l}</button>
+          ))}
+        </div>
+      )}
       {showGif&&<div style={{ padding:'9px 11px',background:c.nav,borderTop:`1px solid ${c.bord}`,flexShrink:0 }}>
         <div style={{ display:'flex',gap:7,marginBottom:7 }}>
           <input value={gifSearch} onChange={e=>setGifSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&searchGifs(gifSearch)} placeholder="Search GIFs..." style={{ flex:1,background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:8,padding:'6px 11px',color:c.text,fontSize:12,outline:'none' }}/>
@@ -800,11 +908,14 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
         {gifError&&<div style={{ fontSize:12,color:'#F87171',textAlign:'center',padding:'6px 0',lineHeight:1.5 }}>{gifError}</div>}
         {gifs.length===0&&!gifLoading&&!gifError&&gifSearch&&<div style={{ fontSize:12,color:c.mut,textAlign:'center',padding:'6px 0' }}>No GIFs found — try another search</div>}
       </div>}
-      <div style={{ padding:'9px 11px',background:c.nav,borderTop:`1px solid ${c.bord}`,display:'flex',gap:7,alignItems:'center',flexShrink:0 }}>
-        <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} style={{ display:'none' }}/>
-        <button onClick={()=>fileRef.current.click()} style={{ width:32,height:32,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0 }} title="Image">🖼️</button>
-        <button onClick={()=>setShowGif(!showGif)} style={{ width:32,height:32,borderRadius:8,border:`1px solid ${showGif?'#6366F1':c.bord}`,background:showGif?'rgba(99,102,241,.15)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:showGif?'#818CF8':c.mut,flexShrink:0 }}>GIF</button>
-        <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&sendMsg(msg)} placeholder="Message your team..." style={{ flex:1,background:c.inp,border:`1.5px solid ${c.inpB}`,borderRadius:9,padding:'8px 12px',color:c.text,fontSize:13,outline:'none' }}/>
+      <div style={{ padding:'9px 11px',background:c.nav,borderTop:`1px solid ${c.bord}`,display:'flex',gap:6,alignItems:'center',flexShrink:0 }}>
+        <input ref={fileRef} type="file" accept="image/*,video/*" onChange={handleImage} style={{ display:'none' }}/>
+        <input ref={attachRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.mp3,.wav,.ogg,video/*,image/*,application/*" onChange={handleAttach} style={{ display:'none' }}/>
+        <button onClick={()=>attachRef.current.click()} style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0 }} title="Send file (PDF, audio, video...)">📎</button>
+        <button onClick={()=>fileRef.current.click()} style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0 }} title="Send image">🖼️</button>
+        <button onClick={()=>setShowGif(!showGif)} style={{ width:30,height:30,borderRadius:8,border:`1px solid ${showGif?'#6366F1':c.bord}`,background:showGif?'rgba(99,102,241,.15)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:showGif?'#818CF8':c.mut,flexShrink:0 }}>GIF</button>
+        <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&sendMsg(msg)} placeholder={'Message '+(activeSpace.startsWith('dm-')?(dmMember?(dmMember.name||dmMember.email).split(' ')[0]:'DM'):'#'+(customSpaces.find(s=>s.id===activeSpace)?.name||activeSpace))+'...'} style={{ flex:1,background:c.inp,border:`1.5px solid ${c.inpB}`,borderRadius:9,padding:'8px 12px',color:c.text,fontSize:13,outline:'none' }}/>
+        <button onClick={()=>setShowFiles(!showFiles)} title="Files & links" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${showFiles?'#6366F1':c.bord}`,background:showFiles?'rgba(99,102,241,.15)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0,color:showFiles?'#818CF8':c.mut }}>🗂️</button>
         <button onClick={()=>sendMsg(msg)} disabled={!msg.trim()} style={{ width:34,height:34,borderRadius:9,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',color:'#fff',cursor:msg.trim()?'pointer':'not-allowed',opacity:msg.trim()?1:.5,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>↑</button>
       </div>
       </div>
