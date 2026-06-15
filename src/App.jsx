@@ -223,7 +223,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
   const [step,setStep]=useState(1);
   const [teamName,setTeamName]=useState(''); const [standupName,setStandupName]=useState('');
   const [memberEmails,setMemberEmails]=useState(['']); const [creating,setCreating]=useState(false);
-  const [createdTeam,setCreatedTeam]=useState(null);
+  const [createdTeam,setCreatedTeam]=useState(null); const [deletingId,setDeletingId]=useState(null);
   const [roomId,setRoomId]=useState(''); const [roomPass,setRoomPass]=useState('');
   const [joinLoading,setJoinLoading]=useState(false); const [joinError,setJoinError]=useState('');
   const name=session?.user?.user_metadata?.name||session?.user?.email?.split('@')[0]||'there';
@@ -247,6 +247,13 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
   },[session]);
 
   const [createError,setCreateError]=useState('');
+  const deleteTeam=async(teamId)=>{
+    if(!teamId)return;
+    setDeletingId(teamId);
+    if(SB.IS_LIVE) await SB.deleteTeam(teamId);
+    setTeams(p=>p.filter(t=>t.teams?.id!==teamId));
+    setDeletingId(null);
+  };
   const create=async()=>{
     if(!teamName.trim())return;
     setCreating(true);setCreateError('');
@@ -323,11 +330,14 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
         {loading?<div style={{ display:'flex',justifyContent:'center',padding:40 }}><Spin/></div>:(
           <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(230px,1fr))',gap:14 }}>
             {teams.map((tm,i)=>(
-              <Card key={tm.team_id} onClick={()=>goToTeam(tm.teams,tm.role)} style={{ padding:'22px',cursor:'pointer' }}>
-                <div style={{ width:48,height:48,borderRadius:14,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:14,fontSize:22 }}>{ICONS[i%ICONS.length]}</div>
-                <div style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:3 }}>{tm.teams?.name}</div>
-                <div style={{ fontSize:12,color:c.mut,marginBottom:8 }}>{tm.role==='manager'?'Manager':'Member'} · {tm.teams?.standup_name||'Standup'}</div>
-                <span style={{ fontSize:11,background:'rgba(99,102,241,.12)',color:'#818CF8',padding:'3px 9px',borderRadius:20 }}>Active</span>
+              <Card key={tm.team_id} style={{ padding:'22px',position:'relative',cursor:'pointer' }}>
+                <div onClick={()=>goToTeam(tm.teams,tm.role)}>
+                  <div style={{ width:48,height:48,borderRadius:14,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:14,fontSize:22 }}>{ICONS[i%ICONS.length]}</div>
+                  <div style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:3 }}>{tm.teams?.name}</div>
+                  <div style={{ fontSize:12,color:c.mut,marginBottom:8 }}>{tm.role==='manager'?'Manager':'Member'} · {tm.teams?.standup_name||'Standup'}</div>
+                  <span style={{ fontSize:11,background:'rgba(99,102,241,.12)',color:'#818CF8',padding:'3px 9px',borderRadius:20 }}>Active</span>
+                </div>
+                {tm.role==='manager'&&<button onClick={e=>{e.stopPropagation();if(window.confirm('Delete "'+tm.teams?.name+'"? This removes all tasks, members and history. This cannot be undone.'))deleteTeam(tm.teams?.id);}} style={{ position:'absolute',top:10,right:10,width:28,height:28,borderRadius:8,background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',color:'#F87171',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13 }} title="Delete team">🗑</button>}
               </Card>
             ))}
             {teams.length>0&&(<>
@@ -612,7 +622,7 @@ function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], te
 
 // ─── RICH CHAT ──────────────────────────────────────────────────────────
 function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='default', onChangeTheme }) {
-  const c=useC(); const [msg,setMsg]=useState(''); const [showGif,setShowGif]=useState(false);
+  const c=useC(); const [msg,setMsg]=useState(''); const [showGif,setShowGif]=useState(false); const [activeSpace,setActiveSpace]=useState('general');
   const [gifSearch,setGifSearch]=useState(''); const [gifs,setGifs]=useState([]); const [gifLoading,setGifLoading]=useState(false); const [gifError,setGifError]=useState('');
   const [showTheme,setShowTheme]=useState(false);
   const bottomRef=useRef(); const fileRef=useRef();
@@ -653,10 +663,29 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
   };
   const grouped=messages.reduce((acc,m)=>{ const date=new Date(m.created_at).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); if(!acc.length||acc[acc.length-1].date!==date)acc.push({date,msgs:[]}); acc[acc.length-1].msgs.push(m); return acc; },[]);
   return (
-    <div style={{ display:'flex',flexDirection:'column',height:'calc(100vh - 160px)',minHeight:400,borderRadius:14,overflow:'hidden',border:`1px solid ${c.bord}`,position:'relative' }}>
+    <div style={{ display:'flex',height:'calc(100vh - 160px)',minHeight:400,borderRadius:14,overflow:'hidden',border:`1px solid ${c.bord}` }}>
+      {/* Spaces sidebar */}
+      <div style={{ width:160,flexShrink:0,background:c.dark?'rgba(10,8,30,.95)':'rgba(230,234,255,.8)',borderRight:`1px solid ${c.bord}`,display:'flex',flexDirection:'column',padding:'12px 8px',gap:2 }}>
+        <div style={{ fontSize:10,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',padding:'4px 8px',marginBottom:4 }}>Spaces</div>
+        {[{id:'general',l:'# general',i:'💬'},{id:'announcements',l:'# announcements',i:'📢'},{id:'random',l:'# random',i:'🎲'}].map(sp=>(
+          <button key={sp.id} onClick={()=>setActiveSpace(sp.id)} style={{ display:'flex',alignItems:'center',gap:7,padding:'7px 8px',borderRadius:8,border:'none',background:activeSpace===sp.id?'rgba(99,102,241,.2)':'transparent',color:activeSpace===sp.id?'#818CF8':c.mut,cursor:'pointer',fontSize:12,fontWeight:activeSpace===sp.id?700:400,textAlign:'left',width:'100%' }}>
+            <span style={{ fontSize:14 }}>{sp.i}</span><span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{sp.l}</span>
+          </button>
+        ))}
+        <div style={{ borderTop:`1px solid ${c.bord}`,marginTop:8,paddingTop:8 }}>
+          <div style={{ fontSize:10,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',padding:'4px 8px',marginBottom:4 }}>Direct</div>
+          {members.filter(m=>m.email!==session?.user?.email).slice(0,5).map(m=>(
+            <button key={m.id||m.email} onClick={()=>setActiveSpace('dm-'+m.email)} style={{ display:'flex',alignItems:'center',gap:7,padding:'6px 8px',borderRadius:8,border:'none',background:activeSpace==='dm-'+m.email?'rgba(99,102,241,.2)':'transparent',color:activeSpace==='dm-'+m.email?'#818CF8':c.mut,cursor:'pointer',fontSize:12,textAlign:'left',width:'100%' }}>
+              <Av member={m} size={18} url={m.avatar_url}/><span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{(m.name||m.email).split(' ')[0]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      {/* Main chat area */}
+      <div style={{ display:'flex',flexDirection:'column',flex:1,minWidth:0,position:'relative' }}>
       <div style={{ padding:'11px 14px',background:c.nav,borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',gap:8,flexShrink:0 }}>
         <div style={{ display:'flex' }}>{members.slice(0,4).map((m,i)=><div key={m.id||m.email} style={{ marginLeft:i>0?-5:0 }}><Av member={m} size={24} url={m.avatar_url}/></div>)}</div>
-        <div style={{ flex:1 }}><span style={{ fontSize:13,fontWeight:700,color:c.text }}>Team Chat</span><span style={{ fontSize:11,color:c.mut,marginLeft:8 }}>{members.length} members</span></div>
+        <div style={{ flex:1 }}><span style={{ fontSize:13,fontWeight:700,color:c.text }}>{'#'+(activeSpace==='general'?'general':activeSpace==='announcements'?'announcements':'random')}</span><span style={{ fontSize:11,color:c.mut,marginLeft:8 }}>{members.length} members</span></div>
         <button onClick={()=>setShowTheme(!showTheme)} style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14 }}>🎨</button>
         {showTheme&&<div style={{ position:'absolute',right:10,top:52,background:c.dark?'rgba(18,15,50,.98)':'#fff',border:`1px solid ${c.bord}`,borderRadius:12,padding:10,zIndex:200,backdropFilter:'blur(20px)',boxShadow:'0 8px 24px rgba(0,0,0,.3)',width:240 }}><div style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8 }}>Chat theme</div><div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6 }}>{CHAT_THEMES.map(t=><button key={t.id} onClick={()=>{onChangeTheme(t.id);setShowTheme(false);}} style={{ padding:'9px 5px',borderRadius:9,border:`2px solid ${chatTheme===t.id?t.accent:c.bord}`,background:t.bg,cursor:'pointer',textAlign:'center' }}><div style={{ fontSize:10,fontWeight:600,color:chatTheme===t.id?t.accent:'rgba(255,255,255,.6)' }}>{t.label}</div></button>)}</div></div>}
       </div>
@@ -695,6 +724,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
         <button onClick={()=>setShowGif(!showGif)} style={{ width:32,height:32,borderRadius:8,border:`1px solid ${showGif?'#6366F1':c.bord}`,background:showGif?'rgba(99,102,241,.15)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:showGif?'#818CF8':c.mut,flexShrink:0 }}>GIF</button>
         <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&sendMsg(msg)} placeholder="Message your team..." style={{ flex:1,background:c.inp,border:`1.5px solid ${c.inpB}`,borderRadius:9,padding:'8px 12px',color:c.text,fontSize:13,outline:'none' }}/>
         <button onClick={()=>sendMsg(msg)} disabled={!msg.trim()} style={{ width:34,height:34,borderRadius:9,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',color:'#fff',cursor:msg.trim()?'pointer':'not-allowed',opacity:msg.trim()?1:.5,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>↑</button>
+      </div>
       </div>
     </div>
   );
@@ -799,7 +829,9 @@ function SettingsPage({ session, onBack, onSaved }) {
   const save=async()=>{ setSaving(true); if(SB.IS_LIVE)await SB.updateProfile({name,avatar_url:avatarUrl}); setSaving(false); onSaved({name,avatar_url:avatarUrl}); };
   const changePw=async()=>{ setPwErr(''); if(newPw.length<6){setPwErr('Min 6 characters');return;} setSaving(true); const {error}=SB.IS_LIVE?await SB.updatePassword(newPw):{error:null}; if(error)setPwErr(error.message); else{setPwOk(true);setNewPw('');setTimeout(()=>setPwOk(false),3000);} setSaving(false); };
   const handleAvatar=async(e)=>{ const file=e.target.files[0]; if(!file)return; if(SB.IS_LIVE){setSaving(true);const url=await SB.uploadAvatar(session.user.id,file);if(url)setAvatarUrl(url);setSaving(false);} };
-  const TABS=[{id:'profile',l:'Profile',i:'👤'},{id:'security',l:'Security',i:'🔒'},{id:'appearance',l:'Appearance',i:'🎨'},{id:'faq',l:'FAQ & Help',i:'❓'}];
+  const TABS=[{id:'profile',l:'Profile',i:'👤'},{id:'security',l:'Security',i:'🔒'},{id:'appearance',l:'Appearance',i:'🎨'},{id:'notifications',l:'Notifications',i:'🔔'},{id:'faq',l:'FAQ & Help',i:'❓'}];
+  const [chatNotifsEnabled,setChatNotifsEnabled]=useState(true);
+  const [soundEnabled,setSoundEnabled]=useState(false);
   return (
     <div style={{ position:'relative',zIndex:1,minHeight:'100vh' }}>
       <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(24px)',position:'sticky',top:0,zIndex:100 }}>
@@ -816,6 +848,30 @@ function SettingsPage({ session, onBack, onSaved }) {
           {tab==='profile'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>Profile</h2><div style={{ display:'flex',alignItems:'center',gap:16,marginBottom:24 }}><div style={{ position:'relative' }}>{avatarUrl?<img src={avatarUrl} alt="av" style={{ width:80,height:80,borderRadius:'50%',objectFit:'cover',border:'3px solid #818CF8' }}/>:<div style={{ width:80,height:80,borderRadius:'50%',background:'rgba(99,102,241,.2)',border:'3px solid #818CF8',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'#818CF8' }}>{name?name[0].toUpperCase():'?'}</div>}<button onClick={()=>fileRef.current.click()} style={{ position:'absolute',bottom:0,right:0,width:26,height:26,borderRadius:'50%',background:'#6366F1',border:'2px solid #fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13 }}>✏️</button><input ref={fileRef} type="file" accept="image/*" onChange={handleAvatar} style={{ display:'none' }}/></div><div><div style={{ fontSize:16,fontWeight:700,color:c.text }}>{name||session?.user?.email}</div><div style={{ fontSize:13,color:c.mut }}>{session?.user?.email}</div><button onClick={()=>fileRef.current.click()} style={{ fontSize:12,color:'#818CF8',background:'none',border:'none',cursor:'pointer',padding:0,marginTop:6 }}>Change photo</button></div></div><Inp label="Display name" value={name} onChange={e=>setName(e.target.value)} style={{ marginBottom:16 }}/><Inp label="Email" value={session?.user?.email||''} disabled style={{ marginBottom:20,opacity:.6 }}/><Btn onClick={save} loading={saving}>Save changes</Btn></Card>)}
           {tab==='security'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>Security</h2><Lbl>Change password</Lbl><Inp label="New password" type="password" value={newPw} onChange={e=>setNewPw(e.target.value)} placeholder="At least 6 characters" error={pwErr} style={{ marginBottom:16 }}/>{pwOk&&<div style={{ background:'rgba(52,211,153,.12)',border:'1px solid rgba(52,211,153,.3)',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#34D399',marginBottom:14 }}>✅ Password updated</div>}<Btn onClick={changePw} loading={saving} disabled={!newPw}>Update password</Btn></Card>)}
           {tab==='appearance'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>Appearance</h2><div style={{ display:'flex',gap:14 }}>{[{l:'Dark',i:'🌙',d:true},{l:'Light',i:'☀️',d:false}].map(opt=><div key={opt.l} onClick={()=>opt.d!==dark&&toggle()} style={{ flex:1,padding:'20px',borderRadius:14,border:`2px solid ${dark===opt.d?'#6366F1':c.bord}`,background:dark===opt.d?'rgba(99,102,241,.12)':c.surf,cursor:'pointer',textAlign:'center',transition:'all .2s' }}><div style={{ fontSize:32,marginBottom:10 }}>{opt.i}</div><div style={{ fontSize:14,fontWeight:600,color:c.text }}>{opt.l} mode</div>{dark===opt.d&&<div style={{ fontSize:11,color:'#818CF8',marginTop:4 }}>✓ Active</div>}</div>)}</div></Card>)}
+          {tab==='notifications'&&(
+            <div>
+              <Card style={{ padding:'28px',marginBottom:14 }}>
+                <h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:4 }}>Chat notifications</h2>
+                <p style={{ fontSize:13,color:c.mut,marginBottom:18 }}>Control how you get notified about new messages.</p>
+                {[
+                  {id:'chat',label:'New chat messages',sub:'Show unread badge when teammates send messages',val:chatNotifsEnabled,set:setChatNotifsEnabled},
+                  {id:'sound',label:'Sound alerts',sub:'Play a sound when a new message arrives',val:soundEnabled,set:setSoundEnabled},
+                ].map(n=>(
+                  <div key={n.id} style={{ display:'flex',alignItems:'center',gap:12,padding:'12px 0',borderBottom:`1px solid ${c.bord}` }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:14,fontWeight:600,color:c.text,marginBottom:2 }}>{n.label}</div>
+                      <div style={{ fontSize:12,color:c.mut }}>{n.sub}</div>
+                    </div>
+                    <button onClick={()=>n.set(!n.val)} style={{ width:44,height:24,borderRadius:12,border:'none',background:n.val?'#6366F1':'rgba(128,128,128,.25)',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0 }}>
+                      <div style={{ width:18,height:18,borderRadius:'50%',background:'#fff',position:'absolute',top:3,left:n.val?23:3,transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,.2)' }}/>
+                    </button>
+                  </div>
+                ))}
+                <button onClick={()=>{ if('Notification' in window) Notification.requestPermission().then(p=>alert(p==='granted'?'Desktop notifications enabled!':'Permission denied. Enable in browser settings.')); }} style={{ marginTop:14,fontSize:13,color:'#818CF8',background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.25)',borderRadius:8,cursor:'pointer',padding:'8px 14px',fontWeight:600 }}>Enable desktop notifications</button>
+              </Card>
+              <RemindersPanel/>
+            </div>
+          )}
           {tab==='faq'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>FAQ & Help</h2>{FAQ.map((item,i)=><div key={i} style={{ borderBottom:`1px solid ${c.bord}`,padding:'14px 0' }}><button onClick={()=>setOpenFaq(openFaq===i?null:i)} style={{ width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',background:'none',border:'none',cursor:'pointer',color:c.text,fontSize:14,fontWeight:600,textAlign:'left',gap:12 }}><span>{item.q}</span><span style={{ transform:openFaq===i?'rotate(180deg)':'none',transition:'transform .2s',color:c.mut,fontSize:18,flexShrink:0 }}>⌃</span></button>{openFaq===i&&<p style={{ fontSize:13,color:c.mut,lineHeight:1.6,marginTop:10,marginBottom:0 }}>{item.a}</p>}</div>)}</Card>)}
         </div>
       </div>
@@ -917,7 +973,7 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
 }
 
 // ─── MANAGER TABS ─────────────────────────────────────────────────────────────
-function LiveTab({ tasks, members, onStatus, onPriority, onNote, onAddTask }) {
+function LiveTab({ tasks, members, onStatus, onPriority, onNote, onAddTask, session }) {
   const c=useC(); const [fu,setFu]=useState('all'); const [fs,setFs]=useState('all'); const [showModal,setShowModal]=useState(false);
   const filtered=tasks.filter(t=>fu==='all'||t.assignee_email===fu).filter(t=>fs==='all'||t.status===fs);
   const total=tasks.length,done=tasks.filter(t=>t.status==='done').length,inProg=tasks.filter(t=>t.status==='in-progress').length,blocked=tasks.filter(t=>t.status==='blocked').length,todo=tasks.filter(t=>t.status==='todo').length,pct=total?Math.round(done/total*100):0;
@@ -934,21 +990,23 @@ function LiveTab({ tasks, members, onStatus, onPriority, onNote, onAddTask }) {
           <Btn onClick={()=>setShowModal(true)} style={{ padding:'7px 14px',fontSize:12,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',flexShrink:0 }}>+ Assign task</Btn>
         </div>
         {filtered.length===0?<div style={{ padding:'40px',textAlign:'center',color:c.mut,fontSize:14 }}>{total===0?'⏳ Waiting for team to add tasks...':'No tasks match this filter'}</div>
-          :filtered.map(t=><MgrRow key={t.id} task={t} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote}/>)}
+          :filtered.map(t=><MgrRow key={t.id} task={t} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} session={session}/>)}
       </Card>
       {showModal&&<AssignModal members={members} onClose={()=>setShowModal(false)} onAdd={onAddTask}/>}
     </div>
   );
 }
 
-function MgrRow({ task, members, onStatus, onPriority, onNote }) {
+function MgrRow({ task, members, onStatus, onPriority, onNote, session }) {
   const c=useC(); const [showN,setShowN]=useState(false); const [note,setNote]=useState(task.manager_note||'');
   const member=members.find(m=>m.email===task.assignee_email); const p=getPriority(task.priority);
-  const next={'todo':'in-progress','in-progress':'done','done':'todo','blocked':'todo'};
+  // Managers can start tasks and unblock them, but ONLY employees mark tasks done
+  const next={'todo':'in-progress','in-progress':'in-progress','done':'todo','blocked':'todo'};
+  const canToggle=task.status!=='in-progress'||task.assignee_email===session?.user?.email;
   return (
     <div style={{ borderBottom:`1px solid ${c.bord}`,transition:'background .15s' }} onMouseEnter={e=>e.currentTarget.style.background=c.row} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
       <div style={{ display:'flex',alignItems:'center',gap:10,padding:'11px 16px' }}>
-        <button onClick={()=>onStatus(task.id,next[task.status])} style={{ width:20,height:20,borderRadius:'50%',flexShrink:0,border:`2px solid ${task.status==='done'?'#34D399':'rgba(128,128,128,.3)'}`,background:task.status==='done'?'#34D399':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .2s' }}>
+        <button onClick={()=>canToggle&&onStatus(task.id,next[task.status])} title={task.status==='in-progress'&&!canToggle?'Only the assigned member can mark this done':''} style={{ width:20,height:20,borderRadius:'50%',flexShrink:0,border:`2px solid ${task.status==='done'?'#34D399':'rgba(128,128,128,.3)'}`,background:task.status==='done'?'#34D399':'transparent',cursor:canToggle?'pointer':'not-allowed',opacity:task.status==='in-progress'&&!canToggle?.45:1,display:'flex',alignItems:'center',justifyContent:'center',transition:'all .2s' }}>
           {task.status==='done'&&<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
         </button>
         <div style={{ width:7,height:7,borderRadius:'50%',background:p.color,flexShrink:0 }}/>
@@ -1164,6 +1222,18 @@ const MGR_TABS=[{id:'live',l:'Live board',i:'⚡'},{id:'team',l:'Team',i:'👥'}
 
 function ManagerView({ session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers }) {
   const c=useC(); const [tab,setTab]=useState('live');
+  const [unreadChat,setUnreadChat]=useState(0);
+  const prevMsgCount=useRef(messages.length);
+  useEffect(()=>{
+    if(messages.length>prevMsgCount.current&&tab!=='chat'){
+      const newMsgs=messages.slice(prevMsgCount.current);
+      const myEmail=session?.user?.email;
+      const externalNew=newMsgs.filter(m=>m.sender_email!==myEmail);
+      if(externalNew.length>0) setUnreadChat(n=>n+externalNew.length);
+    }
+    prevMsgCount.current=messages.length;
+  },[messages,tab]);
+  const setTabClear=(t)=>{ setTab(t); if(t==='chat') setUnreadChat(0); };
   const blocked=tasks.filter(t=>t.status==='blocked').length;
   const name=session?.user?.user_metadata?.name||session?.user?.email?.split('@')[0]||'Manager';
   const myTasks=tasks.filter(t=>t.assignee_email===session?.user?.email);
@@ -1173,7 +1243,12 @@ function ManagerView({ session, team, tasks, members, history, standup, onStatus
         <div style={{ maxWidth:1200,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:10 }}>
           <Logo size={26} onClick={onBack}/>
           <nav style={{ display:'flex',gap:1,flex:1,overflowX:'auto' }}>
-            {MGR_TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{ padding:'5px 10px',borderRadius:8,border:'none',background:tab===t.id?'rgba(129,140,248,.18)':'transparent',color:tab===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:11,fontWeight:tab===t.id?700:400,display:'flex',alignItems:'center',gap:4,transition:'all .15s',whiteSpace:'nowrap',flexShrink:0 }}><span>{t.i}</span>{t.l}</button>)}
+            {MGR_TABS.map(t=>(
+              <button key={t.id} onClick={()=>setTabClear(t.id)} style={{ padding:'5px 10px',borderRadius:8,border:'none',background:tab===t.id?'rgba(129,140,248,.18)':'transparent',color:tab===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:11,fontWeight:tab===t.id?700:400,display:'flex',alignItems:'center',gap:4,transition:'all .15s',whiteSpace:'nowrap',flexShrink:0,position:'relative' }}>
+                <span>{t.i}</span>{t.l}
+                {t.id==='chat'&&unreadChat>0&&<span style={{ position:'absolute',top:0,right:0,minWidth:16,height:16,borderRadius:8,background:'#EF4444',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 3px',lineHeight:1 }}>{unreadChat>9?'9+':unreadChat}</span>}
+              </button>
+            ))}
           </nav>
           <div style={{ display:'flex',alignItems:'center',gap:7,flexShrink:0 }}>
             {blocked>0&&<div style={{ fontSize:11,color:'#F87171',background:'rgba(239,68,68,.12)',border:'1px solid rgba(239,68,68,.25)',padding:'3px 9px',borderRadius:8,fontWeight:700 }}>⚠️ {blocked}</div>}
@@ -1189,7 +1264,7 @@ function ManagerView({ session, team, tasks, members, history, standup, onStatus
         <p style={{ margin:0,color:c.mut,fontSize:12 }}>{members.length} members · {tasks.length} tasks today</p>
       </div>
       <div style={{ maxWidth:1200,margin:'0 auto',padding:'0 24px 48px' }}>
-        {tab==='live'&&<LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask}/>}
+        {tab==='live'&&<LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} session={session}/>}
         {tab==='team'&&<TeamTab tasks={tasks} members={members}/>}
         {tab==='perf'&&<PerfTab tasks={tasks} history={history} members={members}/>}
         {tab==='ai'&&<AIAssistant tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name||'Team'}/>}
