@@ -764,57 +764,348 @@ function RemindersPanel() {
 }
 
 // ─── GOOGLE CALENDAR ─────────────────────────────────────────────────────
-function CalendarPanel({ team, session }) {
-  const c=useC(); const [connected,setConnected]=useState(false); const [selectedMeeting,setSelectedMeeting]=useState(null); const [step,setStep]=useState(1); const [importedMembers,setImportedMembers]=useState([]);
-  const MOCK=[{id:'m1',title:team?.standup_name||'Daily Standup',time:'9:00 AM',days:'Mon-Sat',attendees:['tanisk.pandey@xtransmatrix.com','deepak.nr@xtransmatrix.com','madhan.m@xtransmatrix.com']}];
-  const selectedMeet=MOCK.find(m=>m.id===selectedMeeting);
-  const connectGoogle=async()=>{
-    if(!process.env.REACT_APP_GOOGLE_CLIENT_ID){
-      alert('To connect Google Calendar:\n\n1. Go to console.cloud.google.com\n2. Create a project → Enable Google Calendar API\n3. Create OAuth 2.0 credentials (Web app)\n4. Add redirect URI: '+window.location.origin+'\n5. Add to Vercel: REACT_APP_GOOGLE_CLIENT_ID\n6. Enable Google provider in Supabase Auth settings');
+function CalendarPanel({ team, session, members, onInviteMember }) {
+  const c=useC();
+  const [status,setStatus]=useState('idle'); // idle | loading | connected | error
+  const [events,setEvents]=useState([]);
+  const [view,setView]=useState('week'); // week | month | agenda
+  const [currentDate,setCurrentDate]=useState(new Date());
+  const [selectedEvent,setSelectedEvent]=useState(null);
+  const [error,setError]=useState('');
+  const CLIENT_ID=process.env.REACT_APP_GOOGLE_CLIENT_ID;
+  const SCOPES='https://www.googleapis.com/auth/calendar.readonly';
+
+  const loadGapi=()=>new Promise((res,rej)=>{
+    if(window.gapi&&window.gapi.client){res();return;}
+    const s=document.createElement('script');
+    s.src='https://apis.google.com/js/api.js';
+    s.onload=()=>window.gapi.load('client',res);
+    s.onerror=rej;
+    document.head.appendChild(s);
+  });
+
+  const connect=async()=>{
+    if(!CLIENT_ID){
+      setError('REACT_APP_GOOGLE_CLIENT_ID not set in Vercel. See setup steps below.');
+      setStatus('error');
       return;
     }
-    // Trigger Google OAuth which will also grant Calendar scope
-    await SB.signInWithGoogle();
+    setStatus('loading');
+    try {
+      await loadGapi();
+      await window.gapi.client.init({
+        apiKey: '',
+        discoveryDocs:['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+      });
+      // Use Google Identity Services for OAuth
+      const tokenClient=window.google?.accounts?.oauth2?.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: async(resp)=>{
+          if(resp.error){setError('OAuth failed: '+resp.error);setStatus('error');return;}
+          await fetchEvents();
+        },
+      });
+      if(!tokenClient){
+        // Load GIS script
+        const s=document.createElement('script');
+        s.src='https://accounts.google.com/gsi/client';
+        s.onload=()=>{
+          const tc=window.google.accounts.oauth2.initTokenClient({
+            client_id:CLIENT_ID,scope:SCOPES,
+            callback:async(resp)=>{
+              if(resp.error){setError('OAuth: '+resp.error);setStatus('error');return;}
+              await fetchEvents();
+            },
+          });
+          tc.requestAccessToken();
+        };
+        document.head.appendChild(s);
+      } else {
+        tokenClient.requestAccessToken();
+      }
+    } catch(e) {
+      setError('Failed to load Google API: '+e.message);
+      setStatus('error');
+    }
   };
-  if(!connected) return(
-    <div style={{ textAlign:'center',padding:'40px 20px' }}>
-      <div style={{ fontSize:44,marginBottom:14 }}>📅</div>
-      <h3 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:8 }}>Connect Google Calendar</h3>
-      <p style={{ fontSize:13,color:c.mut,marginBottom:22,lineHeight:1.7,maxWidth:380,margin:'0 auto 22px' }}>Link your Google Calendar to find your standup meetings and import attendees as team members.</p>
-      {!process.env.REACT_APP_GOOGLE_CLIENT_ID?(
-        <div style={{ maxWidth:440,margin:'0 auto' }}>
-          <div style={{ background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:12,padding:'16px 18px',marginBottom:16,textAlign:'left' }}>
-            <div style={{ fontSize:13,fontWeight:700,color:'#FCD34D',marginBottom:10 }}>Setup required — 5 minutes:</div>
-            {['1. Go to console.cloud.google.com → New project','2. APIs & Services → Enable "Google Calendar API"','3. OAuth consent screen → External → fill in name','4. Credentials → OAuth 2.0 Client ID → Web app','5. Authorised redirect URIs → add: '+window.location.origin,'6. Copy Client ID → Vercel env: REACT_APP_GOOGLE_CLIENT_ID','7. Supabase → Auth → Providers → Google → paste Client ID + Secret'].map((s,i)=><div key={i} style={{ fontSize:12,color:c.mut,marginBottom:4,display:'flex',gap:6 }}><span style={{ color:'#FCD34D',flexShrink:0 }}>{s.slice(0,2)}</span><span>{s.slice(3)}</span></div>)}
+
+  const fetchEvents=async()=>{
+    try {
+      const now=new Date();
+      const start=new Date(now.getFullYear(),now.getMonth()-1,1).toISOString();
+      const end=new Date(now.getFullYear(),now.getMonth()+2,0).toISOString();
+      const resp=await window.gapi.client.calendar.events.list({
+        calendarId:'primary',
+        timeMin:start,
+        timeMax:end,
+        showDeleted:false,
+        singleEvents:true,
+        maxResults:100,
+        orderBy:'startTime',
+      });
+      setEvents(resp.result.items||[]);
+      setStatus('connected');
+    } catch(e) {
+      setError('Failed to load events: '+e.message);
+      setStatus('error');
+    }
+  };
+
+  const disconnect=()=>{
+    setStatus('idle');setEvents([]);setSelectedEvent(null);setError('');
+  };
+
+  // Calendar helpers
+  const getDaysInMonth=(date)=>{
+    const year=date.getFullYear(),month=date.getMonth();
+    const first=new Date(year,month,1);
+    const days=[];
+    const startDay=first.getDay();
+    for(let i=0;i<startDay;i++)days.push(null);
+    const total=new Date(year,month+1,0).getDate();
+    for(let d=1;d<=total;d++)days.push(new Date(year,month,d));
+    return days;
+  };
+
+  const getEventsForDay=(date)=>{
+    if(!date)return[];
+    return events.filter(ev=>{
+      const s=new Date(ev.start?.dateTime||ev.start?.date);
+      return s.toDateString()===date.toDateString();
+    });
+  };
+
+  const getWeekDays=(date)=>{
+    const d=new Date(date);
+    const day=d.getDay();
+    const diff=d.getDate()-day;
+    return Array.from({length:7},(_,i)=>new Date(d.setDate(diff+i))).map((_,i)=>{
+      const dd=new Date(date);
+      dd.setDate(date.getDate()-date.getDay()+i);
+      return dd;
+    });
+  };
+
+  const fmtTime=(iso)=>{
+    if(!iso)return'All day';
+    return new Date(iso).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  };
+
+  const fmtDate=(date)=>date.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+
+  const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  const navPrev=()=>{ const d=new Date(currentDate); if(view==='week')d.setDate(d.getDate()-7); else d.setMonth(d.getMonth()-1); setCurrentDate(d); };
+  const navNext=()=>{ const d=new Date(currentDate); if(view==='week')d.setDate(d.getDate()+7); else d.setMonth(d.getMonth()+1); setCurrentDate(d); };
+
+  const eventColor=(ev)=>{
+    const colors={'1':'#ac725e','2':'#d06b64','3':'#f83a22','4':'#fa573c','5':'#ff7537','6':'#ffad46','7':'#42d692','8':'#16a765','9':'#7bd148','10':'#b3dc6c','11':'#fbe983','default':'#6366F1'};
+    return colors[ev.colorId]||'#6366F1';
+  };
+
+  // ── NOT CONNECTED ──────────────────────────────────────────────────────────
+  if(status==='idle'||status==='error') return(
+    <div style={{ maxWidth:560,margin:'0 auto',padding:'20px 0' }}>
+      <div style={{ textAlign:'center',marginBottom:28 }}>
+        <div style={{ fontSize:52,marginBottom:14 }}>📅</div>
+        <h2 style={{ fontSize:20,fontWeight:700,color:c.text,marginBottom:8 }}>Google Calendar</h2>
+        <p style={{ fontSize:13,color:c.mut,lineHeight:1.7 }}>Connect your Google Calendar to see meetings, dates, and import attendees as team members.</p>
+      </div>
+      {error&&<div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:10,padding:'12px 16px',fontSize:13,color:'#F87171',marginBottom:16 }}>{error}</div>}
+      {!CLIENT_ID?(
+        <div style={{ background:'rgba(245,158,11,.06)',border:'1px solid rgba(245,158,11,.2)',borderRadius:14,padding:'20px 22px',marginBottom:20 }}>
+          <div style={{ fontSize:14,fontWeight:700,color:'#FCD34D',marginBottom:14 }}>One-time setup needed (5 min)</div>
+          {[
+            ['1','Go to console.cloud.google.com → Create/select a project'],
+            ['2','APIs & Services → Library → search "Google Calendar API" → Enable'],
+            ['3','APIs & Services → OAuth consent screen → External → App name: StandSync → Save'],
+            ['4','APIs & Services → Credentials → + Create → OAuth 2.0 Client ID → Web application'],
+            ['5','Authorised JavaScript origins → add: https://standsync-olive.vercel.app'],
+            ['6','Authorised redirect URIs → add: https://yqvzmbwaofplxzejiavw.supabase.co/auth/v1/callback'],
+            ['7','Copy Client ID → Vercel → Environment Variables → REACT_APP_GOOGLE_CLIENT_ID'],
+            ['8','Supabase → Authentication → Providers → Google → Enable → paste Client ID + Secret → Save'],
+          ].map(([n,s])=>(
+            <div key={n} style={{ display:'flex',gap:12,marginBottom:10,alignItems:'flex-start' }}>
+              <div style={{ width:22,height:22,borderRadius:'50%',background:'rgba(245,158,11,.2)',color:'#FCD34D',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,flexShrink:0,marginTop:1 }}>{n}</div>
+              <div style={{ fontSize:13,color:c.sub,lineHeight:1.5 }}>{s}</div>
+            </div>
+          ))}
+          <div style={{ marginTop:14,padding:'10px 14px',background:'rgba(99,102,241,.08)',borderRadius:8,fontSize:12,color:'#818CF8' }}>
+            After completing these steps, add REACT_APP_GOOGLE_CLIENT_ID to Vercel and redeploy. The Connect button will then work.
           </div>
-          <Btn onClick={connectGoogle} style={{ margin:'0 auto' }}>Connect with Google</Btn>
         </div>
       ):(
-        <Btn onClick={connectGoogle} style={{ margin:'0 auto' }}>Connect with Google</Btn>
+        <div style={{ textAlign:'center' }}>
+          <Btn onClick={connect} style={{ padding:'13px 32px',fontSize:15,margin:'0 auto' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" style={{ flexShrink:0 }}>
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Connect Google Calendar
+          </Btn>
+          <p style={{ fontSize:12,color:c.mut,marginTop:10 }}>Opens Google sign-in to grant calendar access</p>
+        </div>
       )}
     </div>
   );
-  // Get user email for calendar embed
-  const userEmail = session?.user?.email || '';
+
+  if(status==='loading') return(
+    <div style={{ display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:60,gap:16 }}>
+      <Spin size={36}/>
+      <div style={{ fontSize:14,color:c.mut }}>Connecting to Google Calendar...</div>
+    </div>
+  );
+
+  // ── CONNECTED — full calendar ──────────────────────────────────────────────
+  const weekDays=getWeekDays(currentDate);
+  const monthDays=getDaysInMonth(currentDate);
+  const today=new Date();
+
   return(
     <div>
-      <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:14 }}>
-        <div style={{ width:8,height:8,borderRadius:'50%',background:'#34D399' }}/>
-        <span style={{ fontSize:13,color:'#34D399',fontWeight:600 }}>Google Calendar connected</span>
-        <button onClick={()=>setConnected(false)} style={{ marginLeft:'auto',fontSize:12,color:c.mut,background:'none',border:'none',cursor:'pointer' }}>Disconnect</button>
+      {/* Toolbar */}
+      <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:16,flexWrap:'wrap' }}>
+        <div style={{ display:'flex',alignItems:'center',gap:6 }}>
+          <div style={{ width:8,height:8,borderRadius:'50%',background:'#34D399' }}/>
+          <span style={{ fontSize:13,color:'#34D399',fontWeight:600 }}>Google Calendar</span>
+          <span style={{ fontSize:12,color:c.mut }}>· {events.length} events loaded</span>
+        </div>
+        <div style={{ flex:1 }}/>
+        {/* View toggle */}
+        <div style={{ display:'flex',gap:4,background:c.surf,borderRadius:10,padding:4,border:`1px solid ${c.bord}` }}>
+          {['week','month','agenda'].map(v=>(
+            <button key={v} onClick={()=>setView(v)} style={{ padding:'5px 12px',borderRadius:7,border:'none',background:view===v?'rgba(99,102,241,.2)':'transparent',color:view===v?'#818CF8':c.mut,cursor:'pointer',fontSize:12,fontWeight:view===v?700:400,textTransform:'capitalize' }}>{v}</button>
+          ))}
+        </div>
+        {/* Nav */}
+        <button onClick={navPrev} style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',color:c.text,fontSize:16,display:'flex',alignItems:'center',justifyContent:'center' }}>‹</button>
+        <button onClick={()=>setCurrentDate(new Date())} style={{ padding:'5px 12px',borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',color:c.text,fontSize:12 }}>Today</button>
+        <button onClick={navNext} style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',color:c.text,fontSize:16,display:'flex',alignItems:'center',justifyContent:'center' }}>›</button>
+        <div style={{ fontSize:14,fontWeight:700,color:c.text,minWidth:140 }}>
+          {view==='week'?fmtDate(weekDays[0])+' – '+fmtDate(weekDays[6]):MONTHS[currentDate.getMonth()]+' '+currentDate.getFullYear()}
+        </div>
+        <button onClick={disconnect} style={{ fontSize:12,color:c.mut,background:'none',border:'none',cursor:'pointer' }}>Disconnect</button>
       </div>
-      {/* Embedded Google Calendar — shows real events */}
-      <div style={{ borderRadius:12,overflow:'hidden',border:`1px solid ${c.bord}`,marginBottom:14 }}>
-        <iframe
-          src={'https://calendar.google.com/calendar/embed?src='+encodeURIComponent(userEmail)+'&ctz=Asia%2FKolkata&showTitle=0&showNav=1&showDate=1&showPrint=0&showTabs=1&showCalendars=0&mode=WEEK'}
-          style={{ width:'100%',height:500,border:'none',display:'block' }}
-          title="Google Calendar"
-          sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-        />
-      </div>
-      <div style={{ padding:'11px 14px',background:'rgba(99,102,241,.06)',border:`1px solid ${c.bord}`,borderRadius:10,fontSize:12,color:c.mut }}>
-        📅 Showing your Google Calendar. To import meeting attendees as team members, go to Team Settings → Invite and add their emails.
-      </div>
+
+      {/* WEEK VIEW */}
+      {view==='week'&&(
+        <Card style={{ overflow:'hidden' }}>
+          <div style={{ display:'grid',gridTemplateColumns:'repeat(7,1fr)',borderBottom:`1px solid ${c.bord}` }}>
+            {weekDays.map((day,i)=>(
+              <div key={i} style={{ padding:'10px 8px',textAlign:'center',borderRight:i<6?`1px solid ${c.bord}`:'none',background:day.toDateString()===today.toDateString()?'rgba(99,102,241,.08)':'transparent' }}>
+                <div style={{ fontSize:11,color:c.mut,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:4 }}>{DAYS[i]}</div>
+                <div style={{ fontSize:day.toDateString()===today.toDateString()?16:14,fontWeight:day.toDateString()===today.toDateString()?700:400,color:day.toDateString()===today.toDateString()?'#818CF8':c.text,width:28,height:28,borderRadius:'50%',background:day.toDateString()===today.toDateString()?'rgba(99,102,241,.15)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto' }}>{day.getDate()}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display:'grid',gridTemplateColumns:'repeat(7,1fr)',minHeight:300,alignItems:'start' }}>
+            {weekDays.map((day,i)=>{
+              const dayEvts=getEventsForDay(day);
+              return(
+                <div key={i} style={{ padding:'8px 6px',borderRight:i<6?`1px solid ${c.bord}`:'none',minHeight:200,borderTop:`1px solid ${c.bord}` }}>
+                  {dayEvts.map(ev=>(
+                    <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ padding:'4px 7px',borderRadius:6,background:eventColor(ev)+'22',border:`1px solid ${eventColor(ev)}44`,color:eventColor(ev),fontSize:11,fontWeight:600,marginBottom:4,cursor:'pointer',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }} title={ev.summary}>
+                      {fmtTime(ev.start?.dateTime)} {ev.summary}
+                    </div>
+                  ))}
+                  {dayEvts.length===0&&day.toDateString()===today.toDateString()&&<div style={{ fontSize:10,color:c.mut,textAlign:'center',marginTop:8 }}>No events</div>}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* MONTH VIEW */}
+      {view==='month'&&(
+        <Card style={{ overflow:'hidden' }}>
+          <div style={{ display:'grid',gridTemplateColumns:'repeat(7,1fr)',borderBottom:`1px solid ${c.bord}` }}>
+            {DAYS.map(d=><div key={d} style={{ padding:'10px',textAlign:'center',fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.06em' }}>{d}</div>)}
+          </div>
+          <div style={{ display:'grid',gridTemplateColumns:'repeat(7,1fr)' }}>
+            {monthDays.map((day,i)=>{
+              const dayEvts=day?getEventsForDay(day):[];
+              const isToday=day&&day.toDateString()===today.toDateString();
+              return(
+                <div key={i} style={{ minHeight:80,padding:'6px',borderRight:(i+1)%7!==0?`1px solid ${c.bord}`:'none',borderBottom:`1px solid ${c.bord}`,background:isToday?'rgba(99,102,241,.05)':'transparent' }}>
+                  {day&&<div style={{ fontSize:12,fontWeight:isToday?700:400,color:isToday?'#818CF8':c.sub,width:22,height:22,borderRadius:'50%',background:isToday?'rgba(99,102,241,.15)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:4 }}>{day.getDate()}</div>}
+                  {dayEvts.slice(0,2).map(ev=>(
+                    <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ padding:'2px 5px',borderRadius:4,background:eventColor(ev)+'22',color:eventColor(ev),fontSize:10,fontWeight:600,marginBottom:2,cursor:'pointer',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{ev.summary}</div>
+                  ))}
+                  {dayEvts.length>2&&<div style={{ fontSize:10,color:c.mut }}>+{dayEvts.length-2} more</div>}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* AGENDA VIEW */}
+      {view==='agenda'&&(
+        <div>
+          {events.length===0&&<Card style={{ padding:'32px',textAlign:'center' }}><div style={{ fontSize:32,marginBottom:8 }}>📅</div><div style={{ color:c.mut,fontSize:14 }}>No upcoming events</div></Card>}
+          {events.slice(0,30).map(ev=>{
+            const start=new Date(ev.start?.dateTime||ev.start?.date);
+            const end=new Date(ev.end?.dateTime||ev.end?.date);
+            return(
+              <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ display:'flex',gap:14,padding:'12px 0',borderBottom:`1px solid ${c.bord}`,cursor:'pointer' }}>
+                <div style={{ width:4,borderRadius:2,background:eventColor(ev),flexShrink:0 }}/>
+                <div style={{ width:80,flexShrink:0 }}>
+                  <div style={{ fontSize:12,fontWeight:600,color:c.text }}>{start.toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
+                  <div style={{ fontSize:11,color:c.mut }}>{fmtTime(ev.start?.dateTime)}</div>
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:14,fontWeight:600,color:c.text,marginBottom:2 }}>{ev.summary||'(No title)'}</div>
+                  {ev.location&&<div style={{ fontSize:11,color:c.mut,marginBottom:2 }}>📍 {ev.location}</div>}
+                  {ev.description&&<div style={{ fontSize:11,color:c.mut,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:400 }}>{ev.description.replace(/<[^>]+>/g,'')}</div>}
+                  {ev.attendees&&<div style={{ fontSize:11,color:'#818CF8',marginTop:4 }}>{ev.attendees.length} attendees</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Event detail modal */}
+      {selectedEvent&&(
+        <Modal onClose={()=>setSelectedEvent(null)} title={selectedEvent.summary||'Event'} width={480}>
+          <div style={{ display:'flex',flexDirection:'column',gap:12 }}>
+            <div style={{ display:'flex',gap:8,alignItems:'center' }}>
+              <span style={{ fontSize:13,color:c.mut }}>When:</span>
+              <span style={{ fontSize:13,color:c.text }}>
+                {new Date(selectedEvent.start?.dateTime||selectedEvent.start?.date).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
+                {selectedEvent.start?.dateTime&&' · '+fmtTime(selectedEvent.start.dateTime)+' – '+fmtTime(selectedEvent.end?.dateTime)}
+              </span>
+            </div>
+            {selectedEvent.location&&<div style={{ display:'flex',gap:8 }}><span style={{ fontSize:13,color:c.mut }}>Where:</span><span style={{ fontSize:13,color:c.text }}>{selectedEvent.location}</span></div>}
+            {selectedEvent.description&&<div style={{ padding:'10px 14px',background:c.surf,borderRadius:8,fontSize:12,color:c.sub,lineHeight:1.6 }}>{selectedEvent.description.replace(/<[^>]+>/g,'').slice(0,300)}</div>}
+            {selectedEvent.attendees&&selectedEvent.attendees.length>0&&(
+              <div>
+                <Lbl>Attendees ({selectedEvent.attendees.length})</Lbl>
+                <div style={{ display:'flex',flexDirection:'column',gap:6,maxHeight:180,overflowY:'auto' }}>
+                  {selectedEvent.attendees.map(a=>(
+                    <div key={a.email} style={{ display:'flex',alignItems:'center',gap:10,padding:'7px 0',borderBottom:`1px solid ${c.bord}` }}>
+                      <Av member={{name:a.displayName||a.email,color:'#818CF8'}} size={28}/>
+                      <div style={{ flex:1 }}><div style={{ fontSize:13,color:c.text }}>{a.displayName||a.email}</div><div style={{ fontSize:11,color:c.mut }}>{a.email}</div></div>
+                      <span style={{ fontSize:11,color:a.responseStatus==='accepted'?'#34D399':a.responseStatus==='declined'?'#F87171':'#F59E0B',background:a.responseStatus==='accepted'?'rgba(52,211,153,.1)':a.responseStatus==='declined'?'rgba(239,68,68,.1)':'rgba(245,158,11,.1)',padding:'2px 8px',borderRadius:20,textTransform:'capitalize' }}>{a.responseStatus||'invited'}</span>
+                    </div>
+                  ))}
+                </div>
+                <Btn onClick={()=>{
+                  const emails=selectedEvent.attendees.map(a=>a.email).filter(e=>e!==session?.user?.email);
+                  if(emails.length) alert('To invite these '+emails.length+' attendees to StandSync, go to Team Settings → Invite and add their emails:\n\n'+emails.join('\n'));
+                  setSelectedEvent(null);
+                }} style={{ marginTop:12 }}>Import attendees to team</Btn>
+              </div>
+            )}
+            {selectedEvent.htmlLink&&<a href={selectedEvent.htmlLink} target="_blank" rel="noreferrer" style={{ fontSize:13,color:'#818CF8',textDecoration:'none' }}>Open in Google Calendar →</a>}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
