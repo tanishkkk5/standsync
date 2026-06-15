@@ -200,8 +200,8 @@ function AuthPage({ onLogin, inviteToken }) {
         )}
 
         {mode==='signup'&&<div style={{ marginBottom:14 }}><Inp label="Your name" value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Alex Johnson"/></div>}
-        <div style={{ marginBottom:14 }}><Inp label="Email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@company.com" onKeyDown={e=>e.key==='Enter'&&submit()}/></div>
-        {mode!=='forgot'&&<div style={{ marginBottom:20 }}><Inp label="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder={mode==='signup'?'Min 6 characters':'Your password'} onKeyDown={e=>e.key==='Enter'&&submit()}/></div>}
+        <div style={{ marginBottom:14 }}><Inp label="Email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@company.com" onKeyDown={e=>e.key==='Enter'&&submit()} autoComplete="email"/></div>
+        {mode!=='forgot'&&<div style={{ marginBottom:20 }}><Inp label="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder={mode==='signup'?'Min 6 characters':'Your password'} onKeyDown={e=>e.key==='Enter'&&submit()} autoComplete={mode==='signup'?'new-password':'current-password'}/></div>}
         <Btn onClick={submit} loading={loading} style={{ width:'100%',justifyContent:'center',padding:'12px',fontSize:15 }}>
           {mode==='login'?'Sign in':mode==='signup'?'Create account':'Send reset link'}
         </Btn>
@@ -1110,20 +1110,17 @@ export default function App() {
     if(SB.supabase){
       const {data:{subscription}} = SB.supabase.auth.onAuthStateChange((event, s)=>{
         if(event==='SIGNED_OUT'){
+          // Only explicit logout clears everything
           setSession(null); setTeam(null); setView('auth');
-        } else if(event==='SIGNED_IN' && s?.session){
-          // Handles Google OAuth redirect + normal login
+        } else if(s?.session){
+          // Any event with a valid session — update session and go to home if on auth page
+          // This covers: SIGNED_IN (normal + Google), INITIAL_SESSION, TOKEN_REFRESHED
           setSession(s.session);
-          setView(v=>v==='auth'?'home':v);
-        } else if(event==='INITIAL_SESSION' && s?.session){
-          // Fired on page load when session exists (e.g. after Google redirect)
-          setSession(s.session);
-          setView(v=>v==='auth'?'home':v);
+          if(event==='SIGNED_IN' || event==='INITIAL_SESSION'){
+            setView(v=>v==='auth'?'home':v);
+          }
         }
-        // TOKEN_REFRESHED = silently update session, never change view
-        else if(event==='TOKEN_REFRESHED' && s?.session){
-          setSession(s.session);
-        }
+        // No session + not SIGNED_OUT = token refresh in progress, ignore completely
       });
       return ()=>subscription.unsubscribe();
     }
