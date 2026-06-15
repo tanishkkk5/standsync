@@ -3,25 +3,21 @@ import * as Email from './lib/email';
 import { askAI } from './lib/ai';
 import { getPriority, getStatus, PRIORITIES, STATUSES, TODAY, FAQ, CHAT_THEMES, MEMBER_COLORS } from './lib/constants';
 
-// Supabase loaded from CDN to avoid TDZ bundling bug in supabase-js
-// _sc is populated by initSupabase() called on mount
+// Use require() to load supabase - avoids ES module TDZ issue with Terser
+// require() is CommonJS and gets bundled differently, no circular const problem
+var _createClient = null;
+try { _createClient = require('@supabase/supabase-js').createClient; } catch(e) {}
 var _SURL = process.env.REACT_APP_SUPABASE_URL || '';
 var _SKEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
-let _sc = null;
-
-function initSupabase() {
-  if (_sc || !_SURL || !_SKEY) return;
-  try {
-    if (window.supabase && window.supabase.createClient) {
-      _sc = window.supabase.createClient(_SURL, _SKEY, {
-        auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storageKey:'ss-auth' }
-      });
-      SB.supabase = _sc;
-      SB.IS_LIVE = true;
-    }
-  } catch(e) { console.warn('Supabase init error:', e.message); }
-}
-
+var _sc = null;
+try {
+  if (_createClient && _SURL && _SKEY && _SURL.startsWith('http')) {
+    _sc = _createClient(_SURL, _SKEY, {
+      auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storageKey:'ss-auth' }
+    });
+  }
+} catch(e) { console.warn('Supabase init error:', e.message); }
+function initSupabase(){}
 var SB = {
   supabase:_sc, IS_LIVE:!!_sc,
   signIn:(e,p)=>_sc?_sc.auth.signInWithPassword({email:e,password:p}):Promise.resolve({error:{message:'Demo mode'}}),
