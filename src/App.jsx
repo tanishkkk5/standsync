@@ -10,31 +10,43 @@ const useTheme = () => useContext(ThemeCtx);
 function useC() {
   const { dark } = useTheme();
   return dark ? {
-    bg:'#060412', surf:'rgba(255,255,255,.058)', surfH:'rgba(255,255,255,.09)',
-    bord:'rgba(255,255,255,.1)', bordH:'rgba(255,255,255,.2)',
-    text:'#fff', sub:'rgba(255,255,255,.6)', mut:'rgba(255,255,255,.38)',
-    nav:'rgba(6,4,18,.88)', inp:'rgba(255,255,255,.07)', inpB:'rgba(255,255,255,.13)',
-    sel:'rgba(18,15,55,.97)', row:'rgba(255,255,255,.025)', dark:true,
+    bg:'#06040F', surf:'rgba(255,255,255,.05)', surfH:'rgba(255,255,255,.08)',
+    bord:'rgba(255,255,255,.07)', bordH:'rgba(148,130,255,.3)',
+    text:'#F0ECFF', sub:'rgba(240,236,255,.62)', mut:'rgba(240,236,255,.3)',
+    nav:'rgba(6,4,15,.80)', inp:'rgba(255,255,255,.055)', inpB:'rgba(148,130,255,.18)',
+    sel:'rgba(16,12,42,.97)', row:'rgba(255,255,255,.022)',
+    accent:'#7C6EF5', glow:'rgba(124,110,245,.2)', dark:true,
   } : {
-    bg:'#F1F5F9', surf:'rgba(255,255,255,.92)', surfH:'#fff',
-    bord:'rgba(99,102,241,.15)', bordH:'rgba(99,102,241,.4)',
-    text:'#1E1B4B', sub:'#4338CA', mut:'#6B7280',
-    nav:'rgba(240,244,255,.95)', inp:'rgba(255,255,255,.9)', inpB:'rgba(99,102,241,.25)',
-    sel:'#fff', row:'rgba(99,102,241,.03)', dark:false,
+    bg:'#ECEEFF', surf:'rgba(255,255,255,.72)', surfH:'rgba(255,255,255,.95)',
+    bord:'rgba(99,102,241,.11)', bordH:'rgba(99,102,241,.32)',
+    text:'#16145A', sub:'#3730A3', mut:'#7879A8',
+    nav:'rgba(236,238,255,.78)', inp:'rgba(255,255,255,.88)', inpB:'rgba(99,102,241,.2)',
+    sel:'rgba(255,255,255,.97)', row:'rgba(99,102,241,.025)',
+    accent:'#6366F1', glow:'rgba(99,102,241,.1)', dark:false,
   };
 }
 
-const CSS = `*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
-@keyframes orb{from{transform:translate(0,0) scale(1)}to{transform:translate(14px,18px) scale(1.07)}}
+const CSS = `
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@keyframes orb{from{transform:translate(0,0) scale(1) rotate(0deg)}to{transform:translate(20px,24px) scale(1.1) rotate(5deg)}}
 @keyframes spin{to{transform:rotate(360deg)}}
-@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-@keyframes pulse{0%,100%{transform:scale(1);opacity:.4}50%{transform:scale(1.6);opacity:.7}}
-@keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
-@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:.35}50%{transform:scale(1.7);opacity:.65}}
+@keyframes slideIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 input,select,textarea,button{font-family:inherit}
-::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(128,128,128,.2);border-radius:3px}`;
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(124,110,245,.25);border-radius:10px}
+::-webkit-scrollbar-thumb:hover{background:rgba(124,110,245,.45)}
+::selection{background:rgba(124,110,245,.3);color:inherit}
+`;
 
 // ─── PRIMITIVES ───────────────────────────────────────────────────────────────
 function Logo({ size=32, onClick }) {
@@ -57,8 +69,16 @@ function Av({ member, size=36, url }) {
 function PBadge({ priority }) { const p=getPriority(priority); return <span style={{ fontSize:10,fontWeight:700,letterSpacing:'.06em',background:p.bg,color:p.color,padding:'3px 8px',borderRadius:20,textTransform:'uppercase',border:`1px solid ${p.color}35`,whiteSpace:'nowrap' }}>{p.label}</span>; }
 function SBadge({ status }) { const s=getStatus(status); return <span style={{ fontSize:10,fontWeight:700,letterSpacing:'.06em',background:s.bg,color:s.color,padding:'3px 8px',borderRadius:20,textTransform:'uppercase',border:`1px solid ${s.color}35`,whiteSpace:'nowrap' }}>{s.label}</span>; }
 function Card({ children, style={}, onClick }) {
-  const c=useC(); const [h,setH]=useState(false);
-  return <div onClick={onClick} onMouseEnter={()=>onClick&&setH(true)} onMouseLeave={()=>setH(false)} style={{ background:h?c.surfH:c.surf,backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',border:`1px solid ${h&&onClick?c.bordH:c.bord}`,borderRadius:16,transition:'all .2s',cursor:onClick?'pointer':undefined,...style }}>{children}</div>;
+  const c=useC(); const { dark }=useTheme(); const [h,setH]=useState(false);
+  return(
+    <div onClick={onClick} onMouseEnter={()=>onClick&&setH(true)} onMouseLeave={()=>setH(false)} style={{
+      background:dark?(h&&onClick?'rgba(255,255,255,.07)':'rgba(255,255,255,.048)'):(h&&onClick?'rgba(255,255,255,.92)':'rgba(255,255,255,.72)'),
+      border:`1px solid ${h&&onClick?c.bordH:c.bord}`,borderRadius:16,
+      backdropFilter:'blur(28px)',WebkitBackdropFilter:'blur(28px)',
+      boxShadow:dark?'0 2px 20px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.04)':'0 2px 20px rgba(99,102,241,.06),inset 0 1px 0 rgba(255,255,255,.9)',
+      transition:'all .18s',cursor:onClick?'pointer':undefined,...style
+    }}>{children}</div>
+  );
 }
 function Bar({ pct, color='#818CF8', h=6, style={} }) { return <div style={{ height:h,background:'rgba(128,128,128,.15)',borderRadius:h,overflow:'hidden',...style }}><div style={{ height:'100%',width:`${Math.min(100,Math.max(0,pct))}%`,background:color,borderRadius:h,transition:'width .6s ease' }}/></div>; }
 function Inp({ label, error, style={}, ...p }) {
@@ -75,7 +95,15 @@ function Sel({ label, children, style={}, ...p }) {
 }
 function Btn({ children, v='primary', style={}, disabled, loading, ...p }) {
   const { dark }=useTheme();
-  const vs={ primary:{background:'linear-gradient(135deg,#6366F1,#818CF8)',color:'#fff',border:'none'}, ghost:{background:'transparent',color:dark?'rgba(255,255,255,.6)':'#4338CA',border:dark?'1px solid rgba(255,255,255,.18)':'1px solid rgba(99,102,241,.3)'}, danger:{background:'rgba(239,68,68,.14)',color:'#F87171',border:'1px solid rgba(239,68,68,.3)'}, warn:{background:'rgba(245,158,11,.15)',color:'#FCD34D',border:'1px solid rgba(245,158,11,.3)'}, success:{background:'linear-gradient(135deg,#059669,#34D399)',color:'#fff',border:'none'}, google:{background:'#fff',color:'#3C4043',border:'1px solid #dadce0'}, gcal:{background:'linear-gradient(135deg,#4285F4,#34A853)',color:'#fff',border:'none'}, };
+  const vs={
+    primary:{background:'linear-gradient(135deg,#6B5FE4 0%,#9B8AFB 100%)',color:'#fff',border:'none',boxShadow:'0 3px 14px rgba(107,95,228,.38)'},
+    ghost:{background:dark?'rgba(255,255,255,.06)':'rgba(99,102,241,.07)',color:dark?'rgba(240,236,255,.7)':'#4338CA',border:dark?'1px solid rgba(255,255,255,.1)':'1px solid rgba(99,102,241,.16)'},
+    danger:{background:'rgba(239,68,68,.1)',color:'#F87171',border:'1px solid rgba(239,68,68,.2)'},
+    warn:{background:'rgba(245,158,11,.1)',color:'#FCD34D',border:'1px solid rgba(245,158,11,.2)'},
+    success:{background:'linear-gradient(135deg,#059669,#34D399)',color:'#fff',border:'none',boxShadow:'0 3px 12px rgba(52,211,153,.28)'},
+    google:{background:'#fff',color:'#3C4043',border:'1px solid #dadce0',boxShadow:'0 1px 5px rgba(0,0,0,.1)'},
+    gcal:{background:'linear-gradient(135deg,#4285F4,#34A853)',color:'#fff',border:'none'},
+  };
   return <button {...p} disabled={disabled||loading} style={{ display:'inline-flex',alignItems:'center',justifyContent:'center',gap:6,padding:'10px 20px',borderRadius:10,fontSize:13,fontWeight:600,cursor:(disabled||loading)?'not-allowed':'pointer',transition:'all .15s',opacity:(disabled||loading)?.5:1,...vs[v]||vs.primary,...style }}>{loading?<div style={{ width:16,height:16,borderRadius:'50%',border:'2px solid rgba(0,0,0,.15)',borderTop:'2px solid currentColor',animation:'spin .75s linear infinite' }}/>:children}</button>;
 }
 function Spin({ size=28, color='#818CF8' }) { return <div style={{ width:size,height:size,borderRadius:'50%',border:`2.5px solid rgba(128,128,128,.15)`,borderTop:`2.5px solid ${color}`,animation:'spin .75s linear infinite',flexShrink:0 }}/>; }
@@ -96,9 +124,16 @@ function StatCard({ label, value, color='#818CF8', sub, icon }) {
 function Lbl({ children, style={} }) { const c=useC(); return <div style={{ fontSize:10,fontWeight:700,letterSpacing:'.1em',color:c.mut,textTransform:'uppercase',marginBottom:8,...style }}>{children}</div>; }
 function BgEl() {
   const { dark }=useTheme();
-  if(!dark) return <div style={{ position:'fixed',inset:0,zIndex:0,pointerEvents:'none',background:'linear-gradient(150deg,#E0E7FF 0%,#F0F4FF 50%,#EEF2FF 100%)' }}><div style={{ position:'absolute',inset:0,opacity:.04,backgroundImage:'radial-gradient(circle at 1px 1px,#6366F1 1px,transparent 0)',backgroundSize:'44px 44px' }}/></div>;
+  const base=dark?'linear-gradient(150deg,#06040F 0%,#0A0618 30%,#080E1C 65%,#050912 100%)':'linear-gradient(135deg,#ECEEFF 0%,#E8ECFF 30%,#EFEEFF 60%,#E9F3FF 100%)';
   const orbs=[{w:560,h:560,top:'-130px',left:'-90px',c:'#3730A3',d:9},{w:420,h:420,top:'25%',right:'-70px',c:'#0C4A6E',d:13},{w:300,h:300,bottom:'8%',left:'12%',c:'#581C87',d:11},{w:240,h:240,top:'60%',right:'16%',c:'#064E3B',d:15}];
-  return <div style={{ position:'fixed',inset:0,zIndex:0,overflow:'hidden',pointerEvents:'none' }}><div style={{ position:'absolute',inset:0,background:'linear-gradient(150deg,#060412 0%,#0C0820 35%,#081428 70%,#060C1C 100%)' }}/>{orbs.map((o,i)=><div key={i} style={{ position:'absolute',width:o.w,height:o.h,borderRadius:'50%',background:`radial-gradient(circle,${o.c}30,transparent 70%)`,top:o.top,left:o.left,right:o.right,bottom:o.bottom,animation:`orb ${o.d}s ease-in-out infinite alternate`,animationDelay:`${i*1.5}s` }}/>)}<div style={{ position:'absolute',inset:0,opacity:.022,backgroundImage:'radial-gradient(circle at 1px 1px,white 1px,transparent 0)',backgroundSize:'48px 48px' }}/></div>;
+  return(
+    <div style={{ position:'fixed',inset:0,zIndex:0,overflow:'hidden',pointerEvents:'none' }}>
+      <div style={{ position:'absolute',inset:0,background:base }}/>
+      {orbs.map((o,i)=>(<div key={i} style={{ position:'absolute',width:o.w,height:o.h,borderRadius:'50%',background:'radial-gradient(circle at 35% 35%,'+o.c+',transparent 70%)',top:o.top,left:o.left,right:o.right,bottom:o.bottom,animation:'orb '+o.d+'s ease-in-out infinite alternate',animationDelay:(o.delay||i*1.5)+'s',filter:'blur(48px)' }}/>))}
+      <div style={{ position:'absolute',inset:0,opacity:.015,backgroundImage:'radial-gradient(circle at 1px 1px,rgba(128,128,255,1) 1px,transparent 0)',backgroundSize:'38px 38px' }}/>
+      {dark&&<div style={{ position:'absolute',inset:0,background:'radial-gradient(ellipse at 50% 50%,transparent 38%,rgba(0,0,0,.38) 100%)' }}/>}
+    </div>
+  );
 }
 function ThemeToggle() {
   const { dark, toggle }=useTheme();
@@ -321,7 +356,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
   if(view==='list') return(
     <div style={{ minHeight:'100vh',position:'relative',zIndex:1,animation:'fadeIn .3s ease' }}>
       {/* Nav */}
-      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(24px)',position:'sticky',top:0,zIndex:100 }}>
+      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100 }}>
         <div style={{ maxWidth:960,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:12 }}>
           <Logo size={28}/><div style={{ flex:1 }}/><ThemeToggle/><ProfileMenu session={session} onSettings={onSettings} onLogout={onLogout}/>
         </div>
@@ -390,7 +425,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
     }).sort((a,b)=>new Date(a.start?.dateTime||a.start?.date)-new Date(b.start?.dateTime||b.start?.date));
     return(
       <div style={{ minHeight:'100vh',position:'relative',zIndex:1,animation:'fadeIn .3s ease' }}>
-        <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(24px)',position:'sticky',top:0,zIndex:100 }}>
+        <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100 }}>
           <div style={{ maxWidth:760,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:12 }}>
             <button onClick={()=>setView('list')} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:13,padding:0 }}>← Back</button>
             <Logo size={26}/>
@@ -454,7 +489,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
   // ── TEAM ENTRY: select project / team ────────────────────────────────────
   if(view==='team-entry') return(
     <div style={{ minHeight:'100vh',position:'relative',zIndex:1,animation:'fadeIn .3s ease' }}>
-      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(24px)',position:'sticky',top:0,zIndex:100 }}>
+      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100 }}>
         <div style={{ maxWidth:920,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:12 }}>
           <button onClick={()=>setView('list')} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:13,padding:0 }}>← Back</button>
           <Logo size={26}/>
@@ -487,6 +522,55 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
             </Card>
           </div>
         )}
+      </div>
+    </div>
+  );
+
+  // ── SELECT TEAM FOR STANDUP ──────────────────────────────────────────────
+  if(view==='standup-select-team') return(
+    <div style={{ minHeight:'100vh',position:'relative',zIndex:1,animation:'fadeIn .3s ease' }}>
+      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100 }}>
+        <div style={{ maxWidth:760,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:12 }}>
+          <button onClick={()=>setView('standup-entry')} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:13,padding:0 }}>← Back</button>
+          <Logo size={26}/><div style={{ flex:1 }}/><ThemeToggle/><ProfileMenu session={session} onSettings={onSettings} onLogout={onLogout}/>
+        </div>
+      </div>
+      <div style={{ maxWidth:760,margin:'0 auto',padding:'36px 24px' }}>
+        {selectedCalEvent&&(
+          <div style={{ padding:'16px 20px',borderRadius:12,background:'rgba(99,102,241,.08)',border:'1px solid rgba(99,102,241,.2)',marginBottom:28,display:'flex',alignItems:'center',gap:14 }}>
+            <div style={{ fontSize:32 }}>📅</div>
+            <div>
+              <div style={{ fontSize:16,fontWeight:700,color:c.text }}>{selectedCalEvent.summary}</div>
+              <div style={{ fontSize:13,color:c.mut }}>{selectedCalEvent.start?.dateTime?new Date(selectedCalEvent.start.dateTime).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'All day'}{selectedCalEvent.attendees?' · '+selectedCalEvent.attendees.length+' attendees':''}</div>
+            </div>
+          </div>
+        )}
+        <h2 style={{ fontSize:20,fontWeight:700,color:c.text,marginBottom:6 }}>Which team is this standup for?</h2>
+        <p style={{ fontSize:13,color:c.mut,marginBottom:22 }}>Select a team to open the task board for this meeting.</p>
+        <div style={{ display:'flex',flexDirection:'column',gap:10 }}>
+          {teams.map((tm,i)=>(
+            <div key={tm.team_id} onClick={()=>{ goToTeam(tm.teams,tm.role); }} style={{ padding:'18px 22px',borderRadius:12,border:`1.5px solid ${c.bord}`,background:c.surf,cursor:'pointer',display:'flex',alignItems:'center',gap:14,transition:'all .15s' }}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor='#6366F1';}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor=c.bord;}}>
+              <div style={{ width:44,height:44,borderRadius:12,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0 }}>{ICONS[i%ICONS.length]}</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:15,fontWeight:700,color:c.text,marginBottom:3 }}>{tm.teams?.name}</div>
+                <div style={{ fontSize:12,color:c.mut }}>{tm.role==='manager'?'Manager':'Member'} · {tm.teams?.standup_name||'Standup'}</div>
+              </div>
+              <span style={{ fontSize:13,color:'#818CF8',fontWeight:600 }}>Open board →</span>
+            </div>
+          ))}
+          {teams.length===0&&(
+            <Card style={{ padding:'28px',textAlign:'center' }}>
+              <div style={{ fontSize:32,marginBottom:8 }}>👥</div>
+              <div style={{ color:c.mut,marginBottom:16 }}>No teams yet — create or join one first</div>
+              <div style={{ display:'flex',gap:10,justifyContent:'center' }}>
+                <Btn onClick={()=>setView('create')}>+ Create team</Btn>
+                <Btn v="ghost" onClick={()=>setView('join')}>Join team</Btn>
+              </div>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1245,31 +1329,42 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
   const CLIENT_ID=process.env.REACT_APP_GOOGLE_CLIENT_ID;
   const SCOPES='https://www.googleapis.com/auth/calendar.readonly';
 
-  // Auto-reconnect when component mounts if was previously connected
+  // Auto-reconnect silently when component mounts (no popup shown)
   useEffect(()=>{
-    if(status==='connected'&&events.length===0){
+    if(status==='connected'&&events.length===0&&CLIENT_ID){
+      setStatus('loading');
       reconnectSilent();
+    }
+    // Safety: if stuck on loading, reset after 8s
+    if(status==='loading'){
+      const t=setTimeout(()=>setStatus(s=>s==='loading'?'idle':s),8000);
+      return()=>clearTimeout(t);
     }
   },[]);
 
   const reconnectSilent=async()=>{
-    if(!CLIENT_ID||!window.gapi)return;
+    if(!CLIENT_ID)return;
     try{
-      await loadScript('https://apis.google.com/js/api.js');
-      await loadScript('https://accounts.google.com/gsi/client');
+      await Promise.all([
+        loadScript('https://apis.google.com/js/api.js'),
+        loadScript('https://accounts.google.com/gsi/client'),
+      ]);
       await new Promise(res=>window.gapi.load('client',res));
       await window.gapi.client.init({});
       await window.gapi.client.load('https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest');
-      // Request token silently (no prompt)
       const tc=window.google.accounts.oauth2.initTokenClient({
         client_id:CLIENT_ID,scope:SCOPES,
         callback:async(resp)=>{
-          if(!resp.error) await fetchEvents();
-          else setStatus('idle');
+          if(!resp.error){ await fetchEvents(); }
+          else { console.log('Silent reconnect failed — need manual connect'); setStatus('idle'); }
         },
       });
+      // prompt:'' = silent, no popup
       tc.requestAccessToken({prompt:''});
-    }catch(e){ setStatus('idle'); }
+    }catch(e){
+      console.warn('Calendar reconnect error:',e.message);
+      setStatus('idle');
+    }
   };
 
   // Load a script tag and resolve when ready
@@ -1752,7 +1847,7 @@ function SettingsPage({ session, onBack, onSaved }) {
   const [soundEnabled,setSoundEnabled]=useState(false);
   return (
     <div style={{ position:'relative',zIndex:1,minHeight:'100vh' }}>
-      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(24px)',position:'sticky',top:0,zIndex:100 }}>
+      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100 }}>
         <div style={{ maxWidth:900,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:12 }}>
           <Logo size={28} onClick={onBack}/><div style={{ flex:1 }}/><ThemeToggle/><Btn v="ghost" onClick={onBack} style={{ padding:'6px 14px',fontSize:13 }}>← Back</Btn>
         </div>
@@ -1838,10 +1933,18 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
   const color=myMember?.color||'#818CF8';
   const submit=()=>{ if(!title.trim())return; onAdd({title:title.trim(),assignee_email:user.email,assignee_name:user.name||user.email,priority,status:'todo',timeline:showCustom?custom:tl,notes,manager_note:'',blocker:''}); setTitle('');setPriority('medium');setTl('Today EOD (6 PM)');setNotes('');setShowCustom(false);setCustom(''); };
   const hTl=v=>{ if(v==='Custom...'){setShowCustom(true);setTl('');}else{setShowCustom(false);setTl(v);}};
-  const TABS=[{id:'tasks',l:'My tasks',i:'📋'},{id:'chat',l:'Team chat',i:'💬'},{id:'ai',l:'AI assistant',i:'🤖'}];
+  const TABS=[{id:'tasks',l:'My tasks',i:'📋'},{id:'self',l:'Self tasks',i:'✨'},{id:'overview',l:'My overview',i:'📊'},{id:'notes',l:'Meeting notes',i:'📝'},{id:'chat',l:'Team chat',i:'💬'},{id:'cal',l:'Calendar',i:'📅'},{id:'ai',l:'AI assistant',i:'🤖'}];
+  const [meetingNotes,setMeetingNotes]=useState(''); const [notesSaved,setNotesSaved]=useState(false);
+  const [selfTasks,setSelfTasks]=useState(()=>{ try{return JSON.parse(localStorage.getItem('ss-self-tasks-'+(user.email||''))||'[]');}catch{return[];} });
+  const [selfTitle,setSelfTitle]=useState(''); const [selfPriority,setSelfPriority]=useState('medium');
+  const saveSelfTask=()=>{ if(!selfTitle.trim())return; const t={id:'s'+Date.now(),title:selfTitle.trim(),priority:selfPriority,done:false,created_at:new Date().toISOString()}; const updated=[...selfTasks,t]; setSelfTasks(updated); try{localStorage.setItem('ss-self-tasks-'+(user.email||''),JSON.stringify(updated));}catch{}; setSelfTitle(''); };
+  const toggleSelf=(id)=>{ const updated=selfTasks.map(t=>t.id===id?{...t,done:!t.done}:t); setSelfTasks(updated); try{localStorage.setItem('ss-self-tasks-'+(user.email||''),JSON.stringify(updated));}catch{}; };
+  const deleteSelf=(id)=>{ const updated=selfTasks.filter(t=>t.id!==id); setSelfTasks(updated); try{localStorage.setItem('ss-self-tasks-'+(user.email||''),JSON.stringify(updated));}catch{}; };
+  const saveNotes=()=>{ try{localStorage.setItem('ss-notes-'+(user.email||''),meetingNotes);}catch{}; setNotesSaved(true); setTimeout(()=>setNotesSaved(false),2000); };
+  useEffect(()=>{ try{const n=localStorage.getItem('ss-notes-'+(user.email||'')); if(n)setMeetingNotes(n);}catch{}; },[]);
   return (
     <div style={{ position:'relative',zIndex:1,minHeight:'100vh' }}>
-      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(24px)',position:'sticky',top:0,zIndex:100 }}>
+      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100 }}>
         <div style={{ maxWidth:800,margin:'0 auto',padding:'0 20px',height:56,display:'flex',alignItems:'center',gap:12 }}>
           <Logo size={26} onClick={onBack}/>
           <div style={{ display:'flex',gap:2,flex:1 }}>{TABS.map(t=><button key={t.id} onClick={()=>setActiveTab(t.id)} style={{ padding:'5px 12px',borderRadius:8,border:'none',background:activeTab===t.id?'rgba(129,140,248,.18)':'transparent',color:activeTab===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:12,fontWeight:activeTab===t.id?700:400,display:'flex',alignItems:'center',gap:5 }}><span>{t.i}</span>{t.l}</button>)}</div>
@@ -1884,7 +1987,101 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
           </>
         )}
         {activeTab==='chat'&&<RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme}/>}
+        {activeTab==='cal'&&<CalendarPanel team={null} session={session} members={members}/>}
         {activeTab==='ai'&&<AIAssistant tasks={tasks} members={members} history={[]} session={session} myTasks={mine} teamName="Team"/>}
+
+        {/* ── SELF TASKS (personal, not team) ── */}
+        {activeTab==='self'&&(
+          <div>
+            <div style={{ marginBottom:16 }}>
+              <h2 style={{ fontSize:18,fontWeight:700,color:c.text,marginBottom:4 }}>✨ Personal tasks</h2>
+              <p style={{ fontSize:13,color:c.mut }}>Private to-dos only visible to you — not shared with your team.</p>
+            </div>
+            <Card style={{ padding:'20px',marginBottom:16 }}>
+              <div style={{ display:'flex',gap:10,marginBottom:10 }}>
+                <Inp value={selfTitle} onChange={e=>setSelfTitle(e.target.value)} onKeyDown={e=>e.key==='Enter'&&saveSelfTask()} placeholder="Add a personal task..." style={{ flex:1 }}/>
+                <Sel value={selfPriority} onChange={e=>setSelfPriority(e.target.value)} style={{ width:110 }}><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></Sel>
+                <Btn onClick={saveSelfTask} disabled={!selfTitle.trim()}>Add</Btn>
+              </div>
+            </Card>
+            {selfTasks.length===0&&<Card style={{ padding:'32px',textAlign:'center' }}><div style={{ fontSize:32,marginBottom:8 }}>✨</div><div style={{ color:c.mut }}>No personal tasks yet</div></Card>}
+            {selfTasks.map(t=>(
+              <Card key={t.id} style={{ padding:'12px 16px',marginBottom:8,display:'flex',alignItems:'center',gap:12,opacity:t.done?.65:1 }}>
+                <button onClick={()=>toggleSelf(t.id)} style={{ width:22,height:22,borderRadius:'50%',flexShrink:0,border:`2px solid ${t.done?'#34D399':'rgba(128,128,128,.35)'}`,background:t.done?'#34D399':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center' }}>{t.done&&<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}</button>
+                <span style={{ flex:1,fontSize:13,color:t.done?c.mut:c.text,textDecoration:t.done?'line-through':'none' }}>{t.title}</span>
+                <span style={{ fontSize:10,padding:'2px 8px',borderRadius:20,background:'rgba(99,102,241,.1)',color:'#818CF8' }}>{t.priority}</span>
+                <button onClick={()=>deleteSelf(t.id)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:14,opacity:.5 }}>🗑</button>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* ── MY OVERVIEW / ANALYSIS ── */}
+        {activeTab==='overview'&&(()=>{
+          const total=mine.length, doneCnt=mine.filter(t=>t.status==='done').length;
+          const inProg=mine.filter(t=>t.status==='in-progress').length;
+          const blkd=mine.filter(t=>t.status==='blocked').length;
+          const pctDone=total?Math.round(doneCnt/total*100):0;
+          const byPri={critical:mine.filter(t=>t.priority==='critical').length,high:mine.filter(t=>t.priority==='high').length,medium:mine.filter(t=>t.priority==='medium').length,low:mine.filter(t=>t.priority==='low').length};
+          const selfDone=selfTasks.filter(t=>t.done).length;
+          return(
+            <div>
+              <h2 style={{ fontSize:18,fontWeight:700,color:c.text,marginBottom:16 }}>📊 My overview</h2>
+              {/* Progress ring area */}
+              <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:16 }}>
+                {[{l:'Total',v:total,c:'#818CF8',i:'📋'},{l:'Done',v:doneCnt,c:'#34D399',i:'✅'},{l:'In progress',v:inProg,c:'#38BDF8',i:'⚡'},{l:'Blocked',v:blkd,c:blkd>0?'#EF4444':'#34D399',i:blkd>0?'⚠️':'✓'}].map(s=>(
+                  <Card key={s.l} style={{ padding:'16px',textAlign:'center' }}>
+                    <div style={{ fontSize:24,marginBottom:6 }}>{s.i}</div>
+                    <div style={{ fontSize:28,fontWeight:800,color:s.c,marginBottom:4 }}>{s.v}</div>
+                    <div style={{ fontSize:11,color:c.mut,textTransform:'uppercase',letterSpacing:'.06em' }}>{s.l}</div>
+                  </Card>
+                ))}
+              </div>
+              {/* Progress bar */}
+              <Card style={{ padding:'16px 20px',marginBottom:16 }}>
+                <div style={{ display:'flex',justifyContent:'space-between',marginBottom:8 }}>
+                  <span style={{ fontSize:13,fontWeight:600,color:c.text }}>Today's completion</span>
+                  <span style={{ fontSize:13,fontWeight:700,color:pctDone>=80?'#34D399':pctDone>=50?'#818CF8':'#F97316' }}>{pctDone}%</span>
+                </div>
+                <Bar pct={pctDone} h={10} color="linear-gradient(90deg,#6366F1,#34D399)"/>
+                <div style={{ display:'flex',gap:16,marginTop:12 }}>
+                  {Object.entries(byPri).map(([p,v])=>v>0&&<div key={p} style={{ fontSize:12,color:c.mut }}><span style={{ fontSize:11,padding:'1px 7px',borderRadius:20,background:'rgba(99,102,241,.1)',color:'#818CF8',marginRight:4 }}>{p}</span>{v}</div>)}
+                </div>
+              </Card>
+              {/* Self tasks summary */}
+              <Card style={{ padding:'16px 20px',marginBottom:16 }}>
+                <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8 }}>
+                  <span style={{ fontSize:13,fontWeight:600,color:c.text }}>✨ Personal tasks</span>
+                  <button onClick={()=>setActiveTab('self')} style={{ fontSize:12,color:'#818CF8',background:'none',border:'none',cursor:'pointer' }}>Manage →</button>
+                </div>
+                <div style={{ fontSize:24,fontWeight:800,color:'#818CF8',marginBottom:4 }}>{selfDone}/{selfTasks.length}</div>
+                <Bar pct={selfTasks.length?Math.round(selfDone/selfTasks.length*100):0} h={6} color="#818CF8"/>
+              </Card>
+              {/* Task list split by status */}
+              {blkd>0&&<Card style={{ padding:'14px 18px',marginBottom:12,border:'1px solid rgba(239,68,68,.25)',background:'rgba(239,68,68,.04)' }}>
+                <div style={{ fontSize:13,fontWeight:700,color:'#F87171',marginBottom:10 }}>⚠️ Blocked tasks</div>
+                {mine.filter(t=>t.status==='blocked').map(t=><div key={t.id} style={{ padding:'8px 0',borderBottom:`1px solid ${c.bord}`,fontSize:13,color:c.text }}>{t.title}{t.blocker&&<span style={{ fontSize:11,color:'#F87171',marginLeft:8 }}>· {t.blocker}</span>}</div>)}
+              </Card>}
+            </div>
+          );
+        })()}
+
+        {/* ── MEETING NOTES ── */}
+        {activeTab==='notes'&&(
+          <div>
+            <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16 }}>
+              <div>
+                <h2 style={{ fontSize:18,fontWeight:700,color:c.text,marginBottom:2 }}>📝 Meeting notes</h2>
+                <p style={{ fontSize:13,color:c.mut,margin:0 }}>Private notes for today's standup — auto-saved locally.</p>
+              </div>
+              <Btn onClick={saveNotes} style={{ flexShrink:0 }}>{notesSaved?'✓ Saved!':'Save notes'}</Btn>
+            </div>
+            <Card style={{ padding:'4px' }}>
+              <textarea value={meetingNotes} onChange={e=>{setMeetingNotes(e.target.value);}} onBlur={saveNotes} placeholder="Add your meeting notes here..."   style={{ width:'100%',minHeight:420,background:'transparent',border:'none',color:c.text,fontSize:14,lineHeight:1.8,padding:'16px',outline:'none',resize:'vertical',fontFamily:'inherit',boxSizing:'border-box' }}/>
+            </Card>
+            <div style={{ marginTop:10,fontSize:12,color:c.mut }}>Notes are saved privately to your browser — not shared with your team.</div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2136,7 +2333,34 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
   );
 }
 // ─── MANAGER VIEW ─────────────────────────────────────────────────────────────
-const MGR_TABS=[{id:'live',l:'Live board',i:'⚡'},{id:'team',l:'Team',i:'👥'},{id:'perf',l:'Performance',i:'📊'},{id:'ai',l:'AI Assistant',i:'🤖'},{id:'chat',l:'Chat',i:'💬'},{id:'cal',l:'Calendar',i:'📅'},{id:'remind',l:'Reminders',i:'🔔'},{id:'hist',l:'History',i:'🗂️'},{id:'tset',l:'Settings',i:'⚙️'}];
+// Minimal SVG icon set — 16×16, stroke-based
+const I={
+  live:   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="8" cy="8" r="3"/><path d="M3.3 3.3a7 7 0 0 0 0 9.4M12.7 3.3a7 7 0 0 1 0 9.4"/></svg>,
+  team:   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="6" cy="5" r="2.5"/><path d="M1.5 14c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4"/><circle cx="12" cy="5.5" r="2"/><path d="M14.5 14c0-2-1.5-3-3-3"/></svg>,
+  perf:   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M2 12 L5 8 L8 10 L11 5 L14 7"/><path d="M2 14h12"/></svg>,
+  analysis:<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="2" y="9" width="3" height="5" rx="1"/><rect x="6.5" y="6" width="3" height="8" rx="1"/><rect x="11" y="3" width="3" height="11" rx="1"/></svg>,
+  ai:     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="3" y="3" width="10" height="8" rx="2.5"/><path d="M6 8h4M8 6v4M5.5 11l-2 2M10.5 11l2 2"/></svg>,
+  chat:   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M2 3h12a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H5l-3 2V4a1 1 0 0 1 1-1z"/></svg>,
+  cal:    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="2" y="3" width="12" height="12" rx="2"/><path d="M2 7h12M5 2v2M11 2v2"/><circle cx="5.5" cy="10.5" r=".7" fill="currentColor"/><circle cx="8" cy="10.5" r=".7" fill="currentColor"/><circle cx="10.5" cy="10.5" r=".7" fill="currentColor"/></svg>,
+  notes:  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="3" y="2" width="10" height="13" rx="2"/><path d="M5.5 6h5M5.5 9h5M5.5 12h3"/></svg>,
+  remind: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M8 2a5 5 0 0 1 5 5v3l1 1.5H2L3 10V7a5 5 0 0 1 5-5z"/><path d="M6.5 13a1.5 1.5 0 0 0 3 0"/></svg>,
+  hist:   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M2.5 8a5.5 5.5 0 1 1 1.5 3.8"/><path d="M2.5 4.5V8H6"/></svg>,
+  tset:   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M7 2h2l.5 1.5a4.5 4.5 0 0 1 1.5.87l1.6-.5 1 1.73-1.1 1.2a4.5 4.5 0 0 1 0 1.4l1.1 1.2-1 1.73-1.6-.5a4.5 4.5 0 0 1-1.5.87L9 14H7l-.5-1.5a4.5 4.5 0 0 1-1.5-.87l-1.6.5-1-1.73 1.1-1.2a4.5 4.5 0 0 1 0-1.4L2.4 6.6l1-1.73 1.6.5A4.5 4.5 0 0 1 6.5 3.5L7 2z"/><circle cx="8" cy="8" r="2"/></svg>,
+  pip:    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="1.5" y="3" width="13" height="10" rx="2"/><rect x="8" y="8" width="5.5" height="4" rx="1" fill="currentColor" stroke="none" opacity=".5"/></svg>,
+};
+const MGR_TABS=[
+  {id:'live',     l:'Live board',    ic:I.live},
+  {id:'team',     l:'Team',          ic:I.team},
+  {id:'perf',     l:'Performance',   ic:I.perf},
+  {id:'analysis', l:'Analysis',      ic:I.analysis},
+  {id:'ai',       l:'AI',            ic:I.ai},
+  {id:'chat',     l:'Chat',          ic:I.chat},
+  {id:'cal',      l:'Calendar',      ic:I.cal},
+  {id:'notes',    l:'Notes',         ic:I.notes},
+  {id:'remind',   l:'Reminders',     ic:I.remind},
+  {id:'hist',     l:'History',       ic:I.hist},
+  {id:'tset',     l:'Settings',      ic:I.tset},
+];
 
 function ManagerView({ session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers, setShowPip }) {
   const c=useC(); const [tab,setTab]=useState('live');
@@ -2157,17 +2381,21 @@ function ManagerView({ session, team, tasks, members, history, standup, onStatus
   const myTasks=tasks.filter(t=>t.assignee_email===session?.user?.email);
   return(
     <div style={{ position:'relative',zIndex:1,minHeight:'100vh' }}>
-      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(24px)',position:'sticky',top:0,zIndex:100 }}>
+      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100 }}>
         <div style={{ maxWidth:1200,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:10 }}>
           <Logo size={26} onClick={onBack}/>
           <nav style={{ display:'flex',gap:1,flex:1,overflowX:'auto' }}>
-            <button onClick={()=>setShowPip&&setShowPip(p=>!p)} title="Toggle PiP task window" style={{ padding:'4px 10px',borderRadius:8,border:`1px solid ${c.bord}`,background:'rgba(99,102,241,.08)',color:'#818CF8',cursor:'pointer',fontSize:11,fontWeight:700,flexShrink:0,display:'flex',alignItems:'center',gap:5 }}>🖥️ PiP</button>
-        {MGR_TABS.map(t=>(
-              <button key={t.id} onClick={()=>setTabClear(t.id)} style={{ padding:'5px 10px',borderRadius:8,border:'none',background:tab===t.id?'rgba(129,140,248,.18)':'transparent',color:tab===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:11,fontWeight:tab===t.id?700:400,display:'flex',alignItems:'center',gap:4,transition:'all .15s',whiteSpace:'nowrap',flexShrink:0,position:'relative' }}>
-                <span>{t.i}</span>{t.l}
-                {t.id==='chat'&&unreadChat>0&&<span style={{ position:'absolute',top:0,right:0,minWidth:16,height:16,borderRadius:8,background:'#EF4444',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 3px',lineHeight:1 }}>{unreadChat>9?'9+':unreadChat}</span>}
-              </button>
-            ))}
+            <button onClick={()=>setShowPip&&setShowPip(p=>!p)} title="Toggle PiP task window" style={{ padding:'5px 10px',borderRadius:10,border:`1px solid ${c.bord}`,background:'rgba(124,110,245,.1)',color:'#A78BFA',cursor:'pointer',fontSize:11,fontWeight:600,flexShrink:0,display:'flex',alignItems:'center',gap:6 }}><span style={{ width:14,height:14,display:'flex',alignItems:'center',justifyContent:'center' }}>{I.pip}</span>PiP</button>
+        {MGR_TABS.map(t=>{
+              const isA=tab===t.id;
+              return(
+                <button key={t.id} onClick={()=>setTabClear(t.id)} title={t.l} style={{ padding:'5px 8px',borderRadius:9,border:'none',background:isA?'rgba(124,110,245,.16)':'transparent',color:isA?'#C4B5FD':c.mut,cursor:'pointer',fontSize:11,fontWeight:isA?600:400,display:'flex',alignItems:'center',gap:5,transition:'all .14s',whiteSpace:'nowrap',flexShrink:0,position:'relative' }}>
+                  <span style={{ width:14,height:14,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>{t.ic||t.i}</span>
+                  {isA&&<span>{t.l}</span>}
+                  {t.id==='chat'&&unreadChat>0&&<span style={{ position:'absolute',top:0,right:0,minWidth:14,height:14,borderRadius:7,background:'#EF4444',color:'#fff',fontSize:8,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 2px' }}>{unreadChat>9?'9+':unreadChat}</span>}
+                </button>
+              );
+            })}
           </nav>
           <div style={{ display:'flex',alignItems:'center',gap:7,flexShrink:0 }}>
             {blocked>0&&<div style={{ fontSize:11,color:'#F87171',background:'rgba(239,68,68,.12)',border:'1px solid rgba(239,68,68,.25)',padding:'3px 9px',borderRadius:8,fontWeight:700 }}>⚠️ {blocked}</div>}
@@ -2189,6 +2417,8 @@ function ManagerView({ session, team, tasks, members, history, standup, onStatus
         {tab==='ai'&&<AIAssistant tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name||'Team'}/>}
         {tab==='chat'&&<RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme} isManager={true}/>}
         {tab==='cal'&&<CalendarPanel team={team} members={members} session={session}/>}
+        {tab==='notes'&&<ManagerNotesTab session={session} team={team}/>}
+        {tab==='analysis'&&<TeamAnalysisTab tasks={tasks} members={members}/>}
         {tab==='remind'&&<RemindersPanel team={team} members={members} session={session}/>}
         {tab==='hist'&&<HistTab history={history} members={members}/>}
         {tab==='tset'&&<TeamSettingsTab team={team} members={members} session={session} onMembersUpdate={()=>{if(setMembers&&SB.IS_LIVE)SB.getTeamMembers(team.id).then(m=>setMembers(m||[]))}}/>}
@@ -2488,5 +2718,107 @@ export default function App() {
       {showPip&&view==='standup'&&<PipWindow tasks={tasks} onAdd={handleAddTask} onStatus={handleStatus} session={session} team={team} standup={standup} onClose={()=>setShowPip(false)}/>}
       {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<MemberView user={userForView} myMember={myMember} tasks={tasks} onAdd={handleAddTask} onStatus={handleStatus} onBlocker={handleBlocker} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} members={members} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme}/>}
     </ThemeCtx.Provider>
+  );
+}
+
+// ─── MANAGER MEETING NOTES ───────────────────────────────────────────────────
+function ManagerNotesTab({ session, team }) {
+  const c=useC();
+  const key='ss-mgr-notes-'+(team?.id||'');
+  const [notes,setNotes]=useState(()=>{ try{return localStorage.getItem(key)||'';}catch{return '';} });
+  const [saved,setSaved]=useState(false);
+  const save=()=>{ try{localStorage.setItem(key,notes);}catch{}; setSaved(true); setTimeout(()=>setSaved(false),2000); };
+  const date=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  return(
+    <div>
+      <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16 }}>
+        <div><h2 style={{ fontSize:18,fontWeight:700,color:c.text,marginBottom:2 }}>📝 Meeting notes</h2><p style={{ fontSize:13,color:c.mut,margin:0 }}>{date} · {team?.name}</p></div>
+        <Btn onClick={save}>{saved?'✓ Saved!':'Save'}</Btn>
+      </div>
+      <Card style={{ padding:'4px' }}>
+        <textarea value={notes} onChange={e=>setNotes(e.target.value)} onBlur={save} placeholder={'Meeting notes for '+date+'\n\nAgenda:\n- \n\nDiscussed:\n- \n\nAction items:\n- \n\nDecisions:\n- \n\nNext steps:\n- '} style={{ width:'100%',minHeight:480,background:'transparent',border:'none',color:c.text,fontSize:14,lineHeight:1.8,padding:'20px',outline:'none',resize:'vertical',fontFamily:'inherit',boxSizing:'border-box' }}/>
+      </Card>
+    </div>
+  );
+}
+
+// ─── TEAM ANALYSIS TAB ───────────────────────────────────────────────────────
+function TeamAnalysisTab({ tasks, members }) {
+  const c=useC();
+  const total=tasks.length, done=tasks.filter(t=>t.status==='done').length;
+  const inProg=tasks.filter(t=>t.status==='in-progress').length;
+  const blocked=tasks.filter(t=>t.status==='blocked').length;
+  const pct=total?Math.round(done/total*100):0;
+
+  // Per-member stats
+  const memberStats=members.map(m=>{
+    const mt=tasks.filter(t=>t.assignee_email===m.email);
+    const md=mt.filter(t=>t.status==='done').length;
+    const mb=mt.filter(t=>t.status==='blocked').length;
+    const mp=mt.length?Math.round(md/mt.length*100):0;
+    return {...m,total:mt.length,done:md,blocked:mb,pct:mp};
+  }).sort((a,b)=>b.pct-a.pct);
+
+  // Priority distribution
+  const byPri={critical:tasks.filter(t=>t.priority==='critical').length,high:tasks.filter(t=>t.priority==='high').length,medium:tasks.filter(t=>t.priority==='medium').length,low:tasks.filter(t=>t.priority==='low').length};
+  const priColors={critical:'#EF4444',high:'#F97316',medium:'#F59E0B',low:'#10B981'};
+
+  return(
+    <div>
+      <h2 style={{ fontSize:18,fontWeight:700,color:c.text,marginBottom:16 }}>📈 Team analysis</h2>
+      {/* Summary cards */}
+      <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20 }}>
+        {[{l:'Completion',v:pct+'%',c:'#818CF8'},{l:'Done',v:done+'/'+total,c:'#34D399'},{l:'In progress',v:inProg,c:'#38BDF8'},{l:'Blocked',v:blocked,c:blocked>0?'#EF4444':'#34D399'}].map(s=>(
+          <Card key={s.l} style={{ padding:'16px',textAlign:'center' }}>
+            <div style={{ fontSize:26,fontWeight:800,color:s.c,marginBottom:4 }}>{s.v}</div>
+            <div style={{ fontSize:11,color:c.mut,textTransform:'uppercase',letterSpacing:'.06em' }}>{s.l}</div>
+          </Card>
+        ))}
+      </div>
+      {/* Team completion bar */}
+      <Card style={{ padding:'18px 20px',marginBottom:16 }}>
+        <div style={{ display:'flex',justifyContent:'space-between',marginBottom:8 }}><span style={{ fontSize:13,fontWeight:600,color:c.text }}>Overall team progress</span><span style={{ fontSize:13,fontWeight:700,color:pct>=80?'#34D399':pct>=50?'#818CF8':'#F97316' }}>{pct}%</span></div>
+        <Bar pct={pct} h={10} color="linear-gradient(90deg,#6366F1,#34D399)"/>
+      </Card>
+      {/* Priority breakdown */}
+      <Card style={{ padding:'18px 20px',marginBottom:16 }}>
+        <div style={{ fontSize:13,fontWeight:700,color:c.text,marginBottom:14 }}>Priority breakdown</div>
+        <div style={{ display:'flex',flexDirection:'column',gap:8 }}>
+          {Object.entries(byPri).map(([p,v])=>(
+            <div key={p} style={{ display:'flex',alignItems:'center',gap:12 }}>
+              <span style={{ width:70,fontSize:12,fontWeight:600,color:priColors[p],textTransform:'capitalize' }}>{p}</span>
+              <div style={{ flex:1,height:8,borderRadius:4,background:'rgba(128,128,128,.15)',overflow:'hidden' }}>
+                <div style={{ height:'100%',borderRadius:4,background:priColors[p],width:(total?v/total*100:0)+'%',transition:'width .4s' }}/>
+              </div>
+              <span style={{ fontSize:12,color:c.mut,width:20,textAlign:'right' }}>{v}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+      {/* Per-member performance */}
+      <Card style={{ overflow:'hidden' }}>
+        <div style={{ padding:'14px 18px',borderBottom:`1px solid ${c.bord}`,fontSize:13,fontWeight:700,color:c.text }}>Member performance</div>
+        {memberStats.length===0&&<div style={{ padding:'24px',textAlign:'center',color:c.mut,fontSize:13 }}>Add team members to see analysis</div>}
+        {memberStats.map((m,i)=>(
+          <div key={m.email} style={{ padding:'14px 18px',borderBottom:i<memberStats.length-1?`1px solid ${c.bord}`:'none',display:'flex',alignItems:'center',gap:14 }}>
+            <div style={{ width:28,height:28,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:'rgba(255,255,255,.5)' }}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</div>
+            <Av member={m} size={34} url={m.avatar_url}/>
+            <div style={{ flex:1,minWidth:0 }}>
+              <div style={{ fontSize:14,fontWeight:600,color:c.text,marginBottom:4 }}>{m.name||m.email}</div>
+              <div style={{ display:'flex',alignItems:'center',gap:8 }}>
+                <div style={{ flex:1,height:6,borderRadius:3,background:'rgba(128,128,128,.15)',overflow:'hidden' }}>
+                  <div style={{ height:'100%',borderRadius:3,background:m.pct>=80?'#34D399':m.pct>=50?'#818CF8':'#F97316',width:m.pct+'%',transition:'width .4s' }}/>
+                </div>
+                <span style={{ fontSize:11,color:c.mut }}>{m.done}/{m.total}</span>
+              </div>
+            </div>
+            <div style={{ textAlign:'right',flexShrink:0 }}>
+              <div style={{ fontSize:18,fontWeight:800,color:m.pct>=80?'#34D399':m.pct>=50?'#818CF8':'#F97316' }}>{m.pct}%</div>
+              {m.blocked>0&&<div style={{ fontSize:10,color:'#F87171' }}>⚠️ {m.blocked} blocked</div>}
+            </div>
+          </div>
+        ))}
+      </Card>
+    </div>
   );
 }
