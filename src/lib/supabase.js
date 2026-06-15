@@ -348,13 +348,31 @@ export async function sendChatMessage(teamId, msg) {
 
 export function subscribeToMessages(teamId, cb) {
   if (!supabase) return () => {};
-  const ch = supabase.channel('messages-' + teamId)
+  // Use BOTH broadcast (instant) and postgres_changes (reliable fallback)
+  const ch = supabase.channel('chat-' + teamId, {
+    config: { broadcast: { self: false } } // don't echo back to sender
+  })
+    // Broadcast channel for instant delivery between online users
+    .on('broadcast', { event: 'new_message' }, ({ payload }) => {
+      if (payload) cb(payload);
+    })
+    // postgres_changes as fallback for users who were offline
     .on('postgres_changes', {
       event: 'INSERT', schema: 'public', table: 'messages',
       filter: 'team_id=eq.' + teamId
     }, payload => cb(payload.new))
     .subscribe();
   return () => supabase.removeChannel(ch);
+}
+
+export async function broadcastMessage(teamId, msg) {
+  if (!supabase) return;
+  // Broadcast instantly to all online members
+  await supabase.channel('chat-' + teamId).send({
+    type: 'broadcast',
+    event: 'new_message',
+    payload: msg,
+  });
 }
 
 // ── Invite link retrieval ─────────────────────────────────────────────────────
