@@ -2466,7 +2466,7 @@ const MGR_TABS=[
   {id:'tset',     l:'Settings',      ic:I.tset},
 ];
 
-function ManagerView({ session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers, setShowPip }) {
+function ManagerView({ session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers, openPip, pipOpen }) {
   const c=useC(); const [tab,setTab]=useState('live');
   const [unreadChat,setUnreadChat]=useState(0);
   const prevMsgCount=useRef(messages.length);
@@ -2489,7 +2489,7 @@ function ManagerView({ session, team, tasks, members, history, standup, onStatus
         <div style={{ maxWidth:1200,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:10 }}>
           <Logo size={26} onClick={onBack}/>
           <nav style={{ display:'flex',gap:1,flex:1,overflowX:'auto' }}>
-            <button onClick={()=>setShowPip&&setShowPip(p=>!p)} title="Toggle PiP task window" style={{ padding:'5px 10px',borderRadius:10,border:`1px solid ${c.bord}`,background:'rgba(124,110,245,.1)',color:'#A78BFA',cursor:'pointer',fontSize:11,fontWeight:600,flexShrink:0,display:'flex',alignItems:'center',gap:6 }}><span style={{ width:14,height:14,display:'flex',alignItems:'center',justifyContent:'center' }}>{I.pip}</span>PiP</button>
+            <button onClick={()=>openPip&&openPip()} title="Open PiP — stays visible when you switch tabs" style={{ padding:'5px 10px',borderRadius:10,border:`1px solid ${pipOpen?'rgba(124,110,245,.5)':c.bord}`,background:pipOpen?'rgba(124,110,245,.18)':'rgba(124,110,245,.08)',color:'#A78BFA',cursor:'pointer',fontSize:11,fontWeight:600,flexShrink:0,display:'flex',alignItems:'center',gap:6 }}><span style={{ width:14,height:14,display:'flex',alignItems:'center',justifyContent:'center' }}>{I.pip}</span>{pipOpen?'PiP ●':'PiP'}</button>
         {MGR_TABS.map(t=>{
               const isA=tab===t.id;
               return(
@@ -2533,69 +2533,186 @@ function ManagerView({ session, team, tasks, members, history, standup, onStatus
 
 // ─── PIP TASK WINDOW ─────────────────────────────────────────────────────────
 // Floats over Google Meet / any video call so you can write tasks without switching windows
-function PipWindow({ tasks, onAdd, onStatus, session, team, standup, onClose }) {
-  const c=useC();
-  const [newTask,setNewTask]=useState(''); const [adding,setAdding]=useState(false);
-  const [pos,setPos]=useState({x:window.innerWidth-340,y:60});
-  const [dragging,setDragging]=useState(false); const [dragOffset,setDragOffset]=useState({x:0,y:0});
-  const [minimized,setMinimized]=useState(false);
-  const myEmail=session?.user?.email||'';
-  const myTasks=tasks.filter(t=>t.assignee_email===myEmail);
-  const done=myTasks.filter(t=>t.status==='done').length;
+// ─── REAL PIP — uses window.open() so it survives tab switches + minimizing ──
+// The popup window is a self-contained HTML page with inline styles
+function usePip({ tasks, onAdd, onStatus, session, team, standup }) {
+  const pipRef = useRef(null);
+  const [isOpen, setIsOpen] = useState(false);
 
-  const startDrag=(e)=>{ setDragging(true); setDragOffset({x:e.clientX-pos.x,y:e.clientY-pos.y}); };
-  useEffect(()=>{
-    if(!dragging)return;
-    const mv=(e)=>setPos({x:Math.max(0,Math.min(window.innerWidth-320,e.clientX-dragOffset.x)),y:Math.max(0,Math.min(window.innerHeight-60,e.clientY-dragOffset.y))});
-    const up=()=>setDragging(false);
-    window.addEventListener('mousemove',mv); window.addEventListener('mouseup',up);
-    return()=>{ window.removeEventListener('mousemove',mv); window.removeEventListener('mouseup',up); };
-  },[dragging,dragOffset]);
+  const myEmail = session?.user?.email || '';
+  const myName  = session?.user?.user_metadata?.name || myEmail.split('@')[0];
 
-  const addTask=async()=>{
-    if(!newTask.trim())return; setAdding(true);
-    const myName=session?.user?.user_metadata?.name||myEmail.split('@')[0];
-    await onAdd({title:newTask.trim(),status:'todo',priority:'medium',assignee_email:myEmail,assignee_name:myName,standup_id:standup?.id,team_id:team?.id});
-    setNewTask(''); setAdding(false);
+  // Sync tasks into popup whenever they change
+  useEffect(() => {
+    if (!pipRef.current || pipRef.current.closed) return;
+    try { pipRef.current.postMessage({ type: 'tasks', tasks, myEmail }, '*'); } catch(e) {}
+  }, [tasks, myEmail]);
+
+  const openPip = () => {
+    if (pipRef.current && !pipRef.current.closed) {
+      pipRef.current.focus();
+      return;
+    }
+
+    const w = 340, h = 520;
+    const left = window.screen.width - w - 20;
+    const top  = window.screen.height - h - 60;
+
+    const popup = window.open(
+      '', 'standsync-pip',
+      `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no,status=no`
+    );
+
+    if (!popup) { alert('Popup blocked. Allow popups for standsync-olive.vercel.app in your browser settings.'); return; }
+
+    // Write the full PiP HTML directly into the popup
+    popup.document.write(`<!DOCTYPE html><html>
+<head>
+<meta charset="utf-8">
+<title>StandSync — PiP Tasks</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#07051A;color:#F0ECFF;height:100vh;display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased}
+  .header{padding:12px 14px;background:rgba(124,110,245,.15);border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:10;cursor:default;user-select:none;flex-shrink:0}
+  .logo{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#6B5FE4,#9B8AFB);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .title{font-size:13px;font-weight:700;flex:1;letter-spacing:-.01em}
+  .team{font-size:10px;color:rgba(240,236,255,.45)}
+  .progress{font-size:11px;color:#A78BFA;font-weight:600;flex-shrink:0}
+  .tasks{flex:1;overflow-y:auto;padding:8px}
+  .task{display:flex;align-items:flex-start;gap:9px;padding:8px 10px;border-radius:10px;margin-bottom:5px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);transition:background .15s}
+  .task:hover{background:rgba(255,255,255,.07)}
+  .cb{width:18px;height:18px;border-radius:50%;flex-shrink:0;margin-top:1px;border:2px solid rgba(128,128,128,.35);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
+  .cb.done{border-color:#34D399;background:#34D399}
+  .cb.done::after{content:'';display:block;width:7px;height:5px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translate(1px,-1px)}
+  .cb.inprog{border-color:#38BDF8;background:rgba(56,189,248,.15)}
+  .cb.blocked{border-color:#EF4444;background:rgba(239,68,68,.15)}
+  .task-text{font-size:12px;line-height:1.4;flex:1;word-break:break-word}
+  .task-text.done{text-decoration:line-through;opacity:.45}
+  .badge{font-size:9px;padding:1px 6px;border-radius:20px;flex-shrink:0;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+  .badge.critical{background:rgba(239,68,68,.2);color:#F87171}
+  .badge.high{background:rgba(249,115,22,.2);color:#FB923C}
+  .badge.medium{background:rgba(245,158,11,.15);color:#FCD34D}
+  .badge.low{background:rgba(16,185,129,.15);color:#6EE7B7}
+  .empty{text-align:center;padding:32px 16px;color:rgba(240,236,255,.3);font-size:12px;line-height:1.7}
+  .input-area{padding:10px;border-top:1px solid rgba(255,255,255,.07);display:flex;gap:8px;flex-shrink:0;background:rgba(255,255,255,.02)}
+  input{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:9px;padding:8px 11px;color:#F0ECFF;font-size:12px;outline:none;font-family:inherit}
+  input:focus{border-color:rgba(124,110,245,.5)}
+  input::placeholder{color:rgba(240,236,255,.3)}
+  button.send{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#6B5FE4,#9B8AFB);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;transition:opacity .15s}
+  button.send:disabled{opacity:.35;cursor:default}
+  ::-webkit-scrollbar{width:3px}
+  ::-webkit-scrollbar-thumb{background:rgba(124,110,245,.3);border-radius:3px}
+  .bar-bg{height:3px;background:rgba(255,255,255,.08);border-radius:2px;margin:0 14px 0}
+  .bar-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,#6B5FE4,#34D399);transition:width .4s}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="logo">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+  </div>
+  <div style="flex:1">
+    <div class="title">StandSync PiP</div>
+    <div class="team" id="team-name">Loading...</div>
+  </div>
+  <div class="progress" id="progress">0/0</div>
+</div>
+<div class="bar-bg"><div class="bar-fill" id="bar" style="width:0%"></div></div>
+<div class="tasks" id="task-list"><div class="empty">⏳ Connecting to your tasks...</div></div>
+<div class="input-area">
+  <input id="inp" placeholder="Add a task..." onkeydown="if(event.key==='Enter')addTask()"/>
+  <button class="send" id="send-btn" onclick="addTask()" disabled>↑</button>
+</div>
+<script>
+  var tasks=[], myEmail='${myEmail}', myName='${myName}', teamName='${team?.name||'Team'}';
+  var inp=document.getElementById('inp');
+  inp.addEventListener('input',function(){document.getElementById('send-btn').disabled=!inp.value.trim();});
+
+  document.getElementById('team-name').textContent=teamName;
+
+  var statusNext={todo:'in-progress','in-progress':'done',done:'todo',blocked:'todo'};
+  var statusClass={todo:'',\'in-progress\':\'inprog\',done:\'done\',blocked:\'blocked\'};
+  var priorityOrder=['critical','high','medium','low'];
+
+  function render(){
+    var mine=tasks.filter(function(t){return t.assignee_email===myEmail;});
+    var done=mine.filter(function(t){return t.status==='done';}).length;
+    var pct=mine.length?Math.round(done/mine.length*100):0;
+    document.getElementById('progress').textContent=done+'/'+mine.length;
+    document.getElementById('bar').style.width=pct+'%';
+    var html='';
+    if(mine.length===0){html='<div class="empty">No tasks yet.<br>Add one below.</div>';}
+    else{mine.forEach(function(t){
+      html+='<div class="task"><div class="cb '+statusClass[t.status]+'" onclick="toggle(\''+t.id+'\',\''+statusNext[t.status]+'\')"></div>';
+      html+='<span class="task-text '+(t.status==='done'?'done':'')+'">'+(t.title||'').replace(/</g,'&lt;')+'</span>';
+      html+='<span class="badge '+(t.priority||'medium')+'">'+( t.priority||'med')+'</span></div>';
+    });}
+    document.getElementById('task-list').innerHTML=html;
+  }
+
+  function toggle(id, next){
+    window.opener&&window.opener.postMessage({type:'status',id:id,status:next},'*');
+    tasks=tasks.map(function(t){return t.id===id?Object.assign({},t,{status:next}):t;});
+    render();
+  }
+
+  function addTask(){
+    var v=inp.value.trim(); if(!v)return;
+    window.opener&&window.opener.postMessage({type:'addTask',title:v,myEmail:myEmail,myName:myName},'*');
+    inp.value=''; document.getElementById('send-btn').disabled=true;
+    // Optimistic add
+    tasks.push({id:'tmp'+Date.now(),title:v,status:'todo',priority:'medium',assignee_email:myEmail,assignee_name:myName});
+    render();
+  }
+
+  window.addEventListener('message',function(e){
+    if(e.data&&e.data.type==='tasks'){tasks=e.data.tasks||[];myEmail=e.data.myEmail||myEmail;render();}
+  });
+</script>
+</body></html>`);
+    popup.document.close();
+
+    // Listen for messages from popup
+    const handleMsg = (e) => {
+      if (!e.data) return;
+      if (e.data.type === 'status') onStatus(e.data.id, e.data.status);
+      if (e.data.type === 'addTask') {
+        onAdd({ title: e.data.title, status: 'todo', priority: 'medium',
+          assignee_email: e.data.myEmail, assignee_name: e.data.myName,
+          standup_id: standup?.id, team_id: team?.id });
+      }
+    };
+    window.addEventListener('message', handleMsg);
+
+    popup.onbeforeunload = () => {
+      window.removeEventListener('message', handleMsg);
+      setIsOpen(false);
+      pipRef.current = null;
+    };
+
+    // Send initial tasks
+    setTimeout(() => {
+      if (!popup.closed) {
+        popup.postMessage({ type: 'tasks', tasks, myEmail }, '*');
+      }
+    }, 800);
+
+    pipRef.current = popup;
+    setIsOpen(true);
   };
 
-  const statusIcon={todo:'⬜',['in-progress']:'🔵',done:'✅',blocked:'🔴'};
-  const nextStatus={todo:'in-progress',['in-progress']:'done',done:'todo',blocked:'todo'};
+  const closePip = () => {
+    if (pipRef.current && !pipRef.current.closed) pipRef.current.close();
+    pipRef.current = null;
+    setIsOpen(false);
+  };
 
-  return(
-    <div style={{ position:'fixed',left:pos.x,top:pos.y,zIndex:99999,width:310,borderRadius:14,background:c.dark?'rgba(15,13,42,.97)':'rgba(255,255,255,.97)',border:`1px solid ${c.bord}`,boxShadow:'0 8px 40px rgba(0,0,0,.45)',backdropFilter:'blur(20px)',overflow:'hidden',userSelect:'none',transition:dragging?'none':'box-shadow .2s' }}>
-      {/* Header / drag handle */}
-      <div onMouseDown={startDrag} style={{ padding:'10px 12px',background:c.dark?'rgba(99,102,241,.15)':'rgba(99,102,241,.08)',cursor:'grab',display:'flex',alignItems:'center',gap:8 }}>
-        <div style={{ width:8,height:8,borderRadius:'50%',background:'#34D399',flexShrink:0 }}/>
-        <span style={{ fontSize:12,fontWeight:700,color:'#818CF8',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>StandSync PiP · {team?.name||'Tasks'}</span>
-        <span style={{ fontSize:11,color:c.mut }}>{done}/{myTasks.length}</span>
-        <button onClick={()=>setMinimized(!minimized)} style={{ background:'none',border:'none',cursor:'pointer',color:c.mut,fontSize:14,padding:'0 2px' }}>{minimized?'▼':'▲'}</button>
-        <button onClick={onClose} style={{ background:'none',border:'none',cursor:'pointer',color:c.mut,fontSize:16,padding:'0 2px' }}>×</button>
-      </div>
+  return { openPip, closePip, isOpen };
+}
 
-      {!minimized&&(
-        <>
-          {/* Task list */}
-          <div style={{ maxHeight:260,overflowY:'auto',padding:'6px 0' }}>
-            {myTasks.length===0&&<div style={{ padding:'12px 14px',fontSize:12,color:c.mut,textAlign:'center' }}>No tasks yet — add one below</div>}
-            {myTasks.map(t=>(
-              <div key={t.id} style={{ display:'flex',alignItems:'center',gap:8,padding:'7px 12px',borderBottom:`1px solid ${c.bord}11` }}>
-                <button onClick={()=>onStatus(t.id,nextStatus[t.status])} style={{ background:'none',border:'none',cursor:'pointer',fontSize:16,padding:0,flexShrink:0 }}>{statusIcon[t.status]||'⬜'}</button>
-                <span style={{ flex:1,fontSize:12,color:t.status==='done'?c.mut:c.text,textDecoration:t.status==='done'?'line-through':'none',lineHeight:1.4 }}>{t.title}</span>
-                <span style={{ fontSize:9,color:c.mut,textTransform:'uppercase',flexShrink:0 }}>{t.priority}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Add task input */}
-          <div style={{ padding:'8px 10px',borderTop:`1px solid ${c.bord}`,display:'flex',gap:6 }}>
-            <input value={newTask} onChange={e=>setNewTask(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addTask()} placeholder="Add a task..." style={{ flex:1,background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:8,padding:'6px 10px',color:c.text,fontSize:12,outline:'none' }}/>
-            <button onClick={addTask} disabled={!newTask.trim()||adding} style={{ width:30,height:30,borderRadius:8,background:newTask.trim()?'#6366F1':'transparent',border:newTask.trim()?'none':`1px solid ${c.bord}`,color:newTask.trim()?'#fff':c.mut,cursor:newTask.trim()?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>↑</button>
-          </div>
-        </>
-      )}
-    </div>
-  );
+// Thin wrapper component kept for render tree
+function PipWindow({ tasks, onAdd, onStatus, session, team, standup, onClose }) {
+  return null; // actual PiP uses usePip hook above
 }
 
 
@@ -2651,7 +2768,11 @@ export default function App() {
   const [homeKey,setHomeKey]=useState(0); const [tasks,setTasks]=useState([]); const [standup,setStandup]=useState(null);
   const [history,setHistory]=useState([]); const [messages,setMessages]=useState([]); const [chatTheme,setChatTheme]=useState('default');
   const [toast,setToast]=useState(null); const [emailBusy,setEmailBusy]=useState(false); const [inviteToken,setInviteToken]=useState(null);
-  const [showPip,setShowPip]=useState(false);
+  // Real PiP — popup window that survives tab switches
+  const { openPip, closePip, isOpen: pipOpen } = usePip({
+    tasks, onAdd: handleAddTask, onStatus: handleStatus, session, team, standup
+  });
+  const [showPip,setShowPip]=useState(false); // legacy, not used
   const isManager=myRole==='manager'||!SB.IS_LIVE;
   const showToast=useCallback((msg,type='success')=>setToast({msg,type}),[]);
 
@@ -2817,9 +2938,8 @@ export default function App() {
       {/* App views */}
       {(session||!SB.IS_LIVE)&&view==='home'&&<HomeView key={homeKey} session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onSelectTeam={handleSelectTeam} onLogout={handleLogout} onSettings={()=>setView('settings')}/>}
       {(session||!SB.IS_LIVE)&&view==='settings'&&<SettingsPage session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onBack={()=>setView(team?'standup':'home')} onSaved={d=>showToast('Profile saved')}/>}
-      {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} setShowPip={setShowPip}/>}
-      {/* PiP floating window */}
-      {showPip&&view==='standup'&&<PipWindow tasks={tasks} onAdd={handleAddTask} onStatus={handleStatus} session={session} team={team} standup={standup} onClose={()=>setShowPip(false)}/>}
+      {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
+      {/* PiP is a real popup window — no DOM element needed */}
       {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<MemberView user={userForView} myMember={myMember} tasks={tasks} onAdd={handleAddTask} onStatus={handleStatus} onBlocker={handleBlocker} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} members={members} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme}/>}
     </ThemeCtx.Provider>
   );
