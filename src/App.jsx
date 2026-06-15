@@ -621,32 +621,118 @@ function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], te
 }
 
 // ─── RICH CHAT ──────────────────────────────────────────────────────────
+// ─── RICH CHAT PANEL (Google Chat replica) ────────────────────────────────────
+const EMOJI_LIST = ['👍','❤️','😂','😮','😢','🙏','🔥','🎉','✅','👀','💯','🚀','😊','🤔','👏','💪','😅','🤣','😍','🥳','🙌','💡','⚡','🎯','✨','🤝','😎','🫡','👋','💬'];
+const EMOJI_GROUPS = {
+  'Smileys': ['😀','😁','😂','🤣','😊','😍','🥰','😘','😎','🤩','😏','😒','😞','😔','😟','😕','🙁','😣','😖','😫','😩','🥺','😢','😭','😤','😠','😡','🤬','🤯','😳','🥵','🥶','😱','😨','😰','😥','😓','🤗','🤔','🤭','🤫','🤥','😶','😐','😑','😬','🙄','😯','😦','😧','😮','😲','🥱','😴','🤤','😪','😵','🤐','🥴','🤢','🤮','🤧','🥳'],
+  'Gestures': ['👍','👎','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👋','🤚','🖐','✋','🖖','🙌','👐','🤲','🤝','🙏','✍️','💅','🤳','💪','🦵','🦶','👂','🦻','👃'],
+  'Objects': ['💬','📎','📄','🖼️','🎵','🎬','📅','⚡','🔥','💡','🎯','✅','❌','⭐','🏆','🎉','🎊','🎁','📱','💻','⌨️','🖱️','🖨️','📷','📸','📹','🎥','📞','📟','📠','🔋','🔌','💾','💿','📀','🖥️','📺','📻'],
+  'Nature': ['🌟','⭐','🌈','☀️','🌤️','⛅','🌦️','🌧️','⛈️','🌩️','🌨️','❄️','🔥','💧','🌊','🌸','🌺','🌻','🌹','🍀','🌿','🌱','🌲','🌳','🌴'],
+};
+
 function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='default', onChangeTheme, isManager=false }) {
   const c=useC();
-  const [msg,setMsg]=useState(''); const [showGif,setShowGif]=useState(false);
+  const [msg,setMsg]=useState('');
   const [activeSpace,setActiveSpace]=useState('general');
-  const [gifSearch,setGifSearch]=useState(''); const [gifs,setGifs]=useState([]); const [gifLoading,setGifLoading]=useState(false); const [gifError,setGifError]=useState('');
-  const [showTheme,setShowTheme]=useState(false);
-  const [showNewSpace,setShowNewSpace]=useState(false); const [newSpaceName,setNewSpaceName]=useState(''); const [newSpacePrivate,setNewSpacePrivate]=useState(false);
+  const [showEmoji,setShowEmoji]=useState(false);
+  const [emojiGroup,setEmojiGroup]=useState('Smileys');
+  const [showGif,setShowGif]=useState(false);
+  const [gifSearch,setGifSearch]=useState(''); const [gifs,setGifs]=useState([]); const [gifLoading,setGifLoading]=useState(false);
+  const [showNewSpace,setShowNewSpace]=useState(false); const [newSpaceName,setNewSpaceName]=useState('');
   const [customSpaces,setCustomSpaces]=useState(()=>{ try{return JSON.parse(localStorage.getItem('ss-spaces')||'[]');}catch{return[];} });
   const [pinnedMsgs,setPinnedMsgs]=useState([]);
   const [showPinned,setShowPinned]=useState(false);
   const [showFiles,setShowFiles]=useState(false);
-  const [contextMenu,setContextMenu]=useState(null); // {msgId, x, y}
-  const [showSidebar,setShowSidebar]=useState(false); // right info sidebar
-  const bottomRef=useRef(); const fileRef=useRef(); const attachRef=useRef();
+  const [contextMenu,setContextMenu]=useState(null);
+  const [reactions,setReactions]=useState({}); // {msgId: {emoji: [email,...]}}
+  const [replyTo,setReplyTo]=useState(null);
+  const bottomRef=useRef(); const fileRef=useRef(); const attachRef=useRef(); const inputRef=useRef();
+
   const myEmail=session?.user?.email||'demo@standsync.app';
   const myName=session?.user?.user_metadata?.name||myEmail.split('@')[0];
   const myAvatar=session?.user?.user_metadata?.avatar_url;
-  const theme=CHAT_THEMES.find(t=>t.id===chatTheme)||CHAT_THEMES[0];
+
+  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:'smooth'}); },[messages,activeSpace]);
+
+  // Open file via blob URL (fixes about:blank issue)
+  const openFile=(url,filename)=>{
+    if(!url)return;
+    if(url.startsWith('data:')){
+      const arr=url.split(','), mime=arr[0].match(/:(.*?);/)?.[1]||'application/octet-stream';
+      const bstr=atob(arr[1]), n=bstr.length, u8=new Uint8Array(n);
+      for(let i=0;i<n;i++)u8[i]=bstr.charCodeAt(i);
+      const blob=new Blob([u8],{type:mime});
+      const blobUrl=URL.createObjectURL(blob);
+      const opened=window.open(blobUrl,'_blank');
+      if(!opened){ const a=document.createElement('a'); a.href=blobUrl; a.download=filename||'file'; a.click(); }
+      setTimeout(()=>URL.revokeObjectURL(blobUrl),10000);
+    } else { window.open(url,'_blank'); }
+  };
+
+  const handleFile=(e)=>{
+    const file=e.target.files[0]; if(!file)return;
+    const t=file.type;
+    const msgType=t.startsWith('image/')?'image':t.startsWith('video/')?'video':t.startsWith('audio/')?'audio':t==='application/pdf'?'pdf':'file';
+    const reader=new FileReader();
+    reader.onload=ev=>sendMsg('',msgType,ev.target.result,file.name,file.size);
+    reader.readAsDataURL(file);
+    e.target.value='';
+  };
+
+  const fmtSize=(b)=>b>1048576?(b/1048576).toFixed(1)+'MB':b>1024?(b/1024).toFixed(0)+'KB':b+'B';
+
+  const addReaction=(msgId,emoji)=>{
+    setReactions(prev=>{
+      const r={...prev};
+      if(!r[msgId])r[msgId]={};
+      if(!r[msgId][emoji])r[msgId][emoji]=[];
+      const idx=r[msgId][emoji].indexOf(myEmail);
+      if(idx>=0) r[msgId][emoji]=r[msgId][emoji].filter(e=>e!==myEmail);
+      else r[msgId][emoji]=[...r[msgId][emoji],myEmail];
+      if(r[msgId][emoji].length===0)delete r[msgId][emoji];
+      return r;
+    });
+    setContextMenu(null);
+  };
+
+  // Filter messages by active space/DM
+  const spaceMessages=messages.filter(m=>{
+    if(activeSpace.startsWith('dm-')){
+      const dmEmail=activeSpace.slice(3);
+      return (m.dm_to===myEmail&&m.sender_email===dmEmail)||(m.dm_to===dmEmail&&m.sender_email===myEmail);
+    }
+    return (m.space||'general')===activeSpace && !m.dm_to;
+  });
+
+  const sendMsg=(text,type='text',url='',filename='',filesize=0)=>{
+    if(type==='text'&&!text.trim())return;
+    const isDM=activeSpace.startsWith('dm-');
+    onSend({id:'m'+Date.now(),text:type==='text'?text.trim():'',type,url,filename,filesize,
+      sender_email:myEmail,sender_name:myName,created_at:new Date().toISOString(),
+      space:activeSpace,dm_to:isDM?activeSpace.slice(3):undefined,
+      reply_to:replyTo?{id:replyTo.id,text:replyTo.text||'[attachment]',name:replyTo.sender_name}:undefined,
+    });
+    setMsg(''); setShowEmoji(false); setShowGif(false); setReplyTo(null);
+  };
+
+  const searchGifs=async(q)=>{
+    if(!q.trim())return; setGifLoading(true);
+    try{
+      const key=process.env.REACT_APP_GIPHY_KEY||'dc6zaTOxFJmzC';
+      const r=await fetch('https://api.giphy.com/v1/gifs/search?api_key='+key+'&q='+encodeURIComponent(q)+'&limit=16&rating=g');
+      if(!r.ok){setGifLoading(false);return;}
+      const d=await r.json(); setGifs(d.data||[]);
+    }catch(e){}
+    setGifLoading(false);
+  };
 
   const addCustomSpace=()=>{
     if(!newSpaceName.trim())return;
-    const id='space-'+newSpaceName.toLowerCase().replace(/\s+/g,'-');
-    const updated=[...customSpaces,{id,name:newSpaceName.trim(),private:newSpacePrivate}];
+    const id='space-'+newSpaceName.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+    const updated=[...customSpaces,{id,name:newSpaceName.trim()}];
     setCustomSpaces(updated);
     try{localStorage.setItem('ss-spaces',JSON.stringify(updated));}catch{}
-    setActiveSpace(id); setShowNewSpace(false); setNewSpaceName(''); setNewSpacePrivate(false);
+    setActiveSpace(id); setShowNewSpace(false); setNewSpaceName('');
   };
 
   const deleteCustomSpace=(id)=>{
@@ -656,268 +742,320 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
     if(activeSpace===id)setActiveSpace('general');
   };
 
-  // Filter messages by active space
-  const spaceMessages=messages.filter(m=>{
-    if(activeSpace.startsWith('dm-')){
-      const dmEmail=activeSpace.slice(3);
-      return m.space===(activeSpace)||(m.sender_email===dmEmail&&m.dm_to===myEmail)||(m.sender_email===myEmail&&m.dm_to===dmEmail);
-    }
-    return (m.space||'general')===activeSpace;
-  });
-
-  const sendMsg=(text,type='text',url='',filename='',filesize=0)=>{
-    if(type==='text'&&!text.trim())return;
-    const isDM=activeSpace.startsWith('dm-');
-    onSend({id:'m'+Date.now(),text:type==='text'?text.trim():'',type,url,filename,filesize,
-      sender_email:myEmail,sender_name:myName,created_at:new Date().toISOString(),
-      space:activeSpace,
-      dm_to:isDM?activeSpace.slice(3):undefined,
-    });
-    if(type==='text')setMsg(''); setShowGif(false);
-  };
-
-  const theme2=CHAT_THEMES.find(t=>t.id===chatTheme)||CHAT_THEMES[0];
-  const dmMember=activeSpace.startsWith('dm-')?members.find(m=>m.email===activeSpace.slice(3)):null;
-  const DEFAULT_SPACES=[{id:'general',label:'general',icon:'💬'},{id:'announcements',label:'announcements',icon:'📢'},{id:'random',label:'random',icon:'🎲'}];
-  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:'smooth'}); },[messages]);
-  const searchGifs=async(q)=>{
-    if(!q.trim())return; setGifLoading(true); setGifError('');
-    try{
-      // Try Giphy first with user's key, fall back to trending
-      const key=process.env.REACT_APP_GIPHY_KEY||GIPHY_KEY;
-      const url='https://api.giphy.com/v1/gifs/search?api_key='+key+'&q='+encodeURIComponent(q)+'&limit=12&rating=g&lang=en';
-      const r=await fetch(url);
-      if(!r.ok){setGifError('GIF search unavailable. Add REACT_APP_GIPHY_KEY to Vercel (free at developers.giphy.com)');setGifLoading(false);return;}
-      const d=await r.json();
-      if(d.meta?.status===403||d.meta?.status===401){setGifError('GIF key invalid. Get a free key at developers.giphy.com → Create App → Add REACT_APP_GIPHY_KEY to Vercel');setGifLoading(false);return;}
-      setGifs(d.data||[]);
-      if(!d.data?.length)setGifError('No GIFs found for "'+q+'" — try a different search');
-    }catch(e){setGifError('Could not connect to Giphy. Check your internet connection.');}
-    setGifLoading(false);
-  };
-  // Handle all file types
-  const handleFile=(e,type='image')=>{
-    const file=e.target.files[0]; if(!file)return;
-    const isImage=file.type.startsWith('image/');
-    const isVideo=file.type.startsWith('video/');
-    const isAudio=file.type.startsWith('audio/');
-    const isPDF=file.type==='application/pdf';
-    const msgType=isImage?'image':isVideo?'video':isAudio?'audio':isPDF?'pdf':'file';
-    const reader=new FileReader();
-    reader.onload=ev=>sendMsg('',msgType,ev.target.result,file.name,file.size);
-    reader.readAsDataURL(file);
-  };
-  const handleImage=(e)=>handleFile(e,'image');
-  const handleAttach=(e)=>handleFile(e,'file');
-
-  const fmtSize=(b)=>b>1048576?(b/1048576).toFixed(1)+'MB':b>1024?(b/1024).toFixed(0)+'KB':b+'B';
-
   const renderMsg=(m)=>{
-    if(m.type==='image') return <img src={m.url} alt="img" style={{ maxWidth:200,maxHeight:200,borderRadius:8,objectFit:'cover',cursor:'pointer' }} onClick={()=>window.open(m.url,'_blank')}/>;
-    if(m.type==='gif') return <img src={m.url} alt="gif" style={{ maxWidth:200,borderRadius:8 }}/>;
-    if(m.type==='video') return <video src={m.url} controls style={{ maxWidth:240,borderRadius:8 }}/>;
-    if(m.type==='audio') return <audio src={m.url} controls style={{ maxWidth:240 }}/>;
-    if(m.type==='pdf') return <div style={{ display:'flex',alignItems:'center',gap:9,padding:'8px 12px',background:'rgba(255,255,255,.08)',borderRadius:8,cursor:'pointer' }} onClick={()=>window.open(m.url,'_blank')}><span style={{ fontSize:22 }}>📄</span><div><div style={{ fontSize:12,fontWeight:600 }}>{m.filename||'document.pdf'}</div><div style={{ fontSize:10,opacity:.6 }}>{m.filesize?fmtSize(m.filesize):'PDF'}</div></div></div>;
-    if(m.type==='file') return <div style={{ display:'flex',alignItems:'center',gap:9,padding:'8px 12px',background:'rgba(255,255,255,.08)',borderRadius:8,cursor:'pointer' }} onClick={()=>window.open(m.url,'_blank')}><span style={{ fontSize:22 }}>📎</span><div><div style={{ fontSize:12,fontWeight:600 }}>{m.filename||'file'}</div><div style={{ fontSize:10,opacity:.6 }}>{m.filesize?fmtSize(m.filesize):''}</div></div></div>;
-    // Linkify URLs in text
-    const parts=m.text.split(/(https?:\/\/[^\s]+)/g);
-    return <span>{parts.map((p,i)=>p.match(/^https?:\/\//)?<a key={i} href={p} target="_blank" rel="noreferrer" style={{ color:'#93C5FD',textDecoration:'underline' }}>{p}</a>:<span key={i}>{p}</span>)}</span>;
+    if(m.type==='image') return <img src={m.url} alt="img" onClick={()=>openFile(m.url,m.filename)} style={{ maxWidth:260,maxHeight:260,borderRadius:10,objectFit:'cover',cursor:'pointer',display:'block' }}/>;
+    if(m.type==='gif') return <img src={m.url} alt="gif" style={{ maxWidth:260,borderRadius:10,display:'block' }}/>;
+    if(m.type==='video') return <video src={m.url} controls style={{ maxWidth:280,borderRadius:10,display:'block' }}/>;
+    if(m.type==='audio') return <audio src={m.url} controls style={{ maxWidth:280 }}/>;
+    if(m.type==='pdf'||m.type==='file'){
+      const icon=m.type==='pdf'?'📄':m.filename?.match(/\.(doc|docx)$/i)?'📝':m.filename?.match(/\.(xls|xlsx)$/i)?'📊':m.filename?.match(/\.(mp3|wav)$/i)?'🎵':m.filename?.match(/\.(mp4|mov)$/i)?'🎬':'📎';
+      return(
+        <div onClick={()=>openFile(m.url,m.filename)} style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 14px',background:'rgba(255,255,255,.1)',borderRadius:10,cursor:'pointer',maxWidth:260,border:'1px solid rgba(255,255,255,.15)' }}>
+          <span style={{ fontSize:26,flexShrink:0 }}>{icon}</span>
+          <div style={{ flex:1,minWidth:0 }}>
+            <div style={{ fontSize:12,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{m.filename||'File'}</div>
+            <div style={{ fontSize:10,opacity:.6,marginTop:2 }}>{m.filesize?fmtSize(m.filesize):m.type.toUpperCase()} · Tap to open</div>
+          </div>
+        </div>
+      );
+    }
+    const parts=(m.text||'').split(/(https?:\/\/[^\s]+)/g);
+    return <span style={{ whiteSpace:'pre-wrap',wordBreak:'break-word' }}>{parts.map((p,i)=>p.match(/^https?:\/\//)?<a key={i} href={p} target="_blank" rel="noreferrer" style={{ color:'#93C5FD',textDecoration:'underline' }}>{p}</a>:<span key={i}>{p}</span>)}</span>;
   };
 
-  const pinMsg=(m)=>{ setPinnedMsgs(p=>p.find(x=>x.id===m.id)?p.filter(x=>x.id!==m.id):[...p,m]); setContextMenu(null); };
-  const isPinned=(id)=>pinnedMsgs.some(m=>m.id===id);
+  const grouped=spaceMessages.reduce((acc,m)=>{
+    const date=new Date(m.created_at).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+    if(!acc.length||acc[acc.length-1].date!==date)acc.push({date,msgs:[]});
+    acc[acc.length-1].msgs.push(m); return acc;
+  },[]);
 
-  // Shared files/links
+  const DEFAULT_SPACES=[{id:'general',label:'general',icon:'#'},{id:'announcements',label:'announcements',icon:'#'},{id:'random',label:'random',icon:'#'}];
+  const dmMembers=members.filter(m=>m.email!==myEmail);
+  const activeLabel=activeSpace.startsWith('dm-')
+    ? (members.find(m=>m.email===activeSpace.slice(3))?.name||activeSpace.slice(3)).split(' ')[0]
+    : (customSpaces.find(s=>s.id===activeSpace)?.name||DEFAULT_SPACES.find(s=>s.id===activeSpace)?.label||activeSpace);
   const sharedFiles=spaceMessages.filter(m=>['image','pdf','video','audio','file'].includes(m.type));
-  const sharedLinks=spaceMessages.filter(m=>m.type==='text'&&m.text.match(/https?:\/\//));
+  const sharedLinks=spaceMessages.filter(m=>m.type==='text'&&(m.text||'').match(/https?:\/\//));
+  const isPinned=(id)=>pinnedMsgs.some(m=>m.id===id);
+  const pinMsg=(m)=>{ setPinnedMsgs(p=>isPinned(m.id)?p.filter(x=>x.id!==m.id):[...p,m]); setContextMenu(null); };
 
-  const grouped=spaceMessages.reduce((acc,m)=>{ const date=new Date(m.created_at).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); if(!acc.length||acc[acc.length-1].date!==date)acc.push({date,msgs:[]}); acc[acc.length-1].msgs.push(m); return acc; },[]);
   return (
-    <div style={{ display:'flex',height:'calc(100vh - 160px)',minHeight:400,borderRadius:14,overflow:'hidden',border:`1px solid ${c.bord}` }}>
-      {/* Spaces sidebar */}
-      <div style={{ width:175,flexShrink:0,background:c.dark?'rgba(10,8,30,.97)':'rgba(225,230,255,.9)',borderRight:`1px solid ${c.bord}`,display:'flex',flexDirection:'column',overflow:'hidden' }}>
-        <div style={{ flex:1,overflowY:'auto',padding:'10px 6px' }}>
-          {/* Default spaces */}
-          <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'4px 8px',marginBottom:2 }}>
-            <div style={{ fontSize:10,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em' }}>Spaces</div>
-            {isManager&&<button onClick={()=>setShowNewSpace(!showNewSpace)} title="Create space" style={{ width:18,height:18,borderRadius:4,background:'transparent',border:'none',color:c.mut,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontWeight:700 }}>+</button>}
+    <div style={{ display:'flex',height:'calc(100vh - 155px)',minHeight:480,borderRadius:14,overflow:'hidden',border:`1px solid ${c.bord}`,background:c.bg }} onClick={()=>{setContextMenu(null);setShowEmoji(false);}}>
+
+      {/* ── LEFT SIDEBAR ───────────────────────────────────────────────── */}
+      <div style={{ width:220,flexShrink:0,background:c.dark?'#0F0D2A':'#F3F4FF',borderRight:`1px solid ${c.bord}`,display:'flex',flexDirection:'column',overflow:'hidden' }}>
+        {/* Header */}
+        <div style={{ padding:'14px 14px 10px',borderBottom:`1px solid ${c.bord}`,flexShrink:0 }}>
+          <div style={{ fontSize:14,fontWeight:800,color:c.text,letterSpacing:'-.02em' }}>Chat</div>
+        </div>
+        <div style={{ flex:1,overflowY:'auto',padding:'8px 6px' }}>
+          {/* Spaces */}
+          <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 10px 4px',marginTop:4 }}>
+            <span style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em' }}>Spaces</span>
+            {isManager&&<button onClick={()=>setShowNewSpace(!showNewSpace)} style={{ width:20,height:20,borderRadius:5,background:'transparent',border:'none',color:c.mut,cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700 }} title="Create space">+</button>}
           </div>
-          {DEFAULT_SPACES.map(sp=>(
-            <button key={sp.id} onClick={()=>setActiveSpace(sp.id)} style={{ display:'flex',alignItems:'center',gap:6,padding:'6px 8px',borderRadius:8,border:'none',background:activeSpace===sp.id?'rgba(99,102,241,.2)':'transparent',color:activeSpace===sp.id?'#818CF8':c.mut,cursor:'pointer',fontSize:12,fontWeight:activeSpace===sp.id?700:400,textAlign:'left',width:'100%',marginBottom:1 }}>
-              <span style={{ fontSize:13 }}>{sp.icon}</span><span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{sp.label}</span>
-            </button>
-          ))}
-          {/* Custom spaces */}
-          {customSpaces.map(sp=>(
-            <div key={sp.id} style={{ display:'flex',alignItems:'center',gap:1 }}>
-              <button onClick={()=>setActiveSpace(sp.id)} style={{ flex:1,display:'flex',alignItems:'center',gap:6,padding:'6px 8px',borderRadius:8,border:'none',background:activeSpace===sp.id?'rgba(99,102,241,.2)':'transparent',color:activeSpace===sp.id?'#818CF8':c.mut,cursor:'pointer',fontSize:12,fontWeight:activeSpace===sp.id?700:400,textAlign:'left',marginBottom:1 }}>
-                <span style={{ fontSize:13 }}>#</span><span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{sp.name}</span>
-                {sp.private&&<span style={{ fontSize:9,color:c.mut }}>🔒</span>}
-              </button>
-              {isManager&&<button onClick={()=>deleteCustomSpace(sp.id)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:11,padding:'2px 4px',opacity:.6 }} title="Delete">×</button>}
-            </div>
-          ))}
-          {/* Create space form */}
           {showNewSpace&&isManager&&(
-            <div style={{ padding:'8px',background:'rgba(99,102,241,.08)',borderRadius:10,margin:'6px 0' }}>
-              <input value={newSpaceName} onChange={e=>setNewSpaceName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')addCustomSpace();if(e.key==='Escape')setShowNewSpace(false);}} placeholder="Space name..." autoFocus style={{ width:'100%',background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:6,padding:'5px 8px',color:c.text,fontSize:12,outline:'none',boxSizing:'border-box',marginBottom:6 }}/>
-              <div style={{ display:'flex',alignItems:'center',gap:6,marginBottom:6 }}>
-                <input type="checkbox" id="priv" checked={newSpacePrivate} onChange={e=>setNewSpacePrivate(e.target.checked)} style={{ cursor:'pointer' }}/>
-                <label htmlFor="priv" style={{ fontSize:11,color:c.mut,cursor:'pointer' }}>Private</label>
-              </div>
-              <div style={{ display:'flex',gap:4 }}>
-                <button onClick={addCustomSpace} disabled={!newSpaceName.trim()} style={{ flex:1,padding:'5px',borderRadius:6,background:newSpaceName.trim()?'#6366F1':'rgba(128,128,128,.2)',border:'none',color:'#fff',cursor:newSpaceName.trim()?'pointer':'default',fontSize:11,fontWeight:600 }}>Create</button>
-                <button onClick={()=>setShowNewSpace(false)} style={{ padding:'5px 8px',borderRadius:6,background:'transparent',border:`1px solid ${c.bord}`,color:c.mut,cursor:'pointer',fontSize:11 }}>×</button>
+            <div style={{ margin:'4px 6px 8px',padding:'10px',background:c.surf,borderRadius:10,border:`1px solid ${c.bord}` }}>
+              <input value={newSpaceName} onChange={e=>setNewSpaceName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')addCustomSpace();if(e.key==='Escape')setShowNewSpace(false);}} placeholder="Space name..." autoFocus style={{ width:'100%',background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:7,padding:'6px 10px',color:c.text,fontSize:12,outline:'none',boxSizing:'border-box',marginBottom:7 }}/>
+              <div style={{ display:'flex',gap:5 }}>
+                <button onClick={addCustomSpace} disabled={!newSpaceName.trim()} style={{ flex:1,padding:'5px',borderRadius:7,background:'#6366F1',border:'none',color:'#fff',cursor:'pointer',fontSize:12,fontWeight:600 }}>Create</button>
+                <button onClick={()=>setShowNewSpace(false)} style={{ padding:'5px 8px',borderRadius:7,background:'transparent',border:`1px solid ${c.bord}`,color:c.mut,cursor:'pointer',fontSize:12 }}>✕</button>
               </div>
             </div>
           )}
+          {[...DEFAULT_SPACES,...customSpaces].map(sp=>(
+            <div key={sp.id} style={{ display:'flex',alignItems:'center',gap:1 }}>
+              <button onClick={()=>setActiveSpace(sp.id)} style={{ flex:1,display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:9,border:'none',background:activeSpace===sp.id?(c.dark?'rgba(99,102,241,.2)':'rgba(99,102,241,.12)'):'transparent',color:activeSpace===sp.id?'#818CF8':c.sub,cursor:'pointer',fontSize:13,fontWeight:activeSpace===sp.id?600:400,textAlign:'left' }}>
+                <span style={{ fontSize:12,fontWeight:700,color:activeSpace===sp.id?'#818CF8':c.mut,flexShrink:0 }}>#</span>
+                <span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{sp.label||sp.name}</span>
+              </button>
+              {customSpaces.find(s=>s.id===sp.id)&&isManager&&<button onClick={()=>deleteCustomSpace(sp.id)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:12,padding:'4px',opacity:.5,flexShrink:0 }}>✕</button>}
+            </div>
+          ))}
+
           {/* Direct Messages */}
-          <div style={{ display:'flex',alignItems:'center',padding:'8px 8px 4px',marginTop:6 }}>
-            <div style={{ fontSize:10,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em' }}>Direct messages</div>
+          <div style={{ padding:'10px 10px 4px',marginTop:8 }}>
+            <span style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em' }}>Direct messages</span>
           </div>
-          {members.filter(m=>m.email!==myEmail).map(m=>{
+          {dmMembers.length===0&&<div style={{ fontSize:12,color:c.mut,padding:'6px 10px' }}>No other members yet</div>}
+          {dmMembers.map(m=>{
             const dmKey='dm-'+m.email;
+            const isActive=activeSpace===dmKey;
             return(
-              <button key={m.id||m.email} onClick={()=>setActiveSpace(dmKey)} style={{ display:'flex',alignItems:'center',gap:7,padding:'6px 8px',borderRadius:8,border:'none',background:activeSpace===dmKey?'rgba(99,102,241,.2)':'transparent',color:activeSpace===dmKey?'#818CF8':c.mut,cursor:'pointer',fontSize:12,textAlign:'left',width:'100%',marginBottom:1 }}>
-                <div style={{ position:'relative',flexShrink:0 }}><Av member={m} size={20} url={m.avatar_url}/><div style={{ position:'absolute',bottom:-1,right:-1,width:7,height:7,borderRadius:'50%',background:'#34D399',border:'1.5px solid '+(c.dark?'rgba(10,8,30,.97)':'rgba(225,230,255,.9)') }}/></div>
+              <button key={m.email} onClick={()=>setActiveSpace(dmKey)} style={{ display:'flex',alignItems:'center',gap:9,padding:'7px 10px',borderRadius:9,border:'none',background:isActive?(c.dark?'rgba(99,102,241,.2)':'rgba(99,102,241,.12)'):'transparent',color:isActive?'#818CF8':c.sub,cursor:'pointer',fontSize:13,fontWeight:isActive?600:400,textAlign:'left',width:'100%' }}>
+                <div style={{ position:'relative',flexShrink:0 }}>
+                  <Av member={m} size={22} url={m.avatar_url}/>
+                  <div style={{ position:'absolute',bottom:-1,right:-1,width:7,height:7,borderRadius:'50%',background:'#34D399',border:'1.5px solid '+(c.dark?'#0F0D2A':'#F3F4FF') }}/>
+                </div>
                 <span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{(m.name||m.email).split(' ')[0]}</span>
               </button>
             );
           })}
-          {members.filter(m=>m.email!==myEmail).length===0&&(
-            <div style={{ fontSize:11,color:c.mut,padding:'6px 8px' }}>No other members yet</div>
-          )}
         </div>
       </div>
-      {/* Main chat area */}
-      <div style={{ display:'flex',flexDirection:'column',flex:1,minWidth:0,position:'relative' }}>
-      <div style={{ padding:'11px 14px',background:c.nav,borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',gap:8,flexShrink:0 }}>
-        <div style={{ display:'flex' }}>{members.slice(0,4).map((m,i)=><div key={m.id||m.email} style={{ marginLeft:i>0?-5:0 }}><Av member={m} size={24} url={m.avatar_url}/></div>)}</div>
-        <div style={{ flex:1 }}>
-          <span style={{ fontSize:13,fontWeight:700,color:c.text }}>
-            {activeSpace.startsWith('dm-')?(dmMember?'@ '+(dmMember.name||dmMember.email).split(' ')[0]:'Direct Message'):('# '+(customSpaces.find(s=>s.id===activeSpace)?.name||DEFAULT_SPACES.find(s=>s.id===activeSpace)?.label||activeSpace))}
-          </span>
-          <span style={{ fontSize:11,color:c.mut,marginLeft:8 }}>
-            {activeSpace.startsWith('dm-')?'Direct message':members.length+' members'}
-          </span>
+
+      {/* ── MAIN AREA ──────────────────────────────────────────────────── */}
+      <div style={{ flex:1,display:'flex',flexDirection:'column',minWidth:0,background:c.bg }}>
+
+        {/* Header */}
+        <div style={{ padding:'0 16px',height:52,display:'flex',alignItems:'center',gap:10,borderBottom:`1px solid ${c.bord}`,background:c.nav,flexShrink:0 }}>
+          <span style={{ fontSize:13,fontWeight:700,color:c.mut }}>{activeSpace.startsWith('dm-')?'@':'#'}</span>
+          <span style={{ fontSize:14,fontWeight:700,color:c.text }}>{activeLabel}</span>
+          {!activeSpace.startsWith('dm-')&&<span style={{ fontSize:12,color:c.mut }}>· {members.length} members</span>}
+          <div style={{ flex:1 }}/>
+          {pinnedMsgs.length>0&&<button onClick={()=>setShowPinned(!showPinned)} style={{ display:'flex',alignItems:'center',gap:5,padding:'4px 10px',borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',color:c.mut,fontSize:12 }}>📌 {pinnedMsgs.length}</button>}
+          <button onClick={()=>setShowFiles(!showFiles)} title="Files & links" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:showFiles?'rgba(99,102,241,.12)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:showFiles?'#818CF8':c.mut }}>🗂️</button>
         </div>
-        <button onClick={()=>setShowFiles(!showFiles)} title="Files & links" style={{ width:28,height:28,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:c.mut }}>🗂️</button>
-        <button onClick={()=>setShowTheme(!showTheme)} style={{ width:28,height:28,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13 }}>🎨</button>
-        {showTheme&&<div style={{ position:'absolute',right:10,top:52,background:c.dark?'rgba(18,15,50,.98)':'#fff',border:`1px solid ${c.bord}`,borderRadius:12,padding:10,zIndex:200,backdropFilter:'blur(20px)',boxShadow:'0 8px 24px rgba(0,0,0,.3)',width:240 }}><div style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8 }}>Chat theme</div><div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6 }}>{CHAT_THEMES.map(t=><button key={t.id} onClick={()=>{onChangeTheme(t.id);setShowTheme(false);}} style={{ padding:'9px 5px',borderRadius:9,border:`2px solid ${chatTheme===t.id?t.accent:c.bord}`,background:t.bg,cursor:'pointer',textAlign:'center' }}><div style={{ fontSize:10,fontWeight:600,color:chatTheme===t.id?t.accent:'rgba(255,255,255,.6)' }}>{t.label}</div></button>)}</div></div>}
-      </div>
-      {/* Pinned messages bar */}
-      {pinnedMsgs.length>0&&(
-        <div style={{ padding:'7px 14px',background:'rgba(245,158,11,.08)',borderBottom:`1px solid rgba(245,158,11,.2)`,display:'flex',alignItems:'center',gap:8,flexShrink:0,cursor:'pointer' }} onClick={()=>setShowPinned(!showPinned)}>
-          <span style={{ fontSize:12 }}>📌</span><span style={{ fontSize:12,color:'#FCD34D',fontWeight:600 }}>{pinnedMsgs.length} pinned message{pinnedMsgs.length!==1?'s':''}</span>
-          <span style={{ fontSize:11,color:'rgba(255,255,255,.4)',marginLeft:'auto' }}>{showPinned?'▲':'▼'}</span>
-        </div>
-      )}
-      {showPinned&&pinnedMsgs.length>0&&(
-        <div style={{ padding:'8px 14px',background:'rgba(245,158,11,.05)',borderBottom:`1px solid ${c.bord}`,maxHeight:120,overflowY:'auto',flexShrink:0 }}>
-          {pinnedMsgs.map(m=>(
-            <div key={m.id} style={{ display:'flex',alignItems:'center',gap:8,padding:'4px 0',borderBottom:`1px solid rgba(255,255,255,.05)` }}>
-              <span style={{ fontSize:11,color:'#FCD34D',flexShrink:0 }}>📌</span>
-              <span style={{ fontSize:12,color:'rgba(255,255,255,.7)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{m.sender_name}: {m.text||'[attachment]'}</span>
-              <button onClick={()=>pinMsg(m)} style={{ background:'none',border:'none',color:'rgba(255,255,255,.4)',cursor:'pointer',fontSize:13,flexShrink:0 }}>×</button>
-            </div>
-          ))}
-        </div>
-      )}
-      <div style={{ display:'flex',flex:1,minHeight:0 }}>
-        {/* Messages */}
-        <div style={{ flex:1,overflowY:'auto',padding:'12px',display:'flex',flexDirection:'column',gap:3,background:theme.bg }} onClick={()=>setContextMenu(null)}>
-          {spaceMessages.length===0&&<div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.35)',gap:8,paddingTop:32 }}><div style={{ fontSize:36 }}>{activeSpace.startsWith('dm-')?'👤':'💬'}</div><div style={{ fontSize:13 }}>{activeSpace.startsWith('dm-')?'Start a direct message':'No messages in this space yet'}</div></div>}
-          {grouped.map(group=>(
-            <div key={group.date}>
-              <div style={{ textAlign:'center',margin:'10px 0 6px',fontSize:11,color:'rgba(255,255,255,.3)',display:'flex',alignItems:'center',gap:6 }}><div style={{ flex:1,height:1,background:'rgba(255,255,255,.1)' }}/>{group.date}<div style={{ flex:1,height:1,background:'rgba(255,255,255,.1)' }}/></div>
-              {group.msgs.map(m=>{ const isMe=m.sender_email===myEmail; const member=members.find(x=>x.email===m.sender_email); const color=member?.color||theme.accent; const avatarUrl=member?.avatar_url||(isMe?myAvatar:undefined); return(
-                <div key={m.id} style={{ display:'flex',gap:7,alignItems:'flex-end',marginBottom:4,flexDirection:isMe?'row-reverse':'row',position:'relative' }}
-                  onContextMenu={e=>{e.preventDefault();setContextMenu({msgId:m.id,msg:m,x:e.clientX,y:e.clientY});}}>
-                  {!isMe&&<Av member={{name:m.sender_name,color}} size={26} url={avatarUrl}/>}
-                  {isMe&&<Av member={{name:myName,color:'#818CF8'}} size={26} url={myAvatar}/>}
-                  <div style={{ maxWidth:'72%' }}>
-                    {!isMe&&<div style={{ fontSize:10,color:'rgba(255,255,255,.45)',marginBottom:2,marginLeft:3 }}>{m.sender_name}</div>}
-                    <div style={{ position:'relative' }}>
-                      <div style={{ background:isMe?`linear-gradient(135deg,${theme.accent},${theme.accent}bb)`:'rgba(255,255,255,.12)',color:'#fff',padding:m.type!=='text'?6:'9px 13px',borderRadius:isMe?'14px 14px 4px 14px':'14px 14px 14px 4px',fontSize:13,backdropFilter:'blur(10px)' }}>{renderMsg(m)}</div>
-                      {isPinned(m.id)&&<span style={{ position:'absolute',top:-6,right:-6,fontSize:11 }}>📌</span>}
-                    </div>
-                    <div style={{ fontSize:10,color:'rgba(255,255,255,.28)',marginTop:2,textAlign:isMe?'right':'left',paddingLeft:isMe?0:3,paddingRight:isMe?3:0 }}>{new Date(m.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>
-                  </div>
-                </div>
-              );})}
-            </div>
-          ))}
-          <div ref={bottomRef}/>
-        </div>
-        {/* Files/Links sidebar panel */}
-        {showFiles&&(
-          <div style={{ width:220,flexShrink:0,borderLeft:`1px solid ${c.bord}`,background:c.dark?'rgba(10,8,30,.95)':'rgba(230,234,255,.9)',display:'flex',flexDirection:'column',overflow:'hidden' }}>
-            <div style={{ padding:'12px 14px',borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',justifyContent:'space-between' }}>
-              <span style={{ fontSize:13,fontWeight:700,color:c.text }}>Files & Links</span>
-              <button onClick={()=>setShowFiles(false)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:16 }}>×</button>
-            </div>
-            <div style={{ flex:1,overflowY:'auto',padding:'10px' }}>
-              {sharedFiles.length>0&&(<>
-                <div style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8 }}>Files ({sharedFiles.length})</div>
-                {sharedFiles.map(m=>(
-                  <div key={m.id} onClick={()=>window.open(m.url,'_blank')} style={{ display:'flex',alignItems:'center',gap:8,padding:'8px',borderRadius:8,background:c.surf,marginBottom:6,cursor:'pointer',border:`1px solid ${c.bord}` }}>
-                    <span style={{ fontSize:20,flexShrink:0 }}>{m.type==='image'?'🖼️':m.type==='pdf'?'📄':m.type==='video'?'🎬':m.type==='audio'?'🎵':'📎'}</span>
-                    <div style={{ flex:1,minWidth:0 }}>
-                      <div style={{ fontSize:11,fontWeight:600,color:c.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{m.filename||m.type}</div>
-                      <div style={{ fontSize:10,color:c.mut }}>{m.sender_name} · {new Date(m.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
-                    </div>
-                  </div>
-                ))}
-              </>)}
-              {sharedLinks.length>0&&(<>
-                <div style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',margin:'10px 0 8px' }}>Links ({sharedLinks.length})</div>
-                {sharedLinks.map(m=>{
-                  const urls=m.text.match(/https?:\/\/[^\s]+/g)||[];
-                  return urls.map((url,i)=>(
-                    <a key={m.id+i} href={url} target="_blank" rel="noreferrer" style={{ display:'block',padding:'8px',borderRadius:8,background:c.surf,marginBottom:6,border:`1px solid ${c.bord}`,textDecoration:'none' }}>
-                      <div style={{ fontSize:11,fontWeight:600,color:'#93C5FD',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{url}</div>
-                      <div style={{ fontSize:10,color:c.mut }}>{m.sender_name}</div>
-                    </a>
-                  ));
-                })}
-              </>)}
-              {sharedFiles.length===0&&sharedLinks.length===0&&<div style={{ fontSize:12,color:c.mut,textAlign:'center',marginTop:20 }}>No files or links shared yet</div>}
-            </div>
+
+        {/* Pinned messages */}
+        {showPinned&&pinnedMsgs.length>0&&(
+          <div style={{ padding:'8px 16px',borderBottom:`1px solid ${c.bord}`,background:'rgba(245,158,11,.05)',flexShrink:0,maxHeight:120,overflowY:'auto' }}>
+            {pinnedMsgs.map(m=>(
+              <div key={m.id} style={{ display:'flex',alignItems:'center',gap:8,padding:'5px 0',borderBottom:`1px solid rgba(245,158,11,.1)` }}>
+                <span style={{ fontSize:12,flexShrink:0 }}>📌</span>
+                <span style={{ fontSize:12,color:c.sub,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}><strong>{m.sender_name}:</strong> {m.text||'[attachment]'}</span>
+                <button onClick={()=>pinMsg(m)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:13,flexShrink:0 }}>✕</button>
+              </div>
+            ))}
           </div>
         )}
-      </div>
-      {/* Context menu */}
-      {contextMenu&&(
-        <div style={{ position:'fixed',left:Math.min(contextMenu.x,window.innerWidth-160),top:Math.min(contextMenu.y,window.innerHeight-120),zIndex:999,background:c.dark?'rgba(18,15,50,.98)':'#fff',border:`1px solid ${c.bord}`,borderRadius:10,padding:6,boxShadow:'0 4px 20px rgba(0,0,0,.3)',minWidth:150,backdropFilter:'blur(20px)' }} onClick={e=>e.stopPropagation()}>
-          {[
-            {l:isPinned(contextMenu.msg.id)?'Unpin message':'📌 Pin message',a:()=>pinMsg(contextMenu.msg)},
-            {l:'📋 Copy text',a:()=>{navigator.clipboard&&navigator.clipboard.writeText(contextMenu.msg.text||'');setContextMenu(null);}},
-            {l:'↩️ Reply',a:()=>{setMsg('@'+contextMenu.msg.sender_name+' ');setContextMenu(null);}},
-          ].map(item=>(
-            <button key={item.l} onClick={item.a} style={{ display:'block',width:'100%',padding:'8px 12px',borderRadius:7,border:'none',background:'transparent',color:c.text,cursor:'pointer',fontSize:13,textAlign:'left' }} onMouseEnter={e=>e.target.style.background=c.surfH} onMouseLeave={e=>e.target.style.background='transparent'}>{item.l}</button>
-          ))}
+
+        {/* Messages + Files panel */}
+        <div style={{ flex:1,display:'flex',minHeight:0 }}>
+
+          {/* Messages */}
+          <div style={{ flex:1,overflowY:'auto',padding:'12px 0' }} onClick={()=>{setContextMenu(null);setShowEmoji(false);}}>
+            {spaceMessages.length===0&&(
+              <div style={{ display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',color:c.mut,gap:10 }}>
+                <div style={{ fontSize:48 }}>{activeSpace.startsWith('dm-')?'👋':'💬'}</div>
+                <div style={{ fontSize:15,fontWeight:600,color:c.text }}>Start the conversation</div>
+                <div style={{ fontSize:13,color:c.mut }}>{activeSpace.startsWith('dm-')?'Send a message to '+activeLabel:'This is the start of #'+activeLabel}</div>
+              </div>
+            )}
+            {grouped.map(group=>(
+              <div key={group.date}>
+                <div style={{ display:'flex',alignItems:'center',gap:10,margin:'16px 16px 8px' }}>
+                  <div style={{ flex:1,height:1,background:c.bord }}/>
+                  <span style={{ fontSize:11,color:c.mut,fontWeight:600,whiteSpace:'nowrap' }}>{group.date}</span>
+                  <div style={{ flex:1,height:1,background:c.bord }}/>
+                </div>
+                {group.msgs.map((m,mi)=>{
+                  const isMe=m.sender_email===myEmail;
+                  const member=members.find(x=>x.email===m.sender_email);
+                  const avatarUrl=member?.avatar_url||(isMe?myAvatar:undefined);
+                  const showAvatar=mi===0||group.msgs[mi-1]?.sender_email!==m.sender_email;
+                  const msgReactions=reactions[m.id]||{};
+                  return(
+                    <div key={m.id}
+                      onContextMenu={e=>{e.preventDefault();e.stopPropagation();setContextMenu({msg:m,x:Math.min(e.clientX,window.innerWidth-180),y:Math.min(e.clientY,window.innerHeight-200)});}}
+                      style={{ display:'flex',gap:10,padding:'2px 16px',alignItems:'flex-start',position:'relative' }}
+                      onMouseEnter={e=>e.currentTarget.querySelector('.msg-actions')?.style&&(e.currentTarget.querySelector('.msg-actions').style.opacity='1')}
+                      onMouseLeave={e=>e.currentTarget.querySelector('.msg-actions')?.style&&(e.currentTarget.querySelector('.msg-actions').style.opacity='0')}
+                    >
+                      {/* Avatar column */}
+                      <div style={{ width:36,flexShrink:0,marginTop:showAvatar?2:0 }}>
+                        {showAvatar?<Av member={{name:m.sender_name,color:member?.color||'#818CF8'}} size={34} url={avatarUrl}/>:<div style={{ height:20 }}/>}
+                      </div>
+                      {/* Bubble */}
+                      <div style={{ flex:1,minWidth:0 }}>
+                        {showAvatar&&(
+                          <div style={{ display:'flex',alignItems:'baseline',gap:8,marginBottom:3 }}>
+                            <span style={{ fontSize:13,fontWeight:700,color:c.text }}>{m.sender_name}</span>
+                            <span style={{ fontSize:10,color:c.mut }}>{new Date(m.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</span>
+                          </div>
+                        )}
+                        {/* Reply preview */}
+                        {m.reply_to&&(
+                          <div style={{ display:'flex',gap:6,alignItems:'center',marginBottom:4,padding:'4px 8px',borderRadius:6,background:c.surf,borderLeft:`3px solid #818CF8`,maxWidth:320 }}>
+                            <span style={{ fontSize:11,color:'#818CF8',fontWeight:600 }}>{m.reply_to.name}</span>
+                            <span style={{ fontSize:11,color:c.mut,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{m.reply_to.text}</span>
+                          </div>
+                        )}
+                        {/* Message content */}
+                        <div style={{ fontSize:14,color:c.text,lineHeight:1.5,maxWidth:'80%' }}>
+                          {renderMsg(m)}
+                        </div>
+                        {isPinned(m.id)&&<span style={{ fontSize:10 }}>📌</span>}
+                        {/* Reactions */}
+                        {Object.keys(msgReactions).length>0&&(
+                          <div style={{ display:'flex',flexWrap:'wrap',gap:4,marginTop:5 }}>
+                            {Object.entries(msgReactions).map(([emoji,users])=>users.length>0&&(
+                              <button key={emoji} onClick={()=>addReaction(m.id,emoji)} style={{ display:'flex',alignItems:'center',gap:3,padding:'2px 8px',borderRadius:20,background:users.includes(myEmail)?'rgba(99,102,241,.2)':'rgba(255,255,255,.06)',border:`1px solid ${users.includes(myEmail)?'rgba(99,102,241,.4)':c.bord}`,cursor:'pointer',fontSize:13 }}>
+                                <span>{emoji}</span><span style={{ fontSize:11,color:c.mut,fontWeight:600 }}>{users.length}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {/* Hover actions */}
+                      <div className="msg-actions" style={{ opacity:0,transition:'opacity .15s',position:'absolute',right:16,top:-2,display:'flex',gap:2,background:c.nav,border:`1px solid ${c.bord}`,borderRadius:10,padding:'2px 4px',zIndex:10 }}>
+                        {['👍','❤️','😂','🎉'].map(e=>(
+                          <button key={e} onClick={()=>addReaction(m.id,e)} style={{ width:28,height:28,borderRadius:7,border:'none',background:'transparent',cursor:'pointer',fontSize:15,display:'flex',alignItems:'center',justifyContent:'center' }} title={'React '+e}>{e}</button>
+                        ))}
+                        <button onClick={()=>{setReplyTo(m);inputRef.current?.focus();}} style={{ width:28,height:28,borderRadius:7,border:'none',background:'transparent',cursor:'pointer',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',color:c.mut }} title="Reply">↩</button>
+                        <button onClick={()=>pinMsg(m)} style={{ width:28,height:28,borderRadius:7,border:'none',background:'transparent',cursor:'pointer',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',color:c.mut }} title="Pin">📌</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+            <div ref={bottomRef}/>
+          </div>
+
+          {/* Files/Links sidebar */}
+          {showFiles&&(
+            <div style={{ width:240,flexShrink:0,borderLeft:`1px solid ${c.bord}`,background:c.dark?'rgba(10,8,30,.95)':'rgba(230,234,255,.9)',display:'flex',flexDirection:'column' }}>
+              <div style={{ padding:'14px 14px 12px',borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0 }}>
+                <span style={{ fontSize:13,fontWeight:700,color:c.text }}>Files & Links</span>
+                <button onClick={()=>setShowFiles(false)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:18,lineHeight:1 }}>✕</button>
+              </div>
+              <div style={{ flex:1,overflowY:'auto',padding:'10px' }}>
+                {sharedFiles.length>0&&<>
+                  <div style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.07em',marginBottom:8 }}>Files ({sharedFiles.length})</div>
+                  {sharedFiles.map(m=>(
+                    <div key={m.id} onClick={()=>openFile(m.url,m.filename)} style={{ display:'flex',alignItems:'center',gap:8,padding:'9px',borderRadius:9,background:c.surf,marginBottom:7,cursor:'pointer',border:`1px solid ${c.bord}`,transition:'background .1s' }}>
+                      <span style={{ fontSize:22,flexShrink:0 }}>{m.type==='image'?'🖼️':m.type==='pdf'?'📄':m.type==='video'?'🎬':m.type==='audio'?'🎵':'📎'}</span>
+                      <div style={{ flex:1,minWidth:0 }}>
+                        <div style={{ fontSize:12,fontWeight:600,color:c.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{m.filename||m.type}</div>
+                        <div style={{ fontSize:10,color:c.mut }}>{m.sender_name} · {new Date(m.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
+                      </div>
+                    </div>
+                  ))}
+                </>}
+                {sharedLinks.length>0&&<>
+                  <div style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.07em',margin:'12px 0 8px' }}>Links ({sharedLinks.length})</div>
+                  {sharedLinks.map(m=>{
+                    const urls=(m.text||'').match(/https?:\/\/[^\s]+/g)||[];
+                    return urls.map((url,i)=>(
+                      <a key={m.id+i} href={url} target="_blank" rel="noreferrer" style={{ display:'block',padding:'8px',borderRadius:9,background:c.surf,marginBottom:7,border:`1px solid ${c.bord}`,textDecoration:'none' }}>
+                        <div style={{ fontSize:12,color:'#93C5FD',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{url}</div>
+                        <div style={{ fontSize:10,color:c.mut,marginTop:2 }}>{m.sender_name}</div>
+                      </a>
+                    ));
+                  })}
+                </>}
+                {sharedFiles.length===0&&sharedLinks.length===0&&<div style={{ fontSize:12,color:c.mut,textAlign:'center',padding:'24px 0' }}>No files or links yet</div>}
+              </div>
+            </div>
+          )}
         </div>
-      )}
-      {showGif&&<div style={{ padding:'9px 11px',background:c.nav,borderTop:`1px solid ${c.bord}`,flexShrink:0 }}>
-        <div style={{ display:'flex',gap:7,marginBottom:7 }}>
-          <input value={gifSearch} onChange={e=>setGifSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&searchGifs(gifSearch)} placeholder="Search GIFs..." style={{ flex:1,background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:8,padding:'6px 11px',color:c.text,fontSize:12,outline:'none' }}/>
-          <Btn onClick={()=>searchGifs(gifSearch)} loading={gifLoading} style={{ padding:'6px 12px',fontSize:11 }}>Search</Btn>
-          <button onClick={()=>setShowGif(false)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:18 }}>&times;</button>
+
+        {/* Context menu */}
+        {contextMenu&&(
+          <div style={{ position:'fixed',left:contextMenu.x,top:contextMenu.y,zIndex:9999,background:c.dark?'rgba(18,15,50,.98)':'#fff',border:`1px solid ${c.bord}`,borderRadius:12,padding:6,boxShadow:'0 8px 30px rgba(0,0,0,.25)',minWidth:180 }} onClick={e=>e.stopPropagation()}>
+            <div style={{ padding:'6px 10px 4px',borderBottom:`1px solid ${c.bord}`,marginBottom:4 }}>
+              <div style={{ fontSize:11,color:c.mut,marginBottom:6 }}>React</div>
+              <div style={{ display:'flex',gap:4 }}>{EMOJI_LIST.slice(0,8).map(e=><button key={e} onClick={()=>addReaction(contextMenu.msg.id,e)} style={{ width:30,height:30,borderRadius:8,border:'none',background:'transparent',cursor:'pointer',fontSize:17 }}>{e}</button>)}</div>
+            </div>
+            {[
+              {l:'↩️  Reply',a:()=>{setReplyTo(contextMenu.msg);setContextMenu(null);inputRef.current?.focus();}},
+              {l:isPinned(contextMenu.msg.id)?'📌 Unpin':'📌 Pin message',a:()=>pinMsg(contextMenu.msg)},
+              {l:'📋 Copy text',a:()=>{navigator.clipboard?.writeText(contextMenu.msg.text||'');setContextMenu(null);}},
+            ].map(item=>(
+              <button key={item.l} onClick={item.a} style={{ display:'block',width:'100%',padding:'8px 12px',borderRadius:8,border:'none',background:'transparent',color:c.text,cursor:'pointer',fontSize:13,textAlign:'left',fontWeight:400 }}
+                onMouseEnter={e=>{e.target.style.background=c.dark?'rgba(255,255,255,.06)':'rgba(0,0,0,.05)';}}
+                onMouseLeave={e=>{e.target.style.background='transparent';}}
+              >{item.l}</button>
+            ))}
+          </div>
+        )}
+
+        {/* Input area */}
+        <div style={{ padding:'0 16px 14px',flexShrink:0 }}>
+          {/* Reply preview */}
+          {replyTo&&(
+            <div style={{ display:'flex',alignItems:'center',gap:10,padding:'7px 12px',borderRadius:'10px 10px 0 0',background:c.surf,border:`1px solid ${c.bord}`,borderBottom:'none',marginBottom:-1 }}>
+              <span style={{ fontSize:12 }}>↩️</span>
+              <span style={{ fontSize:12,color:c.mut,flex:1 }}>Replying to <strong style={{ color:'#818CF8' }}>{replyTo.sender_name}</strong>: {(replyTo.text||'[attachment]').slice(0,60)}</span>
+              <button onClick={()=>setReplyTo(null)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:16 }}>✕</button>
+            </div>
+          )}
+
+          {/* GIF picker */}
+          {showGif&&(
+            <div style={{ padding:'10px',background:c.surf,border:`1px solid ${c.bord}`,borderRadius:replyTo?'0':'10px 10px 0 0',borderBottom:'none',marginBottom:-1 }}>
+              <div style={{ display:'flex',gap:7,marginBottom:8 }}>
+                <input value={gifSearch} onChange={e=>setGifSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&searchGifs(gifSearch)} placeholder="Search GIFs..." style={{ flex:1,background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:8,padding:'6px 10px',color:c.text,fontSize:12,outline:'none' }}/>
+                <Btn onClick={()=>searchGifs(gifSearch)} loading={gifLoading} style={{ padding:'6px 12px',fontSize:12 }}>Search</Btn>
+              </div>
+              <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:5,maxHeight:160,overflowY:'auto' }}>
+                {gifs.map(g=><img key={g.id} src={g.images.fixed_height_small.url} alt={g.title} onClick={()=>{sendMsg('','gif',g.images.original.url);setShowGif(false);}} style={{ width:'100%',borderRadius:7,cursor:'pointer',objectFit:'cover',height:70 }}/>)}
+              </div>
+            </div>
+          )}
+
+          {/* Emoji picker */}
+          {showEmoji&&(
+            <div style={{ padding:'10px',background:c.dark?'rgba(18,15,50,.98)':'#fff',border:`1px solid ${c.bord}`,borderRadius:'10px 10px 0 0',borderBottom:'none',marginBottom:-1,boxShadow:'0 -4px 20px rgba(0,0,0,.15)' }} onClick={e=>e.stopPropagation()}>
+              <div style={{ display:'flex',gap:2,marginBottom:8,borderBottom:`1px solid ${c.bord}`,paddingBottom:6 }}>
+                {Object.keys(EMOJI_GROUPS).map(g=>(
+                  <button key={g} onClick={()=>setEmojiGroup(g)} style={{ padding:'4px 10px',borderRadius:8,border:'none',background:emojiGroup===g?'rgba(99,102,241,.15)':'transparent',color:emojiGroup===g?'#818CF8':c.mut,cursor:'pointer',fontSize:12,fontWeight:emojiGroup===g?700:400 }}>{g}</button>
+                ))}
+              </div>
+              <div style={{ display:'grid',gridTemplateColumns:'repeat(9,1fr)',gap:2,maxHeight:160,overflowY:'auto' }}>
+                {EMOJI_GROUPS[emojiGroup].map(e=>(
+                  <button key={e} onClick={()=>{setMsg(m=>m+e);inputRef.current?.focus();}} style={{ width:32,height:32,borderRadius:7,border:'none',background:'transparent',cursor:'pointer',fontSize:20,display:'flex',alignItems:'center',justifyContent:'center' }}
+                    onMouseEnter={ev=>ev.target.style.background=c.dark?'rgba(255,255,255,.08)':'rgba(0,0,0,.06)'}
+                    onMouseLeave={ev=>ev.target.style.background='transparent'}
+                  >{e}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Main input */}
+          <div style={{ display:'flex',alignItems:'center',gap:7,padding:'8px 12px',background:c.surf,border:`1px solid ${c.bord}`,borderRadius:(replyTo||showGif||showEmoji)?'0 0 12px 12px':'12px',boxShadow:'0 1px 4px rgba(0,0,0,.06)' }}>
+            <input ref={fileRef} type="file" accept="image/*,video/*" onChange={handleFile} style={{ display:'none' }}/>
+            <input ref={attachRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.mp3,.wav,.ogg,video/*,image/*,application/*" onChange={handleFile} style={{ display:'none' }}/>
+            <button onClick={e=>{e.stopPropagation();setShowEmoji(!showEmoji);setShowGif(false);}} title="Emoji" style={{ width:32,height:32,borderRadius:8,border:'none',background:'transparent',cursor:'pointer',fontSize:20,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>😊</button>
+            <button onClick={()=>{attachRef.current.click();}} title="Attach file" style={{ width:32,height:32,borderRadius:8,border:'none',background:'transparent',cursor:'pointer',fontSize:17,display:'flex',alignItems:'center',justifyContent:'center',color:c.mut,flexShrink:0 }}>📎</button>
+            <button onClick={()=>{fileRef.current.click();}} title="Image" style={{ width:32,height:32,borderRadius:8,border:'none',background:'transparent',cursor:'pointer',fontSize:17,display:'flex',alignItems:'center',justifyContent:'center',color:c.mut,flexShrink:0 }}>🖼️</button>
+            <button onClick={e=>{e.stopPropagation();setShowGif(!showGif);setShowEmoji(false);}} title="GIF" style={{ height:28,padding:'0 8px',borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',fontSize:11,fontWeight:700,color:c.mut,flexShrink:0 }}>GIF</button>
+            <input ref={inputRef} value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg(msg);}}} placeholder={'Message '+(activeSpace.startsWith('dm-')?'@ ':'# ')+activeLabel} style={{ flex:1,background:'transparent',border:'none',color:c.text,fontSize:14,outline:'none',lineHeight:1.4 }}/>
+            <button onClick={()=>sendMsg(msg)} disabled={!msg.trim()} style={{ width:34,height:34,borderRadius:9,background:msg.trim()?'#6366F1':'transparent',border:msg.trim()?'none':`1px solid ${c.bord}`,color:msg.trim()?'#fff':c.mut,cursor:msg.trim()?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',fontSize:17,flexShrink:0,transition:'all .15s' }}>↑</button>
+          </div>
         </div>
-        {gifs.length>0&&<div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:4,maxHeight:130,overflowY:'auto' }}>{gifs.map(g=><img key={g.id} src={g.images.fixed_height_small.url} alt={g.title} onClick={()=>sendMsg('','gif',g.images.fixed_height.url)} style={{ width:'100%',height:66,objectFit:'cover',borderRadius:6,cursor:'pointer' }} onMouseEnter={e=>e.target.style.opacity='.7'} onMouseLeave={e=>e.target.style.opacity='1'}/>)}</div>}
-        {gifError&&<div style={{ fontSize:12,color:'#F87171',textAlign:'center',padding:'6px 0',lineHeight:1.5 }}>{gifError}</div>}
-        {gifs.length===0&&!gifLoading&&!gifError&&gifSearch&&<div style={{ fontSize:12,color:c.mut,textAlign:'center',padding:'6px 0' }}>No GIFs found — try another search</div>}
-      </div>}
-      <div style={{ padding:'9px 11px',background:c.nav,borderTop:`1px solid ${c.bord}`,display:'flex',gap:6,alignItems:'center',flexShrink:0 }}>
-        <input ref={fileRef} type="file" accept="image/*,video/*" onChange={handleImage} style={{ display:'none' }}/>
-        <input ref={attachRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.mp3,.wav,.ogg,video/*,image/*,application/*" onChange={handleAttach} style={{ display:'none' }}/>
-        <button onClick={()=>attachRef.current.click()} style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0 }} title="Send file (PDF, audio, video...)">📎</button>
-        <button onClick={()=>fileRef.current.click()} style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0 }} title="Send image">🖼️</button>
-        <button onClick={()=>setShowGif(!showGif)} style={{ width:30,height:30,borderRadius:8,border:`1px solid ${showGif?'#6366F1':c.bord}`,background:showGif?'rgba(99,102,241,.15)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:showGif?'#818CF8':c.mut,flexShrink:0 }}>GIF</button>
-        <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&sendMsg(msg)} placeholder={'Message '+(activeSpace.startsWith('dm-')?(dmMember?(dmMember.name||dmMember.email).split(' ')[0]:'DM'):'#'+(customSpaces.find(s=>s.id===activeSpace)?.name||activeSpace))+'...'} style={{ flex:1,background:c.inp,border:`1.5px solid ${c.inpB}`,borderRadius:9,padding:'8px 12px',color:c.text,fontSize:13,outline:'none' }}/>
-        <button onClick={()=>setShowFiles(!showFiles)} title="Files & links" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${showFiles?'#6366F1':c.bord}`,background:showFiles?'rgba(99,102,241,.15)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0,color:showFiles?'#818CF8':c.mut }}>🗂️</button>
-        <button onClick={()=>sendMsg(msg)} disabled={!msg.trim()} style={{ width:34,height:34,borderRadius:9,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',color:'#fff',cursor:msg.trim()?'pointer':'not-allowed',opacity:msg.trim()?1:.5,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>↑</button>
-      </div>
       </div>
     </div>
   );
