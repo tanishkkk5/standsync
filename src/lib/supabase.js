@@ -54,12 +54,24 @@ export async function getSession() {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const ROOM_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-function genRoomId() {
-  let id = '';
-  for (let i = 0; i < 6; i++) id += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)];
-  return id;
+
+// Room ID: derived from team name + random suffix e.g. XTRNS-K3M
+function genRoomId(teamName) {
+  // Take first 4-5 letters from team name (alphanumeric only, uppercase)
+  const prefix = (teamName || 'TEAM').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 5).padEnd(3, 'X');
+  // 3 random chars suffix
+  let suffix = '';
+  for (let i = 0; i < 3; i++) suffix += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)];
+  return prefix + '-' + suffix;
 }
-function genRoomPass() { return String(Math.floor(1000 + Math.random() * 9000)); }
+
+// Password: XXX-XXX format (6 alphanumeric split by dash) — memorable and unique
+function genRoomPass() {
+  let p1 = '', p2 = '';
+  for (let i = 0; i < 3; i++) p1 += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)];
+  for (let i = 0; i < 3; i++) p2 += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)];
+  return p1 + '-' + p2;
+}
 const COLORS = ['#818CF8','#38BDF8','#34D399','#F472B6','#FB923C','#E879F9','#F59E0B','#06B6D4','#8B5CF6','#EC4899'];
 
 // ── Teams ─────────────────────────────────────────────────────────────────────
@@ -79,7 +91,7 @@ export async function createTeam(name, ownerId, ownerEmail, ownerName, standupNa
   });
 
   // Create default room with unique ID
-  const room_id = genRoomId();
+  const room_id = genRoomId(name);
   const room_password = genRoomPass();
   const { data: room } = await supabase.from('rooms').insert({
     team_id: team.id,
@@ -134,7 +146,7 @@ export async function getTeamRooms(teamId) {
 }
 
 export async function createRoom(teamId, roomName, createdBy) {
-  const room_id = genRoomId();
+  const room_id = genRoomId(roomName);
   const room_password = genRoomPass();
   const { data } = await supabase.from('rooms').insert({
     team_id: teamId, name: roomName, room_id, room_password, created_by: createdBy,
@@ -152,7 +164,7 @@ export async function joinTeamByCode(roomId, password, userId, email, name) {
     .from('rooms')
     .select('*, teams(*)')
     .eq('room_id', roomId.toUpperCase().trim())
-    .eq('room_password', password.trim())
+    .eq('room_password', password.trim().toUpperCase())
     .single();
 
   if (error || !room) return { error: 'Invalid Room ID or password. Check with your manager.' };
