@@ -2744,14 +2744,15 @@ export default function App() {
   const [authLoading,setAuthLoading]=useState(false);
   const [view,setView]=useState(()=>{
     try {
+      // If URL has OAuth error, always show auth page
+      const urlParams=new URLSearchParams(window.location.search);
+      if(urlParams.get('error')||urlParams.get('error_code')) return 'auth';
       const raw = localStorage.getItem('ss-auth');
       if (!raw) return 'auth';
       const parsed = JSON.parse(raw);
       const hasSession = !!(parsed?.currentSession || parsed?.session);
       if (!hasSession) return 'auth';
-      // Restore last view (e.g. 'standup') so OAuth redirect returns correctly
       const savedView = localStorage.getItem('ss-view');
-      // But only restore standup/settings — auth/home are fine as defaults
       const team = localStorage.getItem('ss-team');
       if (savedView === 'standup' && team) return 'standup';
       return 'home';
@@ -2789,7 +2790,24 @@ export default function App() {
     try{ localStorage.setItem('ss-view',view); }catch(e){}
   },[view]);
 
-  useEffect(()=>{ const p=new URLSearchParams(window.location.search); const inv=p.get('invite'); if(inv)setInviteToken(inv); },[]);
+  useEffect(()=>{
+    const p=new URLSearchParams(window.location.search);
+    // Handle OAuth error redirect (e.g. bad_oauth_state, expired)
+    const oauthError=p.get('error') || p.get('error_code');
+    if(oauthError){
+      console.warn('OAuth redirect error:', oauthError, p.get('error_description'));
+      // Clear the error params from URL so page renders normally
+      window.history.replaceState({},'',window.location.pathname);
+      // Stay on auth page — don't crash
+      setView('auth');
+    }
+    const inv=p.get('invite');
+    if(inv) setInviteToken(inv);
+    // Also clear any OAuth code/token params that shouldn't stay in URL
+    if(p.get('code')||p.get('access_token')){
+      window.history.replaceState({},'',window.location.pathname);
+    }
+  },[]);
 
   useEffect(()=>{
     if(!SB.IS_LIVE){ setView('home'); return; }
@@ -2801,18 +2819,19 @@ export default function App() {
 
     if(SB.supabase){
       const {data:{subscription}} = SB.supabase.auth.onAuthStateChange((event, s)=>{
-        if(event==='SIGNED_OUT'){
-          setSession(null); setTeam(null); setMyRole('member'); setView('auth');
-          try{ localStorage.removeItem('ss-team'); localStorage.removeItem('ss-role'); localStorage.removeItem('ss-view'); }catch(e){}
-        } else if(s?.session){
-          // Any event with a valid session — update session and go to home if on auth page
-          // This covers: SIGNED_IN (normal + Google), INITIAL_SESSION, TOKEN_REFRESHED
-          setSession(s.session);
-          if(event==='SIGNED_IN' || event==='INITIAL_SESSION'){
-            setView(v=>v==='auth'?'home':v);
+        try {
+          if(event==='SIGNED_OUT'){
+            setSession(null); setTeam(null); setMyRole('member'); setView('auth');
+            try{ localStorage.removeItem('ss-team'); localStorage.removeItem('ss-role'); localStorage.removeItem('ss-view'); }catch(e){}
+          } else if(s?.session){
+            setSession(s.session);
+            if(event==='SIGNED_IN' || event==='INITIAL_SESSION'){
+              setView(v=>v==='auth'?'home':v);
+            }
           }
+        } catch(err) {
+          console.error('Auth state change error:', err);
         }
-        // No session + not SIGNED_OUT = token refresh in progress, ignore completely
       });
       return ()=>subscription.unsubscribe();
     }
