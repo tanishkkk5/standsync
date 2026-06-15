@@ -239,15 +239,37 @@ export async function acceptInvite(token, userId, email, name) {
 
 // ── Standups & Tasks ──────────────────────────────────────────────────────────
 export async function getOrCreateStandup(teamId, date) {
-  let { data, error } = await supabase.from('standups').select('*').eq('team_id', teamId).eq('date', date).single();
-  if (error?.code === 'PGRST116') {
-    const { data: c } = await supabase.from('standups').insert({ team_id: teamId, date }).select().single();
-    return c;
+  if (!teamId) return null;
+  // Try to find existing standup for this team+date
+  const { data: existing } = await supabase
+    .from('standups')
+    .select('*')
+    .eq('team_id', teamId)
+    .eq('date', date)
+    .maybeSingle();
+  if (existing) return existing;
+  // Create new standup
+  const { data: created, error } = await supabase
+    .from('standups')
+    .insert({ team_id: teamId, date })
+    .select()
+    .single();
+  if (error) {
+    console.error('getOrCreateStandup error:', error.message);
+    // If conflict (race condition), fetch again
+    const { data: retry } = await supabase
+      .from('standups')
+      .select('*')
+      .eq('team_id', teamId)
+      .eq('date', date)
+      .maybeSingle();
+    return retry;
   }
-  return data;
+  return created;
 }
 
 export async function getTasks(standupId) {
+  if (!standupId) return [];
   const { data } = await supabase.from('tasks').select('*').eq('standup_id', standupId).order('created_at');
   return data || [];
 }
