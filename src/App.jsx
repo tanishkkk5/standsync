@@ -447,13 +447,15 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
           </div>
           {memberEmails.map((em,i)=>{
             const isOwn=em.trim()!==''&&em.trim().toLowerCase()===(session?.user?.email||'').toLowerCase();
+            const isInvalid=em.trim()!==''&&!em.trim().match(/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/)&&!isOwn;
             return(
               <div key={i} style={{ marginBottom:8 }}>
                 <div style={{ display:'flex',gap:8 }}>
-                  <Inp value={em} onChange={e=>setMemberEmails(p=>p.map((x,idx)=>idx===i?e.target.value:x))} placeholder="colleague@company.com" type="email" style={{ flex:1,borderColor:isOwn?'rgba(239,68,68,.6)':undefined }}/>
+                  <Inp value={em} onChange={e=>setMemberEmails(p=>p.map((x,idx)=>idx===i?e.target.value:x))} placeholder="colleague@company.com" type="email" style={{ flex:1,borderColor:isOwn?'rgba(239,68,68,.6)':isInvalid?'rgba(245,158,11,.6)':undefined }}/>
                   {memberEmails.length>1&&<button onClick={()=>setMemberEmails(p=>p.filter((_,idx)=>idx!==i))} style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',borderRadius:8,color:'#F87171',cursor:'pointer',padding:'0 12px',fontSize:18,flexShrink:0 }}>×</button>}
                 </div>
-                {isOwn&&<div style={{ fontSize:11,color:'#F87171',marginTop:3,paddingLeft:2 }}>⚠️ That is your own email — you are already added as manager. Add your teammates instead.</div>}
+                {isOwn&&<div style={{ fontSize:11,color:'#F87171',marginTop:3,paddingLeft:2 }}>⚠️ That is your own email — you are already the manager</div>}
+                {!isOwn&&isInvalid&&<div style={{ fontSize:11,color:'#F97316',marginTop:3,paddingLeft:2 }}>⚠️ This does not look like a valid email address</div>}
               </div>
             );
           })}
@@ -503,11 +505,11 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
   const QUICK=['Focus today?','Team progress?','Any blockers?','My tasks'];
   return (
     <>
-      <button onClick={()=>setOpen(!open)} style={{ position:'fixed',bottom:24,right:24,zIndex:800,width:52,height:52,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,boxShadow:'0 4px 24px rgba(99,102,241,.5)',transition:'transform .2s',transform:open?'scale(.9)':'scale(1)' }}>{open?'\u2715':'\uD83E\uDD16'}</button>
+      <button onClick={()=>setOpen(!open)} style={{ position:'fixed',bottom:24,right:24,zIndex:800,width:52,height:52,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,boxShadow:'0 4px 24px rgba(99,102,241,.5)',transition:'transform .2s',transform:open?'scale(.9)':'scale(1)' }}>{open?'✕':'🤖'}</button>
       {open&&(
         <div style={{ position:'fixed',bottom:88,right:24,zIndex:799,width:320,maxHeight:460,background:c.dark?'rgba(12,10,32,.97)':'#fff',border:`1px solid ${c.bord}`,borderRadius:18,display:'flex',flexDirection:'column',boxShadow:'0 8px 40px rgba(0,0,0,.4)',overflow:'hidden',animation:'popIn .2s ease' }}>
           <div style={{ padding:'12px 14px',borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',gap:8,background:'rgba(99,102,241,.08)',flexShrink:0 }}>
-            <div style={{ width:30,height:30,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>\uD83E\uDD16</div>
+            <div style={{ width:30,height:30,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>🤖</div>
             <div style={{ flex:1 }}><div style={{ fontSize:13,fontWeight:700,color:c.text }}>StandSync AI</div><div style={{ fontSize:10,color:'#34D399' }}>Online</div></div>
           </div>
           <div style={{ padding:'7px 10px',display:'flex',gap:5,flexWrap:'wrap',borderBottom:`1px solid ${c.bord}`,flexShrink:0 }}>
@@ -526,11 +528,85 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
           </div>
           <div style={{ padding:'9px 10px',borderTop:`1px solid ${c.bord}`,display:'flex',gap:7,flexShrink:0 }}>
             <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()} placeholder="Ask me anything..." style={{ flex:1,background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:9,padding:'8px 11px',color:c.text,fontSize:12,outline:'none' }}/>
-            <button onClick={send} disabled={!input.trim()||loading} style={{ width:34,height:34,borderRadius:9,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',color:'#fff',cursor:input.trim()&&!loading?'pointer':'not-allowed',opacity:input.trim()&&!loading?1:.5,display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0 }}>\u2191</button>
+            <button onClick={send} disabled={!input.trim()||loading} style={{ width:34,height:34,borderRadius:9,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',color:'#fff',cursor:input.trim()&&!loading?'pointer':'not-allowed',opacity:input.trim()&&!loading?1:.5,display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0 }}>↑</button>
           </div>
         </div>
       )}
     </>
+  );
+}
+
+// ─── AI ASSISTANT PAGE ────────────────────────────────────────────────────────
+function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], teamName='Team' }) {
+  const c=useC();
+  const [msgs,setMsgs]=useState([{id:'w',role:'assistant',text:'Hi! I am your StandSync AI assistant. Ask me anything about your tasks, team progress, blockers, or what to focus on today.'}]);
+  const [input,setInput]=useState(''); const [loading,setLoading]=useState(false);
+  const bottomRef=useRef(); const name=session?.user?.user_metadata?.name||'User';
+  const done=tasks.filter(t=>t.status==='done').length;
+  const pct=tasks.length?Math.round(done/tasks.length*100):0;
+
+  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:'smooth'}); },[msgs]);
+
+  const send=async(text)=>{
+    const msg=text||input.trim();
+    if(!msg||loading)return;
+    setMsgs(p=>[...p,{id:'u'+Date.now(),role:'user',text:msg}]);
+    setInput(''); setLoading(true);
+    try{
+      const reply=await askAI(msg,{tasks,members,history,teamName,userName:name,myTasks});
+      setMsgs(p=>[...p,{id:'a'+Date.now(),role:'assistant',text:reply}]);
+    }catch(e){
+      setMsgs(p=>[...p,{id:'e'+Date.now(),role:'assistant',text:'Sorry, had trouble with that. Try again!'}]);
+    }
+    setLoading(false);
+  };
+
+  const QUICK=['What should I focus on today?','How is the team doing?','Any blockers?',"Today's summary",'Who is performing best?'];
+
+  return(
+    <div style={{ display:'flex',flexDirection:'column',height:'calc(100vh - 160px)',minHeight:500,borderRadius:16,overflow:'hidden',border:`1px solid ${c.bord}` }}>
+      {/* Header */}
+      <div style={{ padding:'16px 20px',background:c.surf,borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',gap:12,flexShrink:0 }}>
+        <div style={{ width:42,height:42,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0 }}>🤖</div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:15,fontWeight:700,color:c.text }}>StandSync AI</div>
+          <div style={{ fontSize:12,color:'#34D399' }}>● Online · {process.env.REACT_APP_GEMINI_KEY?'Google Gemini':'Smart fallback mode'}</div>
+        </div>
+        <div style={{ textAlign:'right' }}>
+          <div style={{ fontSize:12,color:c.mut }}>Team completion</div>
+          <div style={{ fontSize:18,fontWeight:700,color:pct>=80?'#34D399':pct>=50?'#818CF8':'#F97316' }}>{pct}%</div>
+        </div>
+      </div>
+      {/* Quick actions */}
+      <div style={{ padding:'10px 16px',borderBottom:`1px solid ${c.bord}`,display:'flex',gap:6,flexWrap:'wrap',flexShrink:0,background:c.nav }}>
+        {QUICK.map(q=><button key={q} onClick={()=>send(q)} style={{ fontSize:12,padding:'5px 12px',borderRadius:20,border:`1px solid ${c.bord}`,background:c.surf,color:c.sub,cursor:'pointer',whiteSpace:'nowrap',transition:'all .15s' }}>{q}</button>)}
+      </div>
+      {/* Messages */}
+      <div style={{ flex:1,overflowY:'auto',padding:'16px',display:'flex',flexDirection:'column',gap:10,background:c.bg }}>
+        {msgs.map(m=>(
+          <div key={m.id} style={{ display:'flex',gap:10,alignItems:'flex-start',flexDirection:m.role==='user'?'row-reverse':'row' }}>
+            {m.role==='assistant'&&<div style={{ width:32,height:32,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>🤖</div>}
+            <div style={{ maxWidth:'78%',background:m.role==='user'?'linear-gradient(135deg,#6366F1,#818CF8)':c.surf,color:m.role==='user'?'#fff':c.text,padding:'11px 15px',borderRadius:m.role==='user'?'16px 16px 4px 16px':'16px 16px 16px 4px',fontSize:13,lineHeight:1.6,border:m.role==='user'?'none':`1px solid ${c.bord}`,boxShadow:m.role==='assistant'?'0 1px 4px rgba(0,0,0,.06)':'none' }}>
+              {m.text.split('\n').map((line,i)=><div key={i} style={{ marginBottom:line?2:6 }}>{line||<br/>}</div>)}
+            </div>
+          </div>
+        ))}
+        {loading&&(
+          <div style={{ display:'flex',gap:8,alignItems:'flex-start' }}>
+            <div style={{ width:32,height:32,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>🤖</div>
+            <div style={{ padding:'11px 16px',background:c.surf,borderRadius:'16px 16px 16px 4px',border:`1px solid ${c.bord}`,display:'flex',gap:5,alignItems:'center' }}>
+              {[0,1,2].map(i=><div key={i} style={{ width:7,height:7,borderRadius:'50%',background:'#818CF8',animation:`bounce .8s ease ${i*.15}s infinite` }}/>)}
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef}/>
+      </div>
+      {/* Input */}
+      <div style={{ padding:'12px 16px',borderTop:`1px solid ${c.bord}`,display:'flex',gap:8,background:c.nav,flexShrink:0 }}>
+        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&send()} placeholder="Ask about tasks, blockers, team performance..." style={{ flex:1,background:c.inp,border:`1.5px solid ${c.inpB}`,borderRadius:10,padding:'10px 14px',color:c.text,fontSize:13,outline:'none' }}/>
+        <button onClick={()=>send()} disabled={!input.trim()||loading} style={{ width:40,height:40,borderRadius:10,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',color:'#fff',cursor:input.trim()&&!loading?'pointer':'not-allowed',opacity:input.trim()&&!loading?1:.5,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0 }}>↑</button>
+      </div>
+    </div>
   );
 }
 
@@ -572,11 +648,11 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
       <div style={{ padding:'11px 14px',background:c.nav,borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',gap:8,flexShrink:0 }}>
         <div style={{ display:'flex' }}>{members.slice(0,4).map((m,i)=><div key={m.id||m.email} style={{ marginLeft:i>0?-5:0 }}><Av member={m} size={24} url={m.avatar_url}/></div>)}</div>
         <div style={{ flex:1 }}><span style={{ fontSize:13,fontWeight:700,color:c.text }}>Team Chat</span><span style={{ fontSize:11,color:c.mut,marginLeft:8 }}>{members.length} members</span></div>
-        <button onClick={()=>setShowTheme(!showTheme)} style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14 }}>\uD83C\uDFA8</button>
+        <button onClick={()=>setShowTheme(!showTheme)} style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14 }}>🎨</button>
         {showTheme&&<div style={{ position:'absolute',right:10,top:52,background:c.dark?'rgba(18,15,50,.98)':'#fff',border:`1px solid ${c.bord}`,borderRadius:12,padding:10,zIndex:200,backdropFilter:'blur(20px)',boxShadow:'0 8px 24px rgba(0,0,0,.3)',width:240 }}><div style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8 }}>Chat theme</div><div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6 }}>{CHAT_THEMES.map(t=><button key={t.id} onClick={()=>{onChangeTheme(t.id);setShowTheme(false);}} style={{ padding:'9px 5px',borderRadius:9,border:`2px solid ${chatTheme===t.id?t.accent:c.bord}`,background:t.bg,cursor:'pointer',textAlign:'center' }}><div style={{ fontSize:10,fontWeight:600,color:chatTheme===t.id?t.accent:'rgba(255,255,255,.6)' }}>{t.label}</div></button>)}</div></div>}
       </div>
       <div style={{ flex:1,overflowY:'auto',padding:'12px',display:'flex',flexDirection:'column',gap:3,background:theme.bg }}>
-        {messages.length===0&&<div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.35)',gap:8,paddingTop:32 }}><div style={{ fontSize:36 }}>\uD83D\uDCAC</div><div style={{ fontSize:13 }}>No messages yet</div></div>}
+        {messages.length===0&&<div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.35)',gap:8,paddingTop:32 }}><div style={{ fontSize:36 }}>💬</div><div style={{ fontSize:13 }}>No messages yet</div></div>}
         {grouped.map(group=>(
           <div key={group.date}>
             <div style={{ textAlign:'center',margin:'10px 0 6px',fontSize:11,color:'rgba(255,255,255,.3)',display:'flex',alignItems:'center',gap:6 }}><div style={{ flex:1,height:1,background:'rgba(255,255,255,.1)' }}/>{group.date}<div style={{ flex:1,height:1,background:'rgba(255,255,255,.1)' }}/></div>
@@ -605,10 +681,10 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
       </div>}
       <div style={{ padding:'9px 11px',background:c.nav,borderTop:`1px solid ${c.bord}`,display:'flex',gap:7,alignItems:'center',flexShrink:0 }}>
         <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} style={{ display:'none' }}/>
-        <button onClick={()=>fileRef.current.click()} style={{ width:32,height:32,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0 }} title="Image">\uD83D\uDDBC\uFE0F</button>
+        <button onClick={()=>fileRef.current.click()} style={{ width:32,height:32,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0 }} title="Image">🖼️</button>
         <button onClick={()=>setShowGif(!showGif)} style={{ width:32,height:32,borderRadius:8,border:`1px solid ${showGif?'#6366F1':c.bord}`,background:showGif?'rgba(99,102,241,.15)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:showGif?'#818CF8':c.mut,flexShrink:0 }}>GIF</button>
         <input value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&sendMsg(msg)} placeholder="Message your team..." style={{ flex:1,background:c.inp,border:`1.5px solid ${c.inpB}`,borderRadius:9,padding:'8px 12px',color:c.text,fontSize:13,outline:'none' }}/>
-        <button onClick={()=>sendMsg(msg)} disabled={!msg.trim()} style={{ width:34,height:34,borderRadius:9,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',color:'#fff',cursor:msg.trim()?'pointer':'not-allowed',opacity:msg.trim()?1:.5,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>\u2191</button>
+        <button onClick={()=>sendMsg(msg)} disabled={!msg.trim()} style={{ width:34,height:34,borderRadius:9,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',color:'#fff',cursor:msg.trim()?'pointer':'not-allowed',opacity:msg.trim()?1:.5,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>↑</button>
       </div>
     </div>
   );
@@ -642,7 +718,7 @@ function RemindersPanel() {
           </Card>
         ))}
       </div>
-      <Btn onClick={save}>{saved?'\u2713 Saved!':'Save reminders'}</Btn>
+      <Btn onClick={save}>{saved?'✓ Saved!':'Save reminders'}</Btn>
     </div>
   );
 }
@@ -650,11 +726,11 @@ function RemindersPanel() {
 // ─── GOOGLE CALENDAR ─────────────────────────────────────────────────────
 function CalendarPanel({ team }) {
   const c=useC(); const [connected,setConnected]=useState(false); const [selectedMeeting,setSelectedMeeting]=useState(null); const [step,setStep]=useState(1); const [importedMembers,setImportedMembers]=useState([]);
-  const MOCK=[{id:'m1',title:team?.standup_name||'Daily Standup',time:'9:00 AM',days:'Mon-Sat',attendees:['tanisk.pandey@xtransmatrix.com','deepak.nr@xtransmatrix.com']},{id:'m2',title:'Weekly Review',time:'3:00 PM',days:'Fridays',attendees:['tanisk.pandey@xtransmatrix.com']}];
+  const MOCK=[{id:'m1',title:team?.standup_name||'Daily Standup',time:'9:00 AM',days:'Mon-Sat',attendees:['tanisk.pandey@xtransmatrix.com','deepak.nr@xtransmatrix.com','madhan.m@xtransmatrix.com']}];
   const selectedMeet=MOCK.find(m=>m.id===selectedMeeting);
   if(!connected) return(
     <div style={{ textAlign:'center',padding:'40px 20px' }}>
-      <div style={{ fontSize:44,marginBottom:14 }}>\uD83D\uDCC5</div>
+      <div style={{ fontSize:44,marginBottom:14 }}>📅</div>
       <h3 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:8 }}>Connect Google Calendar</h3>
       <p style={{ fontSize:13,color:c.mut,marginBottom:22,lineHeight:1.7,maxWidth:360,margin:'0 auto 22px' }}>Link your Google Calendar to find standup meetings and import attendees.</p>
       <Btn v="ghost" onClick={()=>setConnected(true)} style={{ margin:'0 auto' }}>Connect with Google</Btn>
@@ -664,9 +740,9 @@ function CalendarPanel({ team }) {
   return(
     <div>
       <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:18 }}><div style={{ width:8,height:8,borderRadius:'50%',background:'#34D399' }}/><span style={{ fontSize:13,color:'#34D399',fontWeight:600 }}>Google Calendar connected</span><button onClick={()=>setConnected(false)} style={{ marginLeft:'auto',fontSize:12,color:c.mut,background:'none',border:'none',cursor:'pointer' }}>Disconnect</button></div>
-      {step===1&&(<><Lbl>Select your standup meeting</Lbl><div style={{ display:'flex',flexDirection:'column',gap:10,marginBottom:14 }}>{MOCK.map(m=><div key={m.id} onClick={()=>setSelectedMeeting(m.id===selectedMeeting?null:m.id)} style={{ padding:'12px 14px',borderRadius:11,border:`1.5px solid ${m.id===selectedMeeting?'#6366F1':c.bord}`,background:m.id===selectedMeeting?'rgba(99,102,241,.1)':c.surf,cursor:'pointer',transition:'all .2s' }}><div style={{ display:'flex',alignItems:'center',gap:9 }}><div style={{ width:32,height:32,borderRadius:9,background:'rgba(99,102,241,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16 }}>\uD83D\uDCC5</div><div style={{ flex:1 }}><div style={{ fontSize:13,fontWeight:600,color:c.text }}>{m.title}</div><div style={{ fontSize:11,color:c.mut }}>{m.time} \u00b7 {m.days} \u00b7 {m.attendees.length} attendees</div></div>{m.id===selectedMeeting&&<div style={{ width:18,height:18,borderRadius:'50%',background:'#6366F1',display:'flex',alignItems:'center',justifyContent:'center' }}><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg></div>}</div></div>)}</div>{selectedMeeting&&<Btn onClick={()=>setStep(2)}>Select members \u2192</Btn>}</>)}
-      {step===2&&selectedMeet&&(<><Lbl>Select members to add</Lbl><button onClick={()=>setImportedMembers(selectedMeet.attendees)} style={{ fontSize:12,color:'#818CF8',background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.25)',borderRadius:8,padding:'4px 11px',cursor:'pointer',marginBottom:10 }}>Select all</button>{selectedMeet.attendees.map(email=><div key={email} onClick={()=>setImportedMembers(p=>p.includes(email)?p.filter(x=>x!==email):[...p,email])} style={{ display:'flex',alignItems:'center',gap:10,padding:'9px 12px',borderRadius:9,border:`1px solid ${importedMembers.includes(email)?'#6366F1':c.bord}`,background:importedMembers.includes(email)?'rgba(99,102,241,.1)':c.surf,cursor:'pointer',marginBottom:7 }}><Av member={{name:email.split('@')[0],color:'#818CF8'}} size={30}/><span style={{ flex:1,fontSize:13,color:c.text }}>{email}</span></div>)}<div style={{ display:'flex',gap:8,marginTop:10 }}><Btn v="ghost" onClick={()=>setStep(1)}>\u2190 Back</Btn><Btn onClick={()=>setStep(3)} disabled={!importedMembers.length}>Add {importedMembers.length} \u2192</Btn></div></>)}
-      {step===3&&<div style={{ textAlign:'center',padding:'20px 0' }}><div style={{ fontSize:40,marginBottom:10 }}>\uD83C\uDF89</div><h3 style={{ color:c.text,marginBottom:6 }}>Done!</h3><p style={{ color:c.mut,fontSize:13,marginBottom:14 }}>{importedMembers.length} members added.</p><Btn onClick={()=>{setStep(1);setSelectedMeeting(null);setImportedMembers([]);}}>Done</Btn></div>}
+      {step===1&&(<><Lbl>Select your standup meeting</Lbl><div style={{ display:'flex',flexDirection:'column',gap:10,marginBottom:14 }}>{MOCK.map(m=><div key={m.id} onClick={()=>setSelectedMeeting(m.id===selectedMeeting?null:m.id)} style={{ padding:'12px 14px',borderRadius:11,border:`1.5px solid ${m.id===selectedMeeting?'#6366F1':c.bord}`,background:m.id===selectedMeeting?'rgba(99,102,241,.1)':c.surf,cursor:'pointer',transition:'all .2s' }}><div style={{ display:'flex',alignItems:'center',gap:9 }}><div style={{ width:32,height:32,borderRadius:9,background:'rgba(99,102,241,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16 }}>📅</div><div style={{ flex:1 }}><div style={{ fontSize:13,fontWeight:600,color:c.text }}>{m.title}</div><div style={{ fontSize:11,color:c.mut }}>{m.time} · {m.days} · {m.attendees.length} attendees</div></div>{m.id===selectedMeeting&&<div style={{ width:18,height:18,borderRadius:'50%',background:'#6366F1',display:'flex',alignItems:'center',justifyContent:'center' }}><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg></div>}</div></div>)}</div>{selectedMeeting&&<Btn onClick={()=>setStep(2)}>Select members →</Btn>}</>)}
+      {step===2&&selectedMeet&&(<><Lbl>Select members to add</Lbl><button onClick={()=>setImportedMembers(selectedMeet.attendees)} style={{ fontSize:12,color:'#818CF8',background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.25)',borderRadius:8,padding:'4px 11px',cursor:'pointer',marginBottom:10 }}>Select all</button>{selectedMeet.attendees.map(email=><div key={email} onClick={()=>setImportedMembers(p=>p.includes(email)?p.filter(x=>x!==email):[...p,email])} style={{ display:'flex',alignItems:'center',gap:10,padding:'9px 12px',borderRadius:9,border:`1px solid ${importedMembers.includes(email)?'#6366F1':c.bord}`,background:importedMembers.includes(email)?'rgba(99,102,241,.1)':c.surf,cursor:'pointer',marginBottom:7 }}><Av member={{name:email.split('@')[0],color:'#818CF8'}} size={30}/><span style={{ flex:1,fontSize:13,color:c.text }}>{email}</span></div>)}<div style={{ display:'flex',gap:8,marginTop:10 }}><Btn v="ghost" onClick={()=>setStep(1)}>← Back</Btn><Btn onClick={()=>setStep(3)} disabled={!importedMembers.length}>Add {importedMembers.length} →</Btn></div></>)}
+      {step===3&&<div style={{ textAlign:'center',padding:'20px 0' }}><div style={{ fontSize:40,marginBottom:10 }}>🎉</div><h3 style={{ color:c.text,marginBottom:6 }}>Done!</h3><p style={{ color:c.mut,fontSize:13,marginBottom:14 }}>{importedMembers.length} members added.</p><Btn onClick={()=>{setStep(1);setSelectedMeeting(null);setImportedMembers([]);}}>Done</Btn></div>}
     </div>
   );
 }
@@ -1104,7 +1180,8 @@ export default function App() {
     } catch(e){ return 'auth'; }
   });
   const [team,setTeam]=useState(null); const [myRole,setMyRole]=useState('member');
-  const [members,setMembers]=useState(SB.IS_LIVE?[]:DEMO_MEMBERS); const [tasks,setTasks]=useState([]); const [standup,setStandup]=useState(null);
+  const [members,setMembers]=useState(SB.IS_LIVE?[]:DEMO_MEMBERS);
+  const [homeKey,setHomeKey]=useState(0); const [tasks,setTasks]=useState([]); const [standup,setStandup]=useState(null);
   const [history,setHistory]=useState([]); const [messages,setMessages]=useState([]); const [chatTheme,setChatTheme]=useState('default');
   const [toast,setToast]=useState(null); const [emailBusy,setEmailBusy]=useState(false); const [inviteToken,setInviteToken]=useState(null);
   const isManager=myRole==='manager'||!SB.IS_LIVE;
@@ -1213,10 +1290,10 @@ export default function App() {
       {toast&&<ToastEl msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
       {view==='auth'&&<AuthPage onLogin={handleLogin} inviteToken={inviteToken}/>}
       {/* App views */}
-      {(session||!SB.IS_LIVE)&&view==='home'&&<HomeView session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onSelectTeam={handleSelectTeam} onLogout={handleLogout} onSettings={()=>setView('settings')}/>}
+      {(session||!SB.IS_LIVE)&&view==='home'&&<HomeView key={homeKey} session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onSelectTeam={handleSelectTeam} onLogout={handleLogout} onSettings={()=>setView('settings')}/>}
       {(session||!SB.IS_LIVE)&&view==='settings'&&<SettingsPage session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onBack={()=>setView(team?'standup':'home')} onSaved={d=>showToast('Profile saved')}/>}
-      {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>setView('home')} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers}/>}
-      {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<MemberView user={userForView} myMember={myMember} tasks={tasks} onAdd={handleAddTask} onStatus={handleStatus} onBlocker={handleBlocker} onBack={()=>setView('home')} onSettings={()=>setView('settings')} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} members={members} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme}/>}
+      {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers}/>}
+      {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<MemberView user={userForView} myMember={myMember} tasks={tasks} onAdd={handleAddTask} onStatus={handleStatus} onBlocker={handleBlocker} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} members={members} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme}/>}
     </ThemeCtx.Provider>
   );
 }
