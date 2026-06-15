@@ -2478,14 +2478,15 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
 }
 // ─── MANAGER VIEW ─────────────────────────────────────────────────────────────
 // Tab icons — plain text symbols, no JSX at module level
-const ICONS_MAP={
+// eslint-disable-next-line
+var STANDSYNC_ICONS_MAP={
   live:'◉', team:'⚇', perf:'↗', analysis:'▤', ai:'✦',
   chat:'◌', cal:'⊟', notes:'≡', remind:'◔', hist:'↺', tset:'⚙', pip:'⧉'
 };
 // I object maps to same strings for backward compat
-const I=ICONS_MAP;
+const I=STANDSYNC_ICONS_MAP;
 
-const MGR_TABS=[
+var STANDSYNC_MGR_TABS=[
   {id:'live',     l:'Live board',    ic:'◉'},
   {id:'team',     l:'Team',          ic:'⚇'},
   {id:'perf',     l:'Performance',   ic:'↗'},
@@ -2523,7 +2524,7 @@ function ManagerView({ session, team, tasks, members, history, standup, onStatus
           <Logo size={26} onClick={onBack}/>
           <nav style={{ display:'flex',gap:1,flex:1,overflowX:'auto' }}>
             <button onClick={()=>openPip&&openPip()} title="Open PiP — stays visible when you switch tabs" style={{ padding:'5px 10px',borderRadius:10,border:`1px solid ${pipOpen?'rgba(124,110,245,.5)':c.bord}`,background:pipOpen?'rgba(124,110,245,.18)':'rgba(124,110,245,.08)',color:'#A78BFA',cursor:'pointer',fontSize:11,fontWeight:600,flexShrink:0,display:'flex',alignItems:'center',gap:6 }}><span style={{ width:14,height:14,display:'flex',alignItems:'center',justifyContent:'center' }}>{I.pip}</span>{pipOpen?'PiP ●':'PiP'}</button>
-        {MGR_TABS.map(t=>{
+        {STANDSYNC_MGR_TABS.map(t=>{
               const isA=tab===t.id;
               return(
                 <button key={t.id} onClick={()=>setTabClear(t.id)} title={t.l} style={{ padding:'5px 8px',borderRadius:9,border:'none',background:isA?'rgba(124,110,245,.16)':'transparent',color:isA?'#C4B5FD':c.mut,cursor:'pointer',fontSize:11,fontWeight:isA?600:400,display:'flex',alignItems:'center',gap:5,transition:'all .14s',whiteSpace:'nowrap',flexShrink:0,position:'relative' }}>
