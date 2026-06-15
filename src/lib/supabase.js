@@ -89,13 +89,15 @@ const COLORS = ['#818CF8','#38BDF8','#34D399','#F472B6','#FB923C','#E879F9','#F5
 
 // ── Teams ─────────────────────────────────────────────────────────────────────
 export async function createTeam(name, ownerId, ownerEmail, ownerName, standupName) {
-  // Insert team - no slug required
   const { data: team, error } = await supabase
     .from('teams')
     .insert({ name, owner_id: ownerId, standup_name: standupName || name })
     .select().single();
-  if (error) { console.error('createTeam error:', error.message, error.details); return null; }
-  if (!team) return null;
+  if (error) {
+    console.error('createTeam DB error:', error.code, error.message, error.details, error.hint);
+    return { __error: error.message || 'Database error' };
+  }
+  if (!team) return { __error: 'No data returned from teams insert' };
 
   // Add owner as manager
   await supabase.from('team_members').insert({
