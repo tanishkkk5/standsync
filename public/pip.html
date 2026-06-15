@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>StandSync PiP</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#07051A;color:#F0ECFF;height:100vh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+.hdr{padding:11px 14px;background:rgba(124,110,245,.15);border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:9px;flex-shrink:0}
+.logo{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#6B5FE4,#9B8AFB);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.tasks{flex:1;overflow-y:auto;padding:6px 0}
+.task{display:flex;align-items:center;gap:9px;padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.05)}
+.cb{width:18px;height:18px;border-radius:50%;border:2px solid rgba(128,128,128,.4);background:transparent;cursor:pointer;flex-shrink:0;transition:all .2s}
+.cb.done{border-color:#34D399;background:#34D399}
+.cb.inprog{border-color:#38BDF8}
+.cb.blocked{border-color:#EF4444}
+.title{flex:1;font-size:12px;line-height:1.4}
+.title.done{text-decoration:line-through;opacity:.4}
+.pri{font-size:9px;color:rgba(240,236,255,.35);text-transform:uppercase}
+.empty{padding:24px;text-align:center;font-size:12px;color:rgba(240,236,255,.3);line-height:1.8}
+.bar{height:3px;background:rgba(255,255,255,.07)}
+.fill{height:100%;background:linear-gradient(90deg,#6B5FE4,#34D399);transition:width .4s}
+.inp{display:flex;gap:8px;padding:9px;border-top:1px solid rgba(255,255,255,.07);flex-shrink:0}
+input{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:7px 10px;color:#F0ECFF;font-size:12px;outline:none;font-family:inherit}
+input:focus{border-color:rgba(124,110,245,.5)}
+input::placeholder{color:rgba(240,236,255,.3)}
+.send{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#6B5FE4,#9B8AFB);border:none;color:#fff;cursor:pointer;font-size:14px;flex-shrink:0}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:rgba(124,110,245,.3);border-radius:3px}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div class="logo">⚡</div>
+  <div style="flex:1">
+    <div style="font-size:12px;font-weight:700" id="team-name">StandSync</div>
+    <div style="font-size:10px;color:rgba(240,236,255,.45)" id="progress">Loading...</div>
+  </div>
+</div>
+<div class="bar"><div class="fill" id="bar" style="width:0%"></div></div>
+<div class="tasks" id="task-list"><div class="empty">⏳ Connecting...</div></div>
+<div class="inp">
+  <input id="inp" placeholder="Add a task..." />
+  <button class="send" id="send-btn">↑</button>
+</div>
+<script>
+var tasks = [], myEmail = '', myName = '', teamName = 'Team';
+var nextStatus = {todo:'in-progress','in-progress':'done',done:'todo',blocked:'todo'};
+
+function render() {
+  var mine = tasks.filter(function(t){ return t.assignee_email === myEmail; });
+  var done = mine.filter(function(t){ return t.status === 'done'; }).length;
+  var pct = mine.length ? Math.round(done/mine.length*100) : 0;
+  document.getElementById('team-name').textContent = teamName;
+  document.getElementById('progress').textContent = done + '/' + mine.length + ' done · ' + pct + '%';
+  document.getElementById('bar').style.width = pct + '%';
+  var html = '';
+  if (!mine.length) {
+    html = '<div class="empty">No tasks yet.<br>Add one below!</div>';
+  } else {
+    mine.forEach(function(t) {
+      var cls = t.status === 'done' ? 'done' : t.status === 'in-progress' ? 'inprog' : t.status === 'blocked' ? 'blocked' : '';
+      html += '<div class="task">' +
+        '<button class="cb ' + cls + '" data-id="' + t.id + '" data-next="' + (nextStatus[t.status]||'todo') + '"></button>' +
+        '<span class="title ' + (t.status==='done'?'done':'') + '">' + (t.title||'').replace(/</g,'&lt;') + '</span>' +
+        '<span class="pri">' + (t.priority||'') + '</span>' +
+        '</div>';
+    });
+  }
+  document.getElementById('task-list').innerHTML = html;
+}
+
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('cb')) {
+    var id = e.target.dataset.id;
+    var next = e.target.dataset.next;
+    if (window.opener) window.opener.postMessage({type:'status',id:id,status:next}, '*');
+    tasks = tasks.map(function(t){ return t.id===id ? Object.assign({},t,{status:next}) : t; });
+    render();
+  }
+});
+
+document.getElementById('send-btn').addEventListener('click', function() {
+  var v = document.getElementById('inp').value.trim();
+  if (!v) return;
+  if (window.opener) window.opener.postMessage({type:'addTask',title:v,myEmail:myEmail,myName:myName}, '*');
+  tasks.push({id:'tmp'+Date.now(),title:v,status:'todo',priority:'medium',assignee_email:myEmail});
+  render();
+  document.getElementById('inp').value = '';
+});
+
+document.getElementById('inp').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('send-btn').click();
+});
+
+window.addEventListener('message', function(e) {
+  if (!e.data) return;
+  if (e.data.type === 'init') {
+    tasks = e.data.tasks || [];
+    myEmail = e.data.myEmail || '';
+    myName = e.data.myName || '';
+    teamName = e.data.teamName || 'Team';
+    render();
+  }
+  if (e.data.type === 'tasks') {
+    tasks = e.data.tasks || [];
+    render();
+  }
+});
+</script>
+</body>
+</html>
