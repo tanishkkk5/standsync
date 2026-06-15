@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 import * as SB from './lib/supabase';
 import * as Email from './lib/email';
 import { askAI } from './lib/ai';
