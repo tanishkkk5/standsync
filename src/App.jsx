@@ -38,6 +38,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 @keyframes slideIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes popIn{0%{opacity:0;transform:scale(.92) translateY(8px)}100%{opacity:1;transform:scale(1) translateY(0)}}
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 input,select,textarea,button{font-family:inherit}
@@ -130,8 +131,9 @@ function BgEl() {
     <div style={{ position:'fixed',inset:0,zIndex:0,overflow:'hidden',pointerEvents:'none' }}>
       <div style={{ position:'absolute',inset:0,background:base }}/>
       {orbs.map((o,i)=>(<div key={i} style={{ position:'absolute',width:o.w,height:o.h,borderRadius:'50%',background:'radial-gradient(circle at 35% 35%,'+o.c+',transparent 70%)',top:o.top,left:o.left,right:o.right,bottom:o.bottom,animation:'orb '+o.d+'s ease-in-out infinite alternate',animationDelay:(o.delay||i*1.5)+'s',filter:'blur(48px)' }}/>))}
-      <div style={{ position:'absolute',inset:0,opacity:.015,backgroundImage:'radial-gradient(circle at 1px 1px,rgba(128,128,255,1) 1px,transparent 0)',backgroundSize:'38px 38px' }}/>
-      {dark&&<div style={{ position:'absolute',inset:0,background:'radial-gradient(ellipse at 50% 50%,transparent 38%,rgba(0,0,0,.38) 100%)' }}/>}
+      <div style={{ position:'absolute',inset:0,opacity:dark?.018:.025,backgroundImage:'radial-gradient(circle at 1px 1px,rgba(160,140,255,1) 1px,transparent 0)',backgroundSize:'36px 36px' }}/>
+      {dark&&<div style={{ position:'absolute',inset:0,background:'radial-gradient(ellipse at 50% 0%,rgba(124,110,245,.1) 0%,transparent 55%)' }}/>}
+      {dark&&<div style={{ position:'absolute',inset:0,background:'radial-gradient(ellipse at 50% 100%,rgba(45,110,250,.06) 0%,transparent 50%)' }}/>}
     </div>
   );
 }
@@ -718,46 +720,143 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
 
 // ─── FLOATING AI BUBBLE ───────────────────────────────────────────────
 function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamName='Team' }) {
-  const c=useC(); const [open,setOpen]=useState(false);
-  const [msgs,setMsgs]=useState([{id:'w',role:'assistant',text:'Hi! I am your StandSync AI. Ask me about tasks, blockers, team progress, or what to focus on today.'}]);
+  const c=useC(); const { dark }=useTheme();
+  const [open,setOpen]=useState(false);
+  const [msgs,setMsgs]=useState([{id:'w',role:'assistant',text:'Hi! Ask me about your tasks, team progress, or what to focus on today.'}]);
   const [input,setInput]=useState(''); const [loading,setLoading]=useState(false);
+  // Draggable position
+  const [pos,setPos]=useState({x:window.innerWidth-80,y:window.innerHeight-80});
+  const [dragging,setDragging]=useState(false);
+  const [dragStart,setDragStart]=useState({mx:0,my:0,px:0,py:0});
+  const [moved,setMoved]=useState(false);
   const bottomRef=useRef(); const name=session?.user?.user_metadata?.name||'User';
+
   useEffect(()=>{ if(open) bottomRef.current?.scrollIntoView({behavior:'smooth'}); },[msgs,open]);
+
+  const onMouseDown=(e)=>{
+    e.preventDefault();
+    setDragging(true); setMoved(false);
+    setDragStart({mx:e.clientX,my:e.clientY,px:pos.x,py:pos.y});
+  };
+  useEffect(()=>{
+    if(!dragging)return;
+    const mv=(e)=>{
+      const dx=e.clientX-dragStart.mx, dy=e.clientY-dragStart.my;
+      if(Math.abs(dx)>4||Math.abs(dy)>4) setMoved(true);
+      setPos({
+        x:Math.max(28,Math.min(window.innerWidth-28,dragStart.px+dx)),
+        y:Math.max(28,Math.min(window.innerHeight-28,dragStart.py+dy)),
+      });
+    };
+    const up=()=>setDragging(false);
+    window.addEventListener('mousemove',mv); window.addEventListener('mouseup',up);
+    return()=>{ window.removeEventListener('mousemove',mv); window.removeEventListener('mouseup',up); };
+  },[dragging,dragStart]);
+
+  const handleClick=()=>{ if(!moved) setOpen(o=>!o); };
+
   const send=async()=>{
-    if(!input.trim()||loading) return;
-    const userMsg={id:'u'+Date.now(),role:'user',text:input.trim()};
-    setMsgs(p=>[...p,userMsg]); setInput(''); setLoading(true);
+    if(!input.trim()||loading)return;
+    setMsgs(p=>[...p,{id:'u'+Date.now(),role:'user',text:input.trim()}]);
+    setInput(''); setLoading(true);
     try{ const reply=await askAI(input.trim(),{tasks,members,history,teamName,userName:name,myTasks}); setMsgs(p=>[...p,{id:'a'+Date.now(),role:'assistant',text:reply}]); }
-    catch(e){ setMsgs(p=>[...p,{id:'e'+Date.now(),role:'assistant',text:'Sorry, try again!'}]); }
+    catch(e){ setMsgs(p=>[...p,{id:'e'+Date.now(),role:'assistant',text:'Try again!'}]); }
     setLoading(false);
   };
-  const QUICK=['Focus today?','Team progress?','Any blockers?','My tasks'];
+
+  const QUICK=['Focus today','Team status','Blockers?','My progress'];
+
+  // Chat panel — opens above the button
+  const panelLeft=pos.x>window.innerWidth/2?pos.x-320:pos.x-8;
+  const panelTop=pos.y>window.innerHeight/2?pos.y-480:pos.y+64;
+
   return (
     <>
-      <button onClick={()=>setOpen(!open)} style={{ position:'fixed',bottom:24,right:24,zIndex:800,width:52,height:52,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,boxShadow:'0 4px 24px rgba(99,102,241,.5)',transition:'transform .2s',transform:open?'scale(.9)':'scale(1)' }}>{open?'✕':'🤖'}</button>
+      {/* Frosted glass AI orb button */}
+      <button
+        onMouseDown={onMouseDown}
+        onClick={handleClick}
+        style={{
+          position:'fixed',
+          left:pos.x-28, top:pos.y-28,
+          zIndex:900,
+          width:56, height:56,
+          borderRadius:'50%',
+          background:dark
+            ?'rgba(124,110,245,.18)'
+            :'rgba(255,255,255,.55)',
+          backdropFilter:'blur(20px)',
+          WebkitBackdropFilter:'blur(20px)',
+          border:dark?'1px solid rgba(196,181,253,.25)':'1px solid rgba(99,102,241,.2)',
+          cursor:dragging?'grabbing':'grab',
+          display:'flex',alignItems:'center',justifyContent:'center',
+          boxShadow:dark
+            ?'0 4px 24px rgba(124,110,245,.35),inset 0 1px 0 rgba(255,255,255,.1)'
+            :'0 4px 24px rgba(99,102,241,.2),inset 0 1px 0 rgba(255,255,255,.8)',
+          transition:dragging?'none':'box-shadow .2s',
+          userSelect:'none',
+        }}
+      >
+        {/* Minimal star/sparkle AI icon */}
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0 }}>
+          <path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z"
+            fill={dark?'#C4B5FD':'#6366F1'} opacity=".9"/>
+          <circle cx="19" cy="4" r="1.5" fill={dark?'#A78BFA':'#818CF8'} opacity=".7"/>
+          <circle cx="5" cy="19" r="1" fill={dark?'#A78BFA':'#818CF8'} opacity=".5"/>
+        </svg>
+      </button>
+
+      {/* Chat panel */}
       {open&&(
-        <div style={{ position:'fixed',bottom:88,right:24,zIndex:799,width:320,maxHeight:460,background:c.dark?'rgba(12,10,32,.97)':'#fff',border:`1px solid ${c.bord}`,borderRadius:18,display:'flex',flexDirection:'column',boxShadow:'0 8px 40px rgba(0,0,0,.4)',overflow:'hidden',animation:'popIn .2s ease' }}>
-          <div style={{ padding:'12px 14px',borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',gap:8,background:'rgba(99,102,241,.08)',flexShrink:0 }}>
-            <div style={{ width:30,height:30,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>🤖</div>
-            <div style={{ flex:1 }}><div style={{ fontSize:13,fontWeight:700,color:c.text }}>StandSync AI</div><div style={{ fontSize:10,color:'#34D399' }}>Online</div></div>
+        <div style={{
+          position:'fixed',
+          left:Math.max(8,Math.min(window.innerWidth-336,panelLeft)),
+          top:Math.max(8,Math.min(window.innerHeight-496,panelTop)),
+          zIndex:899, width:328, maxHeight:480,
+          background:dark?'rgba(10,8,26,.92)':'rgba(255,255,255,.88)',
+          backdropFilter:'blur(32px)',
+          WebkitBackdropFilter:'blur(32px)',
+          border:`1px solid ${c.bord}`,
+          borderRadius:20,
+          display:'flex',flexDirection:'column',
+          boxShadow:dark?'0 16px 56px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.05)':'0 16px 56px rgba(99,102,241,.15),inset 0 1px 0 rgba(255,255,255,.9)',
+          overflow:'hidden',
+          animation:'fadeUp .18s ease',
+        }}>
+          {/* Header */}
+          <div style={{ padding:'14px 16px 12px',display:'flex',alignItems:'center',gap:10,flexShrink:0 }}>
+            <div style={{ width:32,height:32,borderRadius:'50%',background:'rgba(124,110,245,.15)',border:'1px solid rgba(196,181,253,.25)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z" fill={dark?'#C4B5FD':'#6366F1'}/>
+              </svg>
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13,fontWeight:700,color:c.text,letterSpacing:'-.01em' }}>StandSync AI</div>
+              <div style={{ fontSize:10,color:'#34D399',display:'flex',alignItems:'center',gap:4 }}><div style={{ width:5,height:5,borderRadius:'50%',background:'#34D399' }}/>Online</div>
+            </div>
+            <button onClick={()=>setOpen(false)} style={{ width:26,height:26,borderRadius:8,background:'transparent',border:'none',color:c.mut,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16 }}>×</button>
           </div>
-          <div style={{ padding:'7px 10px',display:'flex',gap:5,flexWrap:'wrap',borderBottom:`1px solid ${c.bord}`,flexShrink:0 }}>
-            {QUICK.map(q=><button key={q} onClick={()=>setInput(q)} style={{ fontSize:11,padding:'3px 9px',borderRadius:20,border:`1px solid ${c.bord}`,background:c.surf,color:c.mut,cursor:'pointer',whiteSpace:'nowrap' }}>{q}</button>)}
+          {/* Quick actions */}
+          <div style={{ padding:'0 12px 10px',display:'flex',gap:5,flexWrap:'wrap',flexShrink:0 }}>
+            {QUICK.map(q=><button key={q} onClick={()=>setInput(q)} style={{ fontSize:11,padding:'4px 10px',borderRadius:20,border:`1px solid ${c.bord}`,background:c.surf,color:c.mut,cursor:'pointer',whiteSpace:'nowrap',transition:'all .12s' }}>{q}</button>)}
           </div>
-          <div style={{ flex:1,overflowY:'auto',padding:'10px',display:'flex',flexDirection:'column',gap:7 }}>
+          {/* Messages */}
+          <div style={{ flex:1,overflowY:'auto',padding:'8px 12px',display:'flex',flexDirection:'column',gap:8 }}>
             {msgs.map(m=>(
-              <div key={m.id} style={{ display:'flex',flexDirection:m.role==='user'?'row-reverse':'row' }}>
-                <div style={{ maxWidth:'88%',background:m.role==='user'?'linear-gradient(135deg,#6366F1,#818CF8)':c.surf,color:m.role==='user'?'#fff':c.text,padding:'8px 12px',borderRadius:m.role==='user'?'13px 13px 3px 13px':'13px 13px 13px 3px',fontSize:12,lineHeight:1.5,border:m.role==='user'?'none':`1px solid ${c.bord}` }}>
-                  {m.text.split('\n').map((l,i)=><div key={i}>{l||<br/>}</div>)}
+              <div key={m.id} style={{ display:'flex',flexDirection:m.role==='user'?'row-reverse':'row',alignItems:'flex-end',gap:6 }}>
+                {m.role==='assistant'&&<div style={{ width:22,height:22,borderRadius:'50%',background:'rgba(124,110,245,.15)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginBottom:2 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z" fill={dark?'#C4B5FD':'#6366F1'}/></svg></div>}
+                <div style={{ maxWidth:'84%',background:m.role==='user'?'linear-gradient(135deg,#6B5FE4,#9B8AFB)':dark?'rgba(255,255,255,.06)':'rgba(255,255,255,.8)',color:m.role==='user'?'#fff':c.text,padding:'8px 12px',borderRadius:m.role==='user'?'14px 14px 4px 14px':'14px 14px 14px 4px',fontSize:12,lineHeight:1.55,border:m.role==='user'?'none':`1px solid ${c.bord}`,boxShadow:m.role==='assistant'?'0 1px 6px rgba(0,0,0,.06)':'none' }}>
+                  {m.text.split('\n').map((l,i)=><div key={i} style={{ marginBottom:l?0:4 }}>{l||<br/>}</div>)}
                 </div>
               </div>
             ))}
-            {loading&&<div style={{ display:'flex',gap:5,padding:'7px 11px',background:c.surf,borderRadius:'13px 13px 13px 3px',width:'fit-content',border:`1px solid ${c.bord}` }}>{[0,1,2].map(i=><div key={i} style={{ width:6,height:6,borderRadius:'50%',background:'#818CF8',animation:`bounce .8s ease ${i*.15}s infinite` }}/>)}</div>}
+            {loading&&<div style={{ display:'flex',gap:4,padding:'8px 11px',background:dark?'rgba(255,255,255,.06)':'rgba(255,255,255,.8)',borderRadius:'14px 14px 14px 4px',width:'fit-content',border:`1px solid ${c.bord}` }}>{[0,1,2].map(i=><div key={i} style={{ width:5,height:5,borderRadius:'50%',background:'#A78BFA',animation:'bounce .7s ease '+(i*.14)+'s infinite' }}/>)}</div>}
             <div ref={bottomRef}/>
           </div>
-          <div style={{ padding:'9px 10px',borderTop:`1px solid ${c.bord}`,display:'flex',gap:7,flexShrink:0 }}>
-            <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()} placeholder="Ask me anything..." style={{ flex:1,background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:9,padding:'8px 11px',color:c.text,fontSize:12,outline:'none' }}/>
-            <button onClick={send} disabled={!input.trim()||loading} style={{ width:34,height:34,borderRadius:9,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',color:'#fff',cursor:input.trim()&&!loading?'pointer':'not-allowed',opacity:input.trim()&&!loading?1:.5,display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0 }}>↑</button>
+          {/* Input */}
+          <div style={{ padding:'10px 12px',borderTop:`1px solid ${c.bord}`,display:'flex',gap:8,flexShrink:0,background:dark?'rgba(255,255,255,.02)':'rgba(255,255,255,.5)' }}>
+            <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()} placeholder="Ask anything..." style={{ flex:1,background:'transparent',border:'none',color:c.text,fontSize:13,outline:'none',letterSpacing:'-.01em' }}/>
+            <button onClick={send} disabled={!input.trim()||loading} style={{ width:32,height:32,borderRadius:10,background:input.trim()?'linear-gradient(135deg,#6B5FE4,#9B8AFB)':'transparent',border:input.trim()?'none':`1px solid ${c.bord}`,color:input.trim()?'#fff':c.mut,cursor:input.trim()?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0,transition:'all .15s' }}>↑</button>
           </div>
         </div>
       )}
@@ -1438,6 +1537,11 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
       const items=resp.result.items||[];
       setEvents(items);
       setStatus('connected');
+      // Scroll to current time in week view after events load
+      setTimeout(()=>{
+        const el=document.getElementById('cal-week-scroll');
+        if(el){ const now=new Date(); el.scrollTop=Math.max(0,(now.getHours()-1)*48); }
+      },200);
       // Auto-detect recurring standup meetings
       const recurring=items.filter(ev=>ev.recurrence||ev.recurringEventId);
       const standupKeywords=['standup','stand-up','stand up','daily','dsu','scrum'];
@@ -1687,7 +1791,7 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
             })}
           </div>
           {/* Time slots */}
-          <div style={{ display:'grid',gridTemplateColumns:'52px repeat(7,1fr)',height:600,overflowY:'auto' }}>
+          <div id="cal-week-scroll" style={{ display:'grid',gridTemplateColumns:'52px repeat(7,1fr)',height:580,overflowY:'auto' }}>
             {/* Time labels */}
             <div style={{ borderRight:`1px solid ${c.bord}` }}>
               {Array.from({length:24},(_,h)=>(
