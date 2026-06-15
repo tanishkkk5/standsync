@@ -319,3 +319,51 @@ export async function uploadAvatar(userId, file) {
   const { data } = supabase.storage.from('avatars').getPublicUrl(path);
   return data.publicUrl;
 }
+
+// ── Chat messages (persistent + realtime) ─────────────────────────────────────
+export async function getChatMessages(teamId, limit = 50) {
+  const { data } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('team_id', teamId)
+    .order('created_at', { ascending: true })
+    .limit(limit);
+  return data || [];
+}
+
+export async function sendChatMessage(teamId, msg) {
+  const { data } = await supabase
+    .from('messages')
+    .insert({
+      team_id: teamId,
+      sender_email: msg.sender_email,
+      sender_name: msg.sender_name,
+      text: msg.text || '',
+      type: msg.type || 'text',
+      url: msg.url || null,
+    })
+    .select().single();
+  return data;
+}
+
+export function subscribeToMessages(teamId, cb) {
+  if (!supabase) return () => {};
+  const ch = supabase.channel('messages-' + teamId)
+    .on('postgres_changes', {
+      event: 'INSERT', schema: 'public', table: 'messages',
+      filter: 'team_id=eq.' + teamId
+    }, payload => cb(payload.new))
+    .subscribe();
+  return () => supabase.removeChannel(ch);
+}
+
+// ── Invite link retrieval ─────────────────────────────────────────────────────
+export async function getTeamInvites(teamId) {
+  const { data } = await supabase
+    .from('invites')
+    .select('*')
+    .eq('team_id', teamId)
+    .is('accepted_at', null)
+    .order('created_at', { ascending: false });
+  return data || [];
+}
