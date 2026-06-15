@@ -2624,7 +2624,7 @@ function usePip({ tasks, onAdd, onStatus, session, team, standup }) {
   document.getElementById('team-name').textContent=teamName;
 
   var statusNext={todo:'in-progress','in-progress':'done',done:'todo',blocked:'todo'};
-  var statusClass={todo:'',\'in-progress\':\'inprog\',done:\'done\',blocked:\'blocked\'};
+  var statusClass={todo:'',"in-progress":"inprog",done:"done",blocked:"blocked"};
   var priorityOrder=['critical','high','medium','low'];
 
   function render(){
@@ -2636,7 +2636,7 @@ function usePip({ tasks, onAdd, onStatus, session, team, standup }) {
     var html='';
     if(mine.length===0){html='<div class="empty">No tasks yet.<br>Add one below.</div>';}
     else{mine.forEach(function(t){
-      html+='<div class="task"><div class="cb '+statusClass[t.status]+'" onclick="toggle(\''+t.id+'\',\''+statusNext[t.status]+'\')"></div>';
+      html+='<div class="task"><div class="cb '+statusClass[t.status]+'" onclick="toggle('+JSON.stringify(t.id)+','+JSON.stringify(statusNext[t.status])+')"></div>';
       html+='<span class="task-text '+(t.status==='done'?'done':'')+'">'+(t.title||'').replace(/</g,'&lt;')+'</span>';
       html+='<span class="badge '+(t.priority||'medium')+'">'+( t.priority||'med')+'</span></div>';
     });}
