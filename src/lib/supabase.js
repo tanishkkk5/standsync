@@ -1,16 +1,34 @@
 import { createClient } from '@supabase/supabase-js';
 
-const SUPA_URL = process.env.REACT_APP_SUPABASE_URL  || '';
+const SUPA_URL = process.env.REACT_APP_SUPABASE_URL || '';
 const SUPA_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
-export const supabase = (SUPA_URL && SUPA_KEY) ? createClient(SUPA_URL, SUPA_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,   // needed for Google OAuth redirect
-    storageKey: 'ss-auth',
+
+// Validate URL format before passing to createClient
+function isValidUrl(url) {
+  try { new URL(url); return true; } catch { return false; }
+}
+
+const canInit = SUPA_URL && SUPA_KEY && isValidUrl(SUPA_URL);
+
+let supabaseClient = null;
+if (canInit) {
+  try {
+    supabaseClient = createClient(SUPA_URL, SUPA_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storageKey: 'ss-auth',
+      }
+    });
+  } catch(e) {
+    console.error('Supabase init failed:', e.message);
   }
-}) : null;
+}
+
+export const supabase = supabaseClient;
 export const IS_LIVE = !!supabase;
+
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export async function signUp(email, password, meta) {
