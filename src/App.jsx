@@ -965,6 +965,9 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
   const [currentDate,setCurrentDate]=useState(new Date());
   const [selectedEvent,setSelectedEvent]=useState(null);
   const [error,setError]=useState('');
+  const [detectedStandups,setDetectedStandups]=useState([]);
+  const [selectedStandup,setSelectedStandup]=useState(null); // chosen standup meeting
+  const [showStandupPicker,setShowStandupPicker]=useState(false);
   const CLIENT_ID=process.env.REACT_APP_GOOGLE_CLIENT_ID;
   const SCOPES='https://www.googleapis.com/auth/calendar.readonly';
 
@@ -1021,25 +1024,32 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
     }
   };
 
-  const fetchEvents=async()=>{
+  const fetchEvents=async(centerDate)=>{
     try {
-      const now=new Date();
-      const start=new Date(now.getFullYear(),now.getMonth()-1,1).toISOString();
-      const end=new Date(now.getFullYear(),now.getMonth()+2,0).toISOString();
+      const base=centerDate||new Date();
+      // Fetch 6 months around current date so all views have data
+      const start=new Date(base.getFullYear(),base.getMonth()-3,1).toISOString();
+      const end=new Date(base.getFullYear(),base.getMonth()+4,0).toISOString();
       const resp=await window.gapi.client.calendar.events.list({
         calendarId:'primary',
         timeMin:start,
         timeMax:end,
         showDeleted:false,
         singleEvents:true,
-        maxResults:200,
+        maxResults:500,
         orderBy:'startTime',
       });
-      setEvents(resp.result.items||[]);
+      const items=resp.result.items||[];
+      setEvents(items);
       setStatus('connected');
+      // Auto-detect recurring standup meetings
+      const recurring=items.filter(ev=>ev.recurrence||ev.recurringEventId);
+      const standupKeywords=['standup','stand-up','stand up','daily','dsu','scrum'];
+      const standups=recurring.filter(ev=>standupKeywords.some(k=>(ev.summary||'').toLowerCase().includes(k)));
+      if(standups.length>0) setDetectedStandups([...new Map(standups.map(e=>[e.summary,e])).values()]);
     } catch(e) {
       console.error('fetchEvents error:', e);
-      setError('Failed to load events: '+(e.result?.error?.message||e.message)+'. Make sure Google Calendar API is enabled in Google Cloud Console.');
+      setError('Failed to load events: '+(e.result?.error?.message||e.message));
       setStatus('error');
     }
   };
@@ -1062,20 +1072,34 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
 
   const getEventsForDay=(date)=>{
     if(!date)return[];
+    const dateStr=date.toDateString();
     return events.filter(ev=>{
-      const s=new Date(ev.start?.dateTime||ev.start?.date);
-      return s.toDateString()===date.toDateString();
+      if(ev.start?.dateTime){
+        return new Date(ev.start.dateTime).toDateString()===dateStr;
+      }
+      if(ev.start?.date){
+        // All-day event: compare YYYY-MM-DD strings to avoid timezone issues
+        const evDate=ev.start.date; // "2026-06-15"
+        const y=date.getFullYear(),m=String(date.getMonth()+1).padStart(2,'0'),d=String(date.getDate()).padStart(2,'0');
+        return evDate===y+'-'+m+'-'+d;
+      }
+      return false;
+    }).sort((a,b)=>{
+      const ta=new Date(a.start?.dateTime||a.start?.date+'T00:00');
+      const tb=new Date(b.start?.dateTime||b.start?.date+'T00:00');
+      return ta-tb;
     });
   };
 
   const getWeekDays=(date)=>{
-    const d=new Date(date);
-    const day=d.getDay();
-    const diff=d.getDate()-day;
-    return Array.from({length:7},(_,i)=>new Date(d.setDate(diff+i))).map((_,i)=>{
-      const dd=new Date(date);
-      dd.setDate(date.getDate()-date.getDay()+i);
-      return dd;
+    // Fix: create new Date objects, don't mutate
+    const sunday=new Date(date);
+    sunday.setDate(date.getDate()-date.getDay());
+    sunday.setHours(0,0,0,0);
+    return Array.from({length:7},(_,i)=>{
+      const d=new Date(sunday);
+      d.setDate(sunday.getDate()+i);
+      return d;
     });
   };
 
@@ -1089,8 +1113,18 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
   const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
   const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-  const navPrev=()=>{ const d=new Date(currentDate); if(view==='week')d.setDate(d.getDate()-7); else d.setMonth(d.getMonth()-1); setCurrentDate(d); };
-  const navNext=()=>{ const d=new Date(currentDate); if(view==='week')d.setDate(d.getDate()+7); else d.setMonth(d.getMonth()+1); setCurrentDate(d); };
+  const navigate=(dir)=>{
+    const d=new Date(currentDate);
+    if(view==='week') d.setDate(d.getDate()+(dir*7));
+    else d.setMonth(d.getMonth()+dir);
+    setCurrentDate(d);
+    // Reload events if navigating outside current fetch range
+    const now=new Date();
+    const monthsDiff=(d.getFullYear()-now.getFullYear())*12+(d.getMonth()-now.getMonth());
+    if(Math.abs(monthsDiff)>2) fetchEvents(d);
+  };
+  const navPrev=()=>navigate(-1);
+  const navNext=()=>navigate(1);
 
   const eventColor=(ev)=>{
     const colors={'1':'#ac725e','2':'#d06b64','3':'#f83a22','4':'#fa573c','5':'#ff7537','6':'#ffad46','7':'#42d692','8':'#16a765','9':'#7bd148','10':'#b3dc6c','11':'#fbe983','default':'#6366F1'};
@@ -1159,6 +1193,49 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
 
   return(
     <div>
+      {/* Standup picker banner */}
+      {detectedStandups.length>0&&!selectedStandup&&(
+        <div style={{ background:'rgba(99,102,241,.08)',border:'1px solid rgba(99,102,241,.25)',borderRadius:12,padding:'14px 18px',marginBottom:16,display:'flex',alignItems:'center',gap:14,flexWrap:'wrap' }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:14,fontWeight:700,color:c.text,marginBottom:3 }}>📅 Standup meetings detected!</div>
+            <div style={{ fontSize:12,color:c.mut }}>Select your standup to link tasks and team to this recurring meeting</div>
+          </div>
+          <Btn onClick={()=>setShowStandupPicker(true)} style={{ flexShrink:0,padding:'8px 18px',fontSize:13 }}>Select standup →</Btn>
+        </div>
+      )}
+      {selectedStandup&&(
+        <div style={{ background:'rgba(52,211,153,.06)',border:'1px solid rgba(52,211,153,.2)',borderRadius:12,padding:'12px 18px',marginBottom:16,display:'flex',alignItems:'center',gap:12 }}>
+          <span style={{ fontSize:18 }}>✅</span>
+          <div style={{ flex:1 }}><div style={{ fontSize:13,fontWeight:700,color:'#34D399' }}>Linked: {selectedStandup.summary}</div><div style={{ fontSize:11,color:c.mut }}>{selectedStandup.attendees?.length||0} attendees · recurring</div></div>
+          <button onClick={()=>setSelectedStandup(null)} style={{ fontSize:12,color:c.mut,background:'none',border:'none',cursor:'pointer' }}>Change</button>
+        </div>
+      )}
+      {/* Standup picker modal */}
+      {showStandupPicker&&(
+        <Modal onClose={()=>setShowStandupPicker(false)} title="Select your standup meeting" width={500}>
+          <p style={{ fontSize:13,color:c.mut,marginBottom:16 }}>These recurring meetings were detected in your calendar. Select the one that is your daily standup.</p>
+          <div style={{ display:'flex',flexDirection:'column',gap:8,marginBottom:20 }}>
+            {detectedStandups.map(ev=>(
+              <div key={ev.id} onClick={()=>{setSelectedStandup(ev);setShowStandupPicker(false);}} style={{ padding:'12px 16px',borderRadius:10,border:`1.5px solid ${selectedStandup?.id===ev.id?'#6366F1':c.bord}`,background:selectedStandup?.id===ev.id?'rgba(99,102,241,.1)':c.surf,cursor:'pointer',transition:'all .2s' }}>
+                <div style={{ display:'flex',alignItems:'center',gap:10 }}>
+                  <div style={{ width:10,height:10,borderRadius:'50%',background:eventColor(ev),flexShrink:0 }}/>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14,fontWeight:600,color:c.text }}>{ev.summary}</div>
+                    <div style={{ fontSize:12,color:c.mut,marginTop:2 }}>{fmtTime(ev.start?.dateTime)} · {ev.attendees?.length||0} attendees · recurring</div>
+                  </div>
+                </div>
+                {ev.attendees&&ev.attendees.length>0&&(
+                  <div style={{ marginTop:8,paddingTop:8,borderTop:`1px solid ${c.bord}`,display:'flex',flexWrap:'wrap',gap:4 }}>
+                    {ev.attendees.slice(0,6).map(a=><span key={a.email} style={{ fontSize:10,background:'rgba(99,102,241,.1)',color:'#818CF8',padding:'2px 7px',borderRadius:20 }}>{a.displayName||a.email}</span>)}
+                    {ev.attendees.length>6&&<span style={{ fontSize:10,color:c.mut }}>+{ev.attendees.length-6} more</span>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <Btn v="ghost" onClick={()=>setShowStandupPicker(false)} style={{ width:'100%',justifyContent:'center' }}>Skip for now</Btn>
+        </Modal>
+      )}
       {/* Toolbar */}
       <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:16,flexWrap:'wrap' }}>
         <div style={{ display:'flex',alignItems:'center',gap:6 }}>
@@ -1186,25 +1263,70 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
       {/* WEEK VIEW */}
       {view==='week'&&(
         <Card style={{ overflow:'hidden' }}>
-          <div style={{ display:'grid',gridTemplateColumns:'repeat(7,1fr)',borderBottom:`1px solid ${c.bord}` }}>
-            {weekDays.map((day,i)=>(
-              <div key={i} style={{ padding:'10px 8px',textAlign:'center',borderRight:i<6?`1px solid ${c.bord}`:'none',background:day.toDateString()===today.toDateString()?'rgba(99,102,241,.08)':'transparent' }}>
-                <div style={{ fontSize:11,color:c.mut,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:4 }}>{DAYS[i]}</div>
-                <div style={{ fontSize:day.toDateString()===today.toDateString()?16:14,fontWeight:day.toDateString()===today.toDateString()?700:400,color:day.toDateString()===today.toDateString()?'#818CF8':c.text,width:28,height:28,borderRadius:'50%',background:day.toDateString()===today.toDateString()?'rgba(99,102,241,.15)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto' }}>{day.getDate()}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ display:'grid',gridTemplateColumns:'repeat(7,1fr)',minHeight:300,alignItems:'start' }}>
+          {/* Day headers */}
+          <div style={{ display:'grid',gridTemplateColumns:'52px repeat(7,1fr)',borderBottom:`1px solid ${c.bord}`,background:c.surf }}>
+            <div/>
             {weekDays.map((day,i)=>{
+              const isToday=day.toDateString()===today.toDateString();
               const dayEvts=getEventsForDay(day);
               return(
-                <div key={i} style={{ padding:'8px 6px',borderRight:i<6?`1px solid ${c.bord}`:'none',minHeight:200,borderTop:`1px solid ${c.bord}` }}>
-                  {dayEvts.map(ev=>(
-                    <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ padding:'4px 7px',borderRadius:6,background:eventColor(ev)+'22',border:`1px solid ${eventColor(ev)}44`,color:eventColor(ev),fontSize:11,fontWeight:600,marginBottom:4,cursor:'pointer',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }} title={ev.summary}>
-                      {fmtTime(ev.start?.dateTime)} {ev.summary}
-                    </div>
+                <div key={i} style={{ padding:'10px 8px',textAlign:'center',borderLeft:`1px solid ${c.bord}`,background:isToday?'rgba(99,102,241,.04)':'transparent' }}>
+                  <div style={{ fontSize:11,color:isToday?'#6366F1':c.mut,textTransform:'uppercase',letterSpacing:'.06em',fontWeight:600,marginBottom:5 }}>{DAYS[i]}</div>
+                  <div style={{ display:'inline-flex',alignItems:'center',justifyContent:'center',width:32,height:32,borderRadius:'50%',background:isToday?'#6366F1':'transparent',fontSize:14,fontWeight:isToday?700:400,color:isToday?'#fff':c.text }}>{day.getDate()}</div>
+                  {dayEvts.length>0&&<div style={{ fontSize:9,color:c.mut,marginTop:3 }}>{dayEvts.length} event{dayEvts.length!==1?'s':''}</div>}
+                </div>
+              );
+            })}
+          </div>
+          {/* Time slots */}
+          <div style={{ display:'grid',gridTemplateColumns:'52px repeat(7,1fr)',height:600,overflowY:'auto' }}>
+            {/* Time labels */}
+            <div style={{ borderRight:`1px solid ${c.bord}` }}>
+              {Array.from({length:24},(_,h)=>(
+                <div key={h} style={{ height:48,display:'flex',alignItems:'flex-start',justifyContent:'flex-end',paddingRight:8,paddingTop:2,fontSize:10,color:c.mut,borderBottom:`1px solid ${c.bord}22` }}>
+                  {h===0?'':h<12?h+' AM':h===12?'12 PM':(h-12)+' PM'}
+                </div>
+              ))}
+            </div>
+            {/* Day columns */}
+            {weekDays.map((day,i)=>{
+              const dayEvts=getEventsForDay(day);
+              const isToday=day.toDateString()===today.toDateString();
+              return(
+                <div key={i} style={{ borderLeft:`1px solid ${c.bord}`,position:'relative',background:isToday?'rgba(99,102,241,.02)':'transparent' }}>
+                  {/* Hour lines */}
+                  {Array.from({length:24},(_,h)=>(
+                    <div key={h} style={{ height:48,borderBottom:`1px solid ${c.bord}22` }}/>
                   ))}
-                  {dayEvts.length===0&&day.toDateString()===today.toDateString()&&<div style={{ fontSize:10,color:c.mut,textAlign:'center',marginTop:8 }}>No events</div>}
+                  {/* Current time indicator */}
+                  {isToday&&(()=>{
+                    const now=new Date();
+                    const top=(now.getHours()*60+now.getMinutes())/60*48;
+                    return <div style={{ position:'absolute',left:0,right:0,top:top,height:2,background:'#EF4444',zIndex:10 }}><div style={{ width:8,height:8,borderRadius:'50%',background:'#EF4444',position:'absolute',left:-4,top:-3 }}/></div>;
+                  })()}
+                  {/* Events */}
+                  {dayEvts.map(ev=>{
+                    if(!ev.start?.dateTime){
+                      // All-day event — show at top
+                      return(
+                        <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ position:'absolute',top:2,left:2,right:2,padding:'2px 5px',borderRadius:4,background:eventColor(ev)+'33',border:`1px solid ${eventColor(ev)}66`,color:eventColor(ev),fontSize:10,fontWeight:600,cursor:'pointer',zIndex:5,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>
+                          {ev.summary}
+                        </div>
+                      );
+                    }
+                    const start=new Date(ev.start.dateTime);
+                    const end=new Date(ev.end?.dateTime||ev.start.dateTime);
+                    const startMin=start.getHours()*60+start.getMinutes();
+                    const duration=Math.max(30,(end-start)/60000);
+                    const top=startMin/60*48;
+                    const height=Math.max(20,duration/60*48-2);
+                    return(
+                      <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ position:'absolute',left:2,right:2,top:top,height:height,padding:'2px 5px',borderRadius:5,background:eventColor(ev)+'33',borderLeft:`3px solid ${eventColor(ev)}`,color:eventColor(ev),fontSize:10,fontWeight:600,cursor:'pointer',zIndex:5,overflow:'hidden',boxSizing:'border-box' }}>
+                        <div style={{ fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{ev.summary}</div>
+                        {height>28&&<div style={{ opacity:.7 }}>{fmtTime(ev.start.dateTime)}</div>}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
