@@ -621,20 +621,57 @@ function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], te
 }
 
 // ─── RICH CHAT ──────────────────────────────────────────────────────────
-function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='default', onChangeTheme }) {
+function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='default', onChangeTheme, isManager=false }) {
   const c=useC(); const [msg,setMsg]=useState(''); const [showGif,setShowGif]=useState(false); const [activeSpace,setActiveSpace]=useState('general');
   const [gifSearch,setGifSearch]=useState(''); const [gifs,setGifs]=useState([]); const [gifLoading,setGifLoading]=useState(false); const [gifError,setGifError]=useState('');
   const [showTheme,setShowTheme]=useState(false);
+  const [showNewSpace,setShowNewSpace]=useState(false); const [newSpaceName,setNewSpaceName]=useState(''); const [newSpacePrivate,setNewSpacePrivate]=useState(false);
+  const [customSpaces,setCustomSpaces]=useState(()=>{ try{return JSON.parse(localStorage.getItem('ss-spaces')||'[]');}catch{return[];} });
   const bottomRef=useRef(); const fileRef=useRef();
   const myEmail=session?.user?.email||'demo@standsync.app';
   const myName=session?.user?.user_metadata?.name||myEmail.split('@')[0];
   const theme=CHAT_THEMES.find(t=>t.id===chatTheme)||CHAT_THEMES[0];
-  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:'smooth'}); },[messages]);
+
+  const addCustomSpace=()=>{
+    if(!newSpaceName.trim())return;
+    const id='space-'+newSpaceName.toLowerCase().replace(/\s+/g,'-');
+    const updated=[...customSpaces,{id,name:newSpaceName.trim(),private:newSpacePrivate}];
+    setCustomSpaces(updated);
+    try{localStorage.setItem('ss-spaces',JSON.stringify(updated));}catch{}
+    setActiveSpace(id); setShowNewSpace(false); setNewSpaceName(''); setNewSpacePrivate(false);
+  };
+
+  const deleteCustomSpace=(id)=>{
+    const updated=customSpaces.filter(s=>s.id!==id);
+    setCustomSpaces(updated);
+    try{localStorage.setItem('ss-spaces',JSON.stringify(updated));}catch{}
+    if(activeSpace===id)setActiveSpace('general');
+  };
+
+  // Filter messages by active space
+  const spaceMessages=messages.filter(m=>{
+    if(activeSpace.startsWith('dm-')){
+      const dmEmail=activeSpace.slice(3);
+      return m.space===(activeSpace)||(m.sender_email===dmEmail&&m.dm_to===myEmail)||(m.sender_email===myEmail&&m.dm_to===dmEmail);
+    }
+    return (m.space||'general')===activeSpace;
+  });
+
   const sendMsg=(text,type='text',url='')=>{
     if(type==='text'&&!text.trim())return;
-    onSend({id:'m'+Date.now(),text:type==='text'?text.trim():'',type,url,sender_email:myEmail,sender_name:myName,created_at:new Date().toISOString()});
+    const isDM=activeSpace.startsWith('dm-');
+    onSend({id:'m'+Date.now(),text:type==='text'?text.trim():'',type,url,
+      sender_email:myEmail,sender_name:myName,created_at:new Date().toISOString(),
+      space:activeSpace,
+      dm_to:isDM?activeSpace.slice(3):undefined,
+    });
     if(type==='text')setMsg(''); setShowGif(false);
   };
+
+  const theme2=CHAT_THEMES.find(t=>t.id===chatTheme)||CHAT_THEMES[0];
+  const dmMember=activeSpace.startsWith('dm-')?members.find(m=>m.email===activeSpace.slice(3)):null;
+  const DEFAULT_SPACES=[{id:'general',label:'general',icon:'💬'},{id:'announcements',label:'announcements',icon:'📢'},{id:'random',label:'random',icon:'🎲'}];
+  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:'smooth'}); },[messages]);
   const searchGifs=async(q)=>{
     if(!q.trim())return; setGifLoading(true); setGifError('');
     try{
@@ -661,36 +698,81 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
     if(m.type==='gif') return <img src={m.url} alt="gif" style={{ maxWidth:180,borderRadius:8 }}/>;
     return <span>{m.text}</span>;
   };
-  const grouped=messages.reduce((acc,m)=>{ const date=new Date(m.created_at).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); if(!acc.length||acc[acc.length-1].date!==date)acc.push({date,msgs:[]}); acc[acc.length-1].msgs.push(m); return acc; },[]);
+  const grouped=spaceMessages.reduce((acc,m)=>{ const date=new Date(m.created_at).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); if(!acc.length||acc[acc.length-1].date!==date)acc.push({date,msgs:[]}); acc[acc.length-1].msgs.push(m); return acc; },[]);
   return (
     <div style={{ display:'flex',height:'calc(100vh - 160px)',minHeight:400,borderRadius:14,overflow:'hidden',border:`1px solid ${c.bord}` }}>
       {/* Spaces sidebar */}
-      <div style={{ width:160,flexShrink:0,background:c.dark?'rgba(10,8,30,.95)':'rgba(230,234,255,.8)',borderRight:`1px solid ${c.bord}`,display:'flex',flexDirection:'column',padding:'12px 8px',gap:2 }}>
-        <div style={{ fontSize:10,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',padding:'4px 8px',marginBottom:4 }}>Spaces</div>
-        {[{id:'general',l:'# general',i:'💬'},{id:'announcements',l:'# announcements',i:'📢'},{id:'random',l:'# random',i:'🎲'}].map(sp=>(
-          <button key={sp.id} onClick={()=>setActiveSpace(sp.id)} style={{ display:'flex',alignItems:'center',gap:7,padding:'7px 8px',borderRadius:8,border:'none',background:activeSpace===sp.id?'rgba(99,102,241,.2)':'transparent',color:activeSpace===sp.id?'#818CF8':c.mut,cursor:'pointer',fontSize:12,fontWeight:activeSpace===sp.id?700:400,textAlign:'left',width:'100%' }}>
-            <span style={{ fontSize:14 }}>{sp.i}</span><span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{sp.l}</span>
-          </button>
-        ))}
-        <div style={{ borderTop:`1px solid ${c.bord}`,marginTop:8,paddingTop:8 }}>
-          <div style={{ fontSize:10,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',padding:'4px 8px',marginBottom:4 }}>Direct</div>
-          {members.filter(m=>m.email!==session?.user?.email).slice(0,5).map(m=>(
-            <button key={m.id||m.email} onClick={()=>setActiveSpace('dm-'+m.email)} style={{ display:'flex',alignItems:'center',gap:7,padding:'6px 8px',borderRadius:8,border:'none',background:activeSpace==='dm-'+m.email?'rgba(99,102,241,.2)':'transparent',color:activeSpace==='dm-'+m.email?'#818CF8':c.mut,cursor:'pointer',fontSize:12,textAlign:'left',width:'100%' }}>
-              <Av member={m} size={18} url={m.avatar_url}/><span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{(m.name||m.email).split(' ')[0]}</span>
+      <div style={{ width:175,flexShrink:0,background:c.dark?'rgba(10,8,30,.97)':'rgba(225,230,255,.9)',borderRight:`1px solid ${c.bord}`,display:'flex',flexDirection:'column',overflow:'hidden' }}>
+        <div style={{ flex:1,overflowY:'auto',padding:'10px 6px' }}>
+          {/* Default spaces */}
+          <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'4px 8px',marginBottom:2 }}>
+            <div style={{ fontSize:10,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em' }}>Spaces</div>
+            {isManager&&<button onClick={()=>setShowNewSpace(!showNewSpace)} title="Create space" style={{ width:18,height:18,borderRadius:4,background:'transparent',border:'none',color:c.mut,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontWeight:700 }}>+</button>}
+          </div>
+          {DEFAULT_SPACES.map(sp=>(
+            <button key={sp.id} onClick={()=>setActiveSpace(sp.id)} style={{ display:'flex',alignItems:'center',gap:6,padding:'6px 8px',borderRadius:8,border:'none',background:activeSpace===sp.id?'rgba(99,102,241,.2)':'transparent',color:activeSpace===sp.id?'#818CF8':c.mut,cursor:'pointer',fontSize:12,fontWeight:activeSpace===sp.id?700:400,textAlign:'left',width:'100%',marginBottom:1 }}>
+              <span style={{ fontSize:13 }}>{sp.icon}</span><span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{sp.label}</span>
             </button>
           ))}
+          {/* Custom spaces */}
+          {customSpaces.map(sp=>(
+            <div key={sp.id} style={{ display:'flex',alignItems:'center',gap:1 }}>
+              <button onClick={()=>setActiveSpace(sp.id)} style={{ flex:1,display:'flex',alignItems:'center',gap:6,padding:'6px 8px',borderRadius:8,border:'none',background:activeSpace===sp.id?'rgba(99,102,241,.2)':'transparent',color:activeSpace===sp.id?'#818CF8':c.mut,cursor:'pointer',fontSize:12,fontWeight:activeSpace===sp.id?700:400,textAlign:'left',marginBottom:1 }}>
+                <span style={{ fontSize:13 }}>#</span><span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{sp.name}</span>
+                {sp.private&&<span style={{ fontSize:9,color:c.mut }}>🔒</span>}
+              </button>
+              {isManager&&<button onClick={()=>deleteCustomSpace(sp.id)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:11,padding:'2px 4px',opacity:.6 }} title="Delete">×</button>}
+            </div>
+          ))}
+          {/* Create space form */}
+          {showNewSpace&&isManager&&(
+            <div style={{ padding:'8px',background:'rgba(99,102,241,.08)',borderRadius:10,margin:'6px 0' }}>
+              <input value={newSpaceName} onChange={e=>setNewSpaceName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')addCustomSpace();if(e.key==='Escape')setShowNewSpace(false);}} placeholder="Space name..." autoFocus style={{ width:'100%',background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:6,padding:'5px 8px',color:c.text,fontSize:12,outline:'none',boxSizing:'border-box',marginBottom:6 }}/>
+              <div style={{ display:'flex',alignItems:'center',gap:6,marginBottom:6 }}>
+                <input type="checkbox" id="priv" checked={newSpacePrivate} onChange={e=>setNewSpacePrivate(e.target.checked)} style={{ cursor:'pointer' }}/>
+                <label htmlFor="priv" style={{ fontSize:11,color:c.mut,cursor:'pointer' }}>Private</label>
+              </div>
+              <div style={{ display:'flex',gap:4 }}>
+                <button onClick={addCustomSpace} disabled={!newSpaceName.trim()} style={{ flex:1,padding:'5px',borderRadius:6,background:newSpaceName.trim()?'#6366F1':'rgba(128,128,128,.2)',border:'none',color:'#fff',cursor:newSpaceName.trim()?'pointer':'default',fontSize:11,fontWeight:600 }}>Create</button>
+                <button onClick={()=>setShowNewSpace(false)} style={{ padding:'5px 8px',borderRadius:6,background:'transparent',border:`1px solid ${c.bord}`,color:c.mut,cursor:'pointer',fontSize:11 }}>×</button>
+              </div>
+            </div>
+          )}
+          {/* Direct Messages */}
+          <div style={{ display:'flex',alignItems:'center',padding:'8px 8px 4px',marginTop:6 }}>
+            <div style={{ fontSize:10,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em' }}>Direct messages</div>
+          </div>
+          {members.filter(m=>m.email!==myEmail).map(m=>{
+            const dmKey='dm-'+m.email;
+            return(
+              <button key={m.id||m.email} onClick={()=>setActiveSpace(dmKey)} style={{ display:'flex',alignItems:'center',gap:7,padding:'6px 8px',borderRadius:8,border:'none',background:activeSpace===dmKey?'rgba(99,102,241,.2)':'transparent',color:activeSpace===dmKey?'#818CF8':c.mut,cursor:'pointer',fontSize:12,textAlign:'left',width:'100%',marginBottom:1 }}>
+                <div style={{ position:'relative',flexShrink:0 }}><Av member={m} size={20} url={m.avatar_url}/><div style={{ position:'absolute',bottom:-1,right:-1,width:7,height:7,borderRadius:'50%',background:'#34D399',border:'1.5px solid '+(c.dark?'rgba(10,8,30,.97)':'rgba(225,230,255,.9)') }}/></div>
+                <span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{(m.name||m.email).split(' ')[0]}</span>
+              </button>
+            );
+          })}
+          {members.filter(m=>m.email!==myEmail).length===0&&(
+            <div style={{ fontSize:11,color:c.mut,padding:'6px 8px' }}>No other members yet</div>
+          )}
         </div>
       </div>
       {/* Main chat area */}
       <div style={{ display:'flex',flexDirection:'column',flex:1,minWidth:0,position:'relative' }}>
       <div style={{ padding:'11px 14px',background:c.nav,borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',gap:8,flexShrink:0 }}>
         <div style={{ display:'flex' }}>{members.slice(0,4).map((m,i)=><div key={m.id||m.email} style={{ marginLeft:i>0?-5:0 }}><Av member={m} size={24} url={m.avatar_url}/></div>)}</div>
-        <div style={{ flex:1 }}><span style={{ fontSize:13,fontWeight:700,color:c.text }}>{'#'+(activeSpace==='general'?'general':activeSpace==='announcements'?'announcements':'random')}</span><span style={{ fontSize:11,color:c.mut,marginLeft:8 }}>{members.length} members</span></div>
+        <div style={{ flex:1 }}>
+          <span style={{ fontSize:13,fontWeight:700,color:c.text }}>
+            {activeSpace.startsWith('dm-')?(dmMember?'@ '+(dmMember.name||dmMember.email).split(' ')[0]:'Direct Message'):('# '+(customSpaces.find(s=>s.id===activeSpace)?.name||DEFAULT_SPACES.find(s=>s.id===activeSpace)?.label||activeSpace))}
+          </span>
+          <span style={{ fontSize:11,color:c.mut,marginLeft:8 }}>
+            {activeSpace.startsWith('dm-')?'Direct message':members.length+' members'}
+          </span>
+        </div>
         <button onClick={()=>setShowTheme(!showTheme)} style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14 }}>🎨</button>
         {showTheme&&<div style={{ position:'absolute',right:10,top:52,background:c.dark?'rgba(18,15,50,.98)':'#fff',border:`1px solid ${c.bord}`,borderRadius:12,padding:10,zIndex:200,backdropFilter:'blur(20px)',boxShadow:'0 8px 24px rgba(0,0,0,.3)',width:240 }}><div style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8 }}>Chat theme</div><div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6 }}>{CHAT_THEMES.map(t=><button key={t.id} onClick={()=>{onChangeTheme(t.id);setShowTheme(false);}} style={{ padding:'9px 5px',borderRadius:9,border:`2px solid ${chatTheme===t.id?t.accent:c.bord}`,background:t.bg,cursor:'pointer',textAlign:'center' }}><div style={{ fontSize:10,fontWeight:600,color:chatTheme===t.id?t.accent:'rgba(255,255,255,.6)' }}>{t.label}</div></button>)}</div></div>}
       </div>
       <div style={{ flex:1,overflowY:'auto',padding:'12px',display:'flex',flexDirection:'column',gap:3,background:theme.bg }}>
-        {messages.length===0&&<div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.35)',gap:8,paddingTop:32 }}><div style={{ fontSize:36 }}>💬</div><div style={{ fontSize:13 }}>No messages yet</div></div>}
+        {spaceMessages.length===0&&<div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.35)',gap:8,paddingTop:32 }}><div style={{ fontSize:36 }}>{activeSpace.startsWith('dm-')?'👤':'💬'}</div><div style={{ fontSize:13 }}>{activeSpace.startsWith('dm-')?'Start a direct message':'No messages in this space yet'}</div></div>}
         {grouped.map(group=>(
           <div key={group.date}>
             <div style={{ textAlign:'center',margin:'10px 0 6px',fontSize:11,color:'rgba(255,255,255,.3)',display:'flex',alignItems:'center',gap:6 }}><div style={{ flex:1,height:1,background:'rgba(255,255,255,.1)' }}/>{group.date}<div style={{ flex:1,height:1,background:'rgba(255,255,255,.1)' }}/></div>
@@ -775,57 +857,55 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
   const CLIENT_ID=process.env.REACT_APP_GOOGLE_CLIENT_ID;
   const SCOPES='https://www.googleapis.com/auth/calendar.readonly';
 
-  const loadGapi=()=>new Promise((res,rej)=>{
-    if(window.gapi&&window.gapi.client){res();return;}
+  // Load a script tag and resolve when ready
+  const loadScript=(src)=>new Promise((res,rej)=>{
+    if(document.querySelector('script[src="'+src+'"]')){res();return;}
     const s=document.createElement('script');
-    s.src='https://apis.google.com/js/api.js';
-    s.onload=()=>window.gapi.load('client',res);
-    s.onerror=rej;
+    s.src=src; s.onload=res; s.onerror=()=>rej(new Error('Failed to load: '+src));
     document.head.appendChild(s);
   });
 
   const connect=async()=>{
     if(!CLIENT_ID){
-      setError('REACT_APP_GOOGLE_CLIENT_ID not set in Vercel. See setup steps below.');
-      setStatus('error');
-      return;
+      setError('REACT_APP_GOOGLE_CLIENT_ID not set. Complete setup steps below then redeploy.');
+      setStatus('error'); return;
     }
-    setStatus('loading');
+    setStatus('loading'); setError('');
     try {
-      await loadGapi();
-      await window.gapi.client.init({
-        apiKey: '',
-        discoveryDocs:['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
-      });
-      // Use Google Identity Services for OAuth
-      const tokenClient=window.google?.accounts?.oauth2?.initTokenClient({
+      // Step 1: Load both scripts in parallel
+      await Promise.all([
+        loadScript('https://apis.google.com/js/api.js'),
+        loadScript('https://accounts.google.com/gsi/client'),
+      ]);
+
+      // Step 2: Load gapi client
+      await new Promise(res=>window.gapi.load('client',res));
+
+      // Step 3: Init gapi client (no API key needed for OAuth flow)
+      await window.gapi.client.init({});
+
+      // Step 4: Load calendar API explicitly
+      await window.gapi.client.load('https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest');
+
+      // Step 5: Init token client (GIS)
+      const tokenClient=window.google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: SCOPES,
         callback: async(resp)=>{
-          if(resp.error){setError('OAuth failed: '+resp.error);setStatus('error');return;}
+          if(resp.error){
+            setError('Google auth error: '+resp.error+'. Make sure your domain is in Authorised JavaScript origins in Google Cloud Console.');
+            setStatus('error'); return;
+          }
           await fetchEvents();
         },
       });
-      if(!tokenClient){
-        // Load GIS script
-        const s=document.createElement('script');
-        s.src='https://accounts.google.com/gsi/client';
-        s.onload=()=>{
-          const tc=window.google.accounts.oauth2.initTokenClient({
-            client_id:CLIENT_ID,scope:SCOPES,
-            callback:async(resp)=>{
-              if(resp.error){setError('OAuth: '+resp.error);setStatus('error');return;}
-              await fetchEvents();
-            },
-          });
-          tc.requestAccessToken();
-        };
-        document.head.appendChild(s);
-      } else {
-        tokenClient.requestAccessToken();
-      }
+
+      // Step 6: Request token — opens Google popup
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+
     } catch(e) {
-      setError('Failed to load Google API: '+e.message);
+      console.error('Calendar connect error:', e);
+      setError('Setup error: '+e.message+'. Check browser console for details.');
       setStatus('error');
     }
   };
@@ -841,13 +921,14 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
         timeMax:end,
         showDeleted:false,
         singleEvents:true,
-        maxResults:100,
+        maxResults:200,
         orderBy:'startTime',
       });
       setEvents(resp.result.items||[]);
       setStatus('connected');
     } catch(e) {
-      setError('Failed to load events: '+e.message);
+      console.error('fetchEvents error:', e);
+      setError('Failed to load events: '+(e.result?.error?.message||e.message)+'. Make sure Google Calendar API is enabled in Google Cloud Console.');
       setStatus('error');
     }
   };
@@ -1559,7 +1640,7 @@ function ManagerView({ session, team, tasks, members, history, standup, onStatus
         {tab==='team'&&<TeamTab tasks={tasks} members={members}/>}
         {tab==='perf'&&<PerfTab tasks={tasks} history={history} members={members}/>}
         {tab==='ai'&&<AIAssistant tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name||'Team'}/>}
-        {tab==='chat'&&<RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme}/>}
+        {tab==='chat'&&<RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme} isManager={true}/>}
         {tab==='cal'&&<CalendarPanel team={team} members={members} session={session}/>}
         {tab==='remind'&&<RemindersPanel team={team} members={members} session={session}/>}
         {tab==='hist'&&<HistTab history={history} members={members}/>}
