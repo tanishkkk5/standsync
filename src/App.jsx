@@ -5,8 +5,8 @@ import { getPriority, getStatus, PRIORITIES, STATUSES, TODAY, FAQ, CHAT_THEMES, 
 
 // Supabase loaded from CDN to avoid TDZ bundling bug in supabase-js
 // _sc is populated by initSupabase() called on mount
-const _SURL = process.env.REACT_APP_SUPABASE_URL || '';
-const _SKEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
+var _SURL = process.env.REACT_APP_SUPABASE_URL || '';
+var _SKEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 let _sc = null;
 
 function initSupabase() {
@@ -22,7 +22,7 @@ function initSupabase() {
   } catch(e) { console.warn('Supabase init error:', e.message); }
 }
 
-const SB = {
+var SB = {
   supabase:_sc, IS_LIVE:!!_sc,
   signIn:(e,p)=>_sc?_sc.auth.signInWithPassword({email:e,password:p}):Promise.resolve({error:{message:'Demo mode'}}),
   signUp:(e,p,n)=>_sc?_sc.auth.signUp({email:e,password:p,options:{data:{name:n}}}):Promise.resolve({error:{message:'Demo mode'}}),
@@ -980,8 +980,8 @@ function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], te
 
 // ─── RICH CHAT ──────────────────────────────────────────────────────────
 // ─── RICH CHAT PANEL (Google Chat replica) ────────────────────────────────────
-const EMOJI_LIST = ['👍','❤️','😂','😮','😢','🙏','🔥','🎉','✅','👀','💯','🚀','😊','🤔','👏','💪','😅','🤣','😍','🥳','🙌','💡','⚡','🎯','✨','🤝','😎','🫡','👋','💬'];
-const EMOJI_GROUPS = {
+var EMOJI_LIST = ['👍','❤️','😂','😮','😢','🙏','🔥','🎉','✅','👀','💯','🚀','😊','🤔','👏','💪','😅','🤣','😍','🥳','🙌','💡','⚡','🎯','✨','🤝','😎','🫡','👋','💬'];
+var EMOJI_GROUPS = {
   'Smileys': ['😀','😁','😂','🤣','😊','😍','🥰','😘','😎','🤩','😏','😒','😞','😔','😟','😕','🙁','😣','😖','😫','😩','🥺','😢','😭','😤','😠','😡','🤬','🤯','😳','🥵','🥶','😱','😨','😰','😥','😓','🤗','🤔','🤭','🤫','🤥','😶','😐','😑','😬','🙄','😯','😦','😧','😮','😲','🥱','😴','🤤','😪','😵','🤐','🥴','🤢','🤮','🤧','🥳'],
   'Gestures': ['👍','👎','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👋','🤚','🖐','✋','🖖','🙌','👐','🤲','🤝','🙏','✍️','💅','🤳','💪','🦵','🦶','👂','🦻','👃'],
   'Objects': ['💬','📎','📄','🖼️','🎵','🎬','📅','⚡','🔥','💡','🎯','✅','❌','⭐','🏆','🎉','🎊','🎁','📱','💻','⌨️','🖱️','🖨️','📷','📸','📹','🎥','📞','📟','📠','🔋','🔌','💾','💿','📀','🖥️','📺','📻'],
@@ -2477,6 +2477,10 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
   );
 }
 // ─── MANAGER VIEW ─────────────────────────────────────────────────────────────
+
+function ManagerView({
+ session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers, openPip, pipOpen }) {
+
 // Tab icons — plain text symbols, no JSX at module level
 // eslint-disable-next-line
 var STANDSYNC_ICONS_MAP={
@@ -2484,7 +2488,7 @@ var STANDSYNC_ICONS_MAP={
   chat:'◌', cal:'⊟', notes:'≡', remind:'◔', hist:'↺', tset:'⚙', pip:'⧉'
 };
 // I object maps to same strings for backward compat
-const I=STANDSYNC_ICONS_MAP;
+var I=STANDSYNC_ICONS_MAP;
 
 var STANDSYNC_MGR_TABS=[
   {id:'live',     l:'Live board',    ic:'◉'},
@@ -2500,7 +2504,6 @@ var STANDSYNC_MGR_TABS=[
   {id:'tset',     l:'Settings',      ic:'⚙'},
 ];
 
-function ManagerView({ session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers, openPip, pipOpen }) {
   const c=useC(); const [tab,setTab]=useState('live');
   const [unreadChat,setUnreadChat]=useState(0);
   const prevMsgCount=useRef(messages.length);
@@ -2622,7 +2625,7 @@ function PipWindow() { return null; }
 
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
-const DEMO_MEMBERS=[
+var DEMO_MEMBERS=[
   {id:'dm1',user_id:'u1',email:'tanisk.pandey@xtransmatrix.com',name:'Tanisk Pandey',role:'manager',color:'#818CF8'},
   {id:'dm2',user_id:'u2',email:'deepak.nr@xtransmatrix.com',name:'Deepak NR',role:'member',color:'#38BDF8'},
   {id:'dm3',user_id:'u3',email:'madhan.m@xtransmatrix.com',name:'Madhan M',role:'member',color:'#34D399'},
