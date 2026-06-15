@@ -6,14 +6,7 @@
   <meta name="theme-color" content="#060412"/>
   <title>StandSync</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236366F1'/%3E%3Cpolyline points='26,12 21,12 18,21 12,3 9,12 6,12' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"/>
-  <!-- Polyfills -->
-  <script>
-    window.global = window;
-    window.globalThis = window;
-    window.process = window.process || { env: {} };
-  </script>
-  <!-- Supabase from CDN — avoids TDZ bundling crash -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/umd/supabase.min.js"></script>
+  <script>window.global=window;window.globalThis=window;</script>
 </head>
 <body style="margin:0;background:#060412">
   <div id="root"></div>
