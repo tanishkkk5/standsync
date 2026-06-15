@@ -164,6 +164,14 @@ export async function removeMember(teamMemberId) {
 }
 
 // ── Rooms ─────────────────────────────────────────────────────────────────────
+export async function deleteTeam(teamId) {
+  if (!supabase || !teamId) return;
+  // Cascade delete handles rooms, team_members, invites, standups
+  const { error } = await supabase.from('teams').delete().eq('id', teamId);
+  if (error) console.error('deleteTeam error:', error.message);
+  return !error;
+}
+
 export async function getTeamRooms(teamId) {
   const { data } = await supabase.from('rooms').select('*').eq('team_id', teamId).order('created_at');
   return data || [];
