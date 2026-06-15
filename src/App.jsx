@@ -734,7 +734,7 @@ function RemindersPanel() {
 }
 
 // ─── GOOGLE CALENDAR ─────────────────────────────────────────────────────
-function CalendarPanel({ team }) {
+function CalendarPanel({ team, session }) {
   const c=useC(); const [connected,setConnected]=useState(false); const [selectedMeeting,setSelectedMeeting]=useState(null); const [step,setStep]=useState(1); const [importedMembers,setImportedMembers]=useState([]);
   const MOCK=[{id:'m1',title:team?.standup_name||'Daily Standup',time:'9:00 AM',days:'Mon-Sat',attendees:['tanisk.pandey@xtransmatrix.com','deepak.nr@xtransmatrix.com','madhan.m@xtransmatrix.com']}];
   const selectedMeet=MOCK.find(m=>m.id===selectedMeeting);
@@ -764,12 +764,27 @@ function CalendarPanel({ team }) {
       )}
     </div>
   );
+  // Get user email for calendar embed
+  const userEmail = session?.user?.email || '';
   return(
     <div>
-      <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:18 }}><div style={{ width:8,height:8,borderRadius:'50%',background:'#34D399' }}/><span style={{ fontSize:13,color:'#34D399',fontWeight:600 }}>Google Calendar connected</span><button onClick={()=>setConnected(false)} style={{ marginLeft:'auto',fontSize:12,color:c.mut,background:'none',border:'none',cursor:'pointer' }}>Disconnect</button></div>
-      {step===1&&(<><Lbl>Select your standup meeting</Lbl><div style={{ display:'flex',flexDirection:'column',gap:10,marginBottom:14 }}>{MOCK.map(m=><div key={m.id} onClick={()=>setSelectedMeeting(m.id===selectedMeeting?null:m.id)} style={{ padding:'12px 14px',borderRadius:11,border:`1.5px solid ${m.id===selectedMeeting?'#6366F1':c.bord}`,background:m.id===selectedMeeting?'rgba(99,102,241,.1)':c.surf,cursor:'pointer',transition:'all .2s' }}><div style={{ display:'flex',alignItems:'center',gap:9 }}><div style={{ width:32,height:32,borderRadius:9,background:'rgba(99,102,241,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16 }}>📅</div><div style={{ flex:1 }}><div style={{ fontSize:13,fontWeight:600,color:c.text }}>{m.title}</div><div style={{ fontSize:11,color:c.mut }}>{m.time} · {m.days} · {m.attendees.length} attendees</div></div>{m.id===selectedMeeting&&<div style={{ width:18,height:18,borderRadius:'50%',background:'#6366F1',display:'flex',alignItems:'center',justifyContent:'center' }}><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg></div>}</div></div>)}</div>{selectedMeeting&&<Btn onClick={()=>setStep(2)}>Select members →</Btn>}</>)}
-      {step===2&&selectedMeet&&(<><Lbl>Select members to add</Lbl><button onClick={()=>setImportedMembers(selectedMeet.attendees)} style={{ fontSize:12,color:'#818CF8',background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.25)',borderRadius:8,padding:'4px 11px',cursor:'pointer',marginBottom:10 }}>Select all</button>{selectedMeet.attendees.map(email=><div key={email} onClick={()=>setImportedMembers(p=>p.includes(email)?p.filter(x=>x!==email):[...p,email])} style={{ display:'flex',alignItems:'center',gap:10,padding:'9px 12px',borderRadius:9,border:`1px solid ${importedMembers.includes(email)?'#6366F1':c.bord}`,background:importedMembers.includes(email)?'rgba(99,102,241,.1)':c.surf,cursor:'pointer',marginBottom:7 }}><Av member={{name:email.split('@')[0],color:'#818CF8'}} size={30}/><span style={{ flex:1,fontSize:13,color:c.text }}>{email}</span></div>)}<div style={{ display:'flex',gap:8,marginTop:10 }}><Btn v="ghost" onClick={()=>setStep(1)}>← Back</Btn><Btn onClick={()=>setStep(3)} disabled={!importedMembers.length}>Add {importedMembers.length} →</Btn></div></>)}
-      {step===3&&<div style={{ textAlign:'center',padding:'20px 0' }}><div style={{ fontSize:40,marginBottom:10 }}>🎉</div><h3 style={{ color:c.text,marginBottom:6 }}>Done!</h3><p style={{ color:c.mut,fontSize:13,marginBottom:14 }}>{importedMembers.length} members added.</p><Btn onClick={()=>{setStep(1);setSelectedMeeting(null);setImportedMembers([]);}}>Done</Btn></div>}
+      <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:14 }}>
+        <div style={{ width:8,height:8,borderRadius:'50%',background:'#34D399' }}/>
+        <span style={{ fontSize:13,color:'#34D399',fontWeight:600 }}>Google Calendar connected</span>
+        <button onClick={()=>setConnected(false)} style={{ marginLeft:'auto',fontSize:12,color:c.mut,background:'none',border:'none',cursor:'pointer' }}>Disconnect</button>
+      </div>
+      {/* Embedded Google Calendar — shows real events */}
+      <div style={{ borderRadius:12,overflow:'hidden',border:`1px solid ${c.bord}`,marginBottom:14 }}>
+        <iframe
+          src={'https://calendar.google.com/calendar/embed?src='+encodeURIComponent(userEmail)+'&ctz=Asia%2FKolkata&showTitle=0&showNav=1&showDate=1&showPrint=0&showTabs=1&showCalendars=0&mode=WEEK'}
+          style={{ width:'100%',height:500,border:'none',display:'block' }}
+          title="Google Calendar"
+          sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+        />
+      </div>
+      <div style={{ padding:'11px 14px',background:'rgba(99,102,241,.06)',border:`1px solid ${c.bord}`,borderRadius:10,fontSize:12,color:c.mut }}>
+        📅 Showing your Google Calendar. To import meeting attendees as team members, go to Team Settings → Invite and add their emails.
+      </div>
     </div>
   );
 }
@@ -1220,10 +1235,22 @@ export default function App() {
       if (!raw) return 'auth';
       const parsed = JSON.parse(raw);
       const hasSession = !!(parsed?.currentSession || parsed?.session);
-      return hasSession ? 'home' : 'auth';
+      if (!hasSession) return 'auth';
+      // Restore last view (e.g. 'standup') so OAuth redirect returns correctly
+      const savedView = localStorage.getItem('ss-view');
+      // But only restore standup/settings — auth/home are fine as defaults
+      const team = localStorage.getItem('ss-team');
+      if (savedView === 'standup' && team) return 'standup';
+      return 'home';
     } catch(e){ return 'auth'; }
   });
-  const [team,setTeam]=useState(null); const [myRole,setMyRole]=useState('member');
+  // Persist team + role so page reloads (OAuth redirects) don't lose state
+  const [team,setTeam]=useState(()=>{
+    try{ const t=localStorage.getItem('ss-team'); return t?JSON.parse(t):null; }catch(e){return null;}
+  });
+  const [myRole,setMyRole]=useState(()=>{
+    try{ return localStorage.getItem('ss-role')||'member'; }catch(e){return 'member';}
+  });
   const [members,setMembers]=useState(SB.IS_LIVE?[]:DEMO_MEMBERS);
   const [homeKey,setHomeKey]=useState(0); const [tasks,setTasks]=useState([]); const [standup,setStandup]=useState(null);
   const [history,setHistory]=useState([]); const [messages,setMessages]=useState([]); const [chatTheme,setChatTheme]=useState('default');
@@ -1232,6 +1259,17 @@ export default function App() {
   const showToast=useCallback((msg,type='success')=>setToast({msg,type}),[]);
 
   // Session persistence handled by Supabase client (localStorage key: ss-auth)
+  // Persist team, role, view so OAuth redirects don't lose state
+  useEffect(()=>{
+    if(team){ try{ localStorage.setItem('ss-team',JSON.stringify(team)); }catch(e){} }
+    else { try{ localStorage.removeItem('ss-team'); }catch(e){} }
+  },[team]);
+  useEffect(()=>{
+    try{ localStorage.setItem('ss-role',myRole); }catch(e){}
+  },[myRole]);
+  useEffect(()=>{
+    try{ localStorage.setItem('ss-view',view); }catch(e){}
+  },[view]);
 
   useEffect(()=>{ const p=new URLSearchParams(window.location.search); const inv=p.get('invite'); if(inv)setInviteToken(inv); },[]);
 
@@ -1246,8 +1284,8 @@ export default function App() {
     if(SB.supabase){
       const {data:{subscription}} = SB.supabase.auth.onAuthStateChange((event, s)=>{
         if(event==='SIGNED_OUT'){
-          // Only explicit logout clears everything
-          setSession(null); setTeam(null); setView('auth');
+          setSession(null); setTeam(null); setMyRole('member'); setView('auth');
+          try{ localStorage.removeItem('ss-team'); localStorage.removeItem('ss-role'); localStorage.removeItem('ss-view'); }catch(e){}
         } else if(s?.session){
           // Any event with a valid session — update session and go to home if on auth page
           // This covers: SIGNED_IN (normal + Google), INITIAL_SESSION, TOKEN_REFRESHED
@@ -1317,17 +1355,33 @@ export default function App() {
   },[tasks,members,team,showToast]);
   const handleEOD=useCallback(async()=>{ setEmailBusy(true); try{ for(const m of members.filter(x=>x.role!=='manager')){const p=tasks.filter(t=>t.assignee_email===m.email&&t.status!=='done');if(p.length>0)await Email.sendEODBacklog(m,p,team?.name||'Team');} const mg=members.find(m=>m.role==='manager'); if(mg)await Email.sendManagerSummary(mg.email,tasks,members,team?.name||'Team'); showToast('🕕 EOD summary sent'); }catch(e){showToast('Failed to send EOD','error');} setEmailBusy(false); },[tasks,members,team,showToast]);
   const handleLogin=useCallback(async(sess)=>{ setSession(sess); if(inviteToken&&SB.IS_LIVE){const r=await SB.acceptInvite(inviteToken,sess.user.id,sess.user.email,sess.user.user_metadata?.name||sess.user.email);if(r.teamId)showToast(`✅ Joined: ${r.teamName}`);window.history.replaceState({},'',window.location.pathname);setInviteToken(null);} setView('home'); },[inviteToken,showToast]);
-  const handleSelectTeam=useCallback((t,role)=>{ setTeam(t);setMyRole(role);setView('standup'); if(!SB.IS_LIVE){setMembers(DEMO_MEMBERS);setTasks([]);} },[]);
-  const handleLogout=useCallback(()=>{ SB.signOut();setSession(null);setTeam(null);setView('auth'); },[]);
+  const handleSelectTeam=useCallback((t,role)=>{
+    setTeam(t); setMyRole(role||'member'); setView('standup');
+    if(!SB.IS_LIVE){ setMembers(DEMO_MEMBERS); setTasks([]); }
+  },[]);
+  const handleLogout=useCallback(()=>{
+    SB.signOut();
+    setSession(null); setTeam(null); setMyRole('member'); setView('auth');
+    setTasks([]); setMembers([]); setMessages([]); setStandup(null);
+    try{
+      localStorage.removeItem('ss-team');
+      localStorage.removeItem('ss-role');
+      localStorage.removeItem('ss-view');
+    }catch(e){}
+  },[]);
   const handleSendMessage=useCallback(async(m)=>{
     if(SB.IS_LIVE&&team){
-      // Save to DB — real-time subscription will broadcast to all members
+      // Add to local state immediately for sender
+      const localId='local-'+Date.now();
+      const localMsg={...m,id:localId};
+      setMessages(p=>[...p,localMsg]);
+      // Save to DB
       const saved=await SB.sendChatMessage(team.id,m);
       if(saved){
-        // Real-time will add it via subscription, but add locally for instant feedback
-        setMessages(p=>{if(p.find(x=>x.id===saved.id))return p;return[...p,{...m,id:saved.id,created_at:saved.created_at}];});
-      } else {
-        setMessages(p=>[...p,m]); // fallback
+        // Replace local message with saved one
+        setMessages(p=>p.map(x=>x.id===localId?{...saved,type:m.type,url:m.url,text:m.text}:x));
+        // Broadcast to all other online members instantly
+        await SB.broadcastMessage(team.id,{...saved,type:m.type,url:m.url,text:m.text});
       }
     } else {
       setMessages(p=>[...p,m]);
