@@ -38,12 +38,13 @@ input,select,textarea,button{font-family:inherit}
 
 // ─── PRIMITIVES ───────────────────────────────────────────────────────────────
 function Logo({ size=32, onClick }) {
+  const { dark } = useTheme();
   return (
     <div onClick={onClick} style={{ display:'flex',alignItems:'center',gap:9,cursor:onClick?'pointer':'default',flexShrink:0 }}>
       <div style={{ width:size,height:size,borderRadius:size*.28,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 18px rgba(99,102,241,.4)',flexShrink:0 }}>
         <svg width={size*.55} height={size*.55} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       </div>
-      <span style={{ fontSize:size*.56,fontWeight:800,color:'#fff',letterSpacing:'-.025em',lineHeight:1 }}>StandSync</span>
+      <span style={{ fontSize:size*.56,fontWeight:800,color:dark?'#fff':'#1E1B4B',letterSpacing:'-.025em',lineHeight:1 }}>StandSync</span>
     </div>
   );
 }
@@ -144,7 +145,7 @@ function AuthPage({ onLogin, inviteToken }) {
   const c=useC(); const [mode,setMode]=useState(inviteToken?'signup':'login');
   const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); const [name,setName]=useState('');
   const [loading,setLoading]=useState(false); const [gLoading,setGLoading]=useState(false);
-  const [error,setError]=useState(''); const [info,setInfo]=useState('');
+  const [error,setError]=useState(''); const [info,setInfo]=useState(''); const [gError,setGError]=useState('');
 
   const submit=async()=>{
     setError('');setInfo('');setLoading(true);
@@ -163,11 +164,11 @@ function AuthPage({ onLogin, inviteToken }) {
   };
 
   const signInWithGoogle=async()=>{
-    if(!SB.IS_LIVE){setError('To enable Google Sign-In: add REACT_APP_GOOGLE_CLIENT_ID to Vercel and enable Google provider in Supabase Auth settings.');return;}
-    if(!process.env.REACT_APP_GOOGLE_CLIENT_ID){setError('Google Sign-In not configured. Add REACT_APP_GOOGLE_CLIENT_ID to Vercel environment variables.');return;}
+    if(!SB.IS_LIVE){setGError('Supabase not connected. Add environment variables to Vercel first.');return;}
+    if(!process.env.REACT_APP_GOOGLE_CLIENT_ID){setGError('Google Sign-In not configured. Add REACT_APP_GOOGLE_CLIENT_ID to Vercel, then enable Google provider in Supabase Auth settings.');return;}
     setGLoading(true);
     const {error:e}=await SB.signInWithGoogle();
-    if(e){setError(e.message);setGLoading(false);}
+    if(e){setGError(e.message);setGLoading(false);}
     // On success: Supabase redirects to window.location.origin
   };
 
@@ -183,7 +184,8 @@ function AuthPage({ onLogin, inviteToken }) {
         </p>
         {inviteToken&&mode==='signup'&&<div style={{ background:'rgba(99,102,241,.12)',border:'1px solid rgba(99,102,241,.3)',borderRadius:10,padding:'10px 14px',marginBottom:18,fontSize:13,color:'#818CF8' }}>🎉 You were invited! Create an account to join.</div>}
         {info&&<div style={{ background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.3)',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#34D399',marginBottom:14 }}>✅ {info}</div>}
-        {error&&<div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#F87171',marginBottom:14 }}>{error}</div>}
+        {gError&&<div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#F87171',marginBottom:14 }}>{gError}</div>}
+        {error&&!gError&&<div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#F87171',marginBottom:14 }}>{error}</div>}
 
         {/* Google Sign-In */}
         {mode!=='forgot'&&(
@@ -192,12 +194,12 @@ function AuthPage({ onLogin, inviteToken }) {
               <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
               Continue with Google
             </Btn>
-            {!!!process.env.REACT_APP_GOOGLE_CLIENT_ID&&<div style={{ fontSize:11,color:c.mut,textAlign:'center',marginBottom:12 }}>⚙️ Add REACT_APP_GOOGLE_CLIENT_ID to enable Google Sign-In</div>}
+
             <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:16 }}><div style={{ flex:1,height:1,background:c.bord }}/><span style={{ fontSize:12,color:c.mut }}>or</span><div style={{ flex:1,height:1,background:c.bord }}/></div>
           </>
         )}
 
-        {mode==='signup'&&<div style={{ marginBottom:14 }}><Inp label="Your name" value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Tanisk Pandey"/></div>}
+        {mode==='signup'&&<div style={{ marginBottom:14 }}><Inp label="Your name" value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Alex Johnson"/></div>}
         <div style={{ marginBottom:14 }}><Inp label="Email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@company.com" onKeyDown={e=>e.key==='Enter'&&submit()}/></div>
         {mode!=='forgot'&&<div style={{ marginBottom:20 }}><Inp label="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder={mode==='signup'?'Min 6 characters':'Your password'} onKeyDown={e=>e.key==='Enter'&&submit()}/></div>}
         <Btn onClick={submit} loading={loading} style={{ width:'100%',justifyContent:'center',padding:'12px',fontSize:15 }}>
@@ -331,7 +333,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
           <p style={{ fontSize:13,color:c.mut }}>Get the Room ID and password from your manager</p>
         </div>
         <Inp label="Room ID" value={roomId} onChange={e=>setRoomId(e.target.value.toUpperCase())} placeholder="e.g. AB3K9M" style={{ marginBottom:14,letterSpacing:'.12em',textTransform:'uppercase',fontSize:18,textAlign:'center',fontWeight:700 }} autoFocus/>
-        <Inp label="Room password" type="password" value={roomPass} onChange={e=>setRoomPass(e.target.value)} placeholder="4-digit PIN" style={{ marginBottom:18,textAlign:'center',fontSize:18,letterSpacing:'.15em' }} onKeyDown={e=>e.key==='Enter'&&joinTeam()}/>
+        <Inp label="Room password" type="password" value={roomPass} onChange={e=>setRoomPass(e.target.value.toUpperCase())} placeholder="4-digit PIN" style={{ marginBottom:18,textAlign:'center',fontSize:18,letterSpacing:'.15em' }} onKeyDown={e=>e.key==='Enter'&&joinTeam()}/>
         {joinError&&<div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#F87171',marginBottom:14 }}>{joinError}</div>}
         <Btn onClick={joinTeam} loading={joinLoading} disabled={!roomId.trim()||!roomPass.trim()} style={{ width:'100%',justifyContent:'center',padding:'12px',fontSize:15 }}>Join team →</Btn>
         <div style={{ marginTop:16,fontSize:12,color:c.mut,textAlign:'center' }}>Don't have a Room ID? Ask your manager to share it from Team Settings</div>
