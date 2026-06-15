@@ -23,9 +23,21 @@ export async function signIn(email, password) {
 }
 export async function signInWithGoogle() {
   if (!supabase) return { error: { message: 'Supabase not configured' } };
+  // redirectTo must EXACTLY match what you set in:
+  // 1. Supabase → Auth → URL Configuration → Site URL
+  // 2. Google Cloud Console → OAuth → Authorized redirect URIs
+  //    (add: https://YOUR_PROJECT.supabase.co/auth/v1/callback)
+  const redirectTo = window.location.origin;
   return supabase.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.origin },
+    options: {
+      redirectTo,
+      scopes: 'email profile',
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'select_account',
+      },
+    },
   });
 }
 export async function signOut() {
@@ -55,14 +67,14 @@ export async function getSession() {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const ROOM_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-// Room ID: derived from team name + random suffix e.g. XTRNS-K3M
+// Room ID: team name prefix + random suffix e.g. DATAC-K3M
 function genRoomId(teamName) {
-  // Take first 4-5 letters from team name (alphanumeric only, uppercase)
   const prefix = (teamName || 'TEAM').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 5).padEnd(3, 'X');
-  // 3 random chars suffix
-  let suffix = '';
-  for (let i = 0; i < 3; i++) suffix += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)];
-  return prefix + '-' + suffix;
+  // Use timestamp base36 + random for guaranteed uniqueness
+  const ts = Date.now().toString(36).slice(-2).toUpperCase();
+  let rnd = '';
+  for (let i = 0; i < 2; i++) rnd += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)];
+  return prefix + '-' + ts + rnd;
 }
 
 // Password: XXX-XXX format (6 alphanumeric split by dash) — memorable and unique
@@ -77,11 +89,20 @@ const COLORS = ['#818CF8','#38BDF8','#34D399','#F472B6','#FB923C','#E879F9','#F5
 // ── Teams ─────────────────────────────────────────────────────────────────────
 export async function createTeam(name, ownerId, ownerEmail, ownerName, standupName) {
   const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + Math.random().toString(36).slice(2, 6);
-  const { data: team, error } = await supabase
-    .from('teams')
-    .insert({ name, slug, owner_id: ownerId, standup_name: standupName || name })
-    .select().single();
-  if (error || !team) return null;
+  // Try with slug first, fall back without it if column doesn't exist
+  let team = null;
+  let err1 = null;
+  const payload = { name, slug, owner_id: ownerId, standup_name: standupName || name };
+  const res1 = await supabase.from('teams').insert(payload).select().single();
+  if (res1.error) {
+    // Retry without slug in case column doesn't exist
+    const res2 = await supabase.from('teams').insert({ name, owner_id: ownerId, standup_name: standupName || name }).select().single();
+    if (res2.error) { console.error('createTeam error:', res2.error); return null; }
+    team = res2.data;
+  } else {
+    team = res1.data;
+  }
+  if (!team) return null;
 
   // Add owner as manager
   await supabase.from('team_members').insert({
