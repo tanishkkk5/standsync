@@ -320,6 +320,38 @@ export async function uploadAvatar(userId, file) {
   return data.publicUrl;
 }
 
+// ── Ensure manager is in team_members ───────────────────────────────────────────
+export async function ensureManagerMember(teamId, userId, email, name) {
+  // Check if member exists
+  const { data: existing } = await supabase
+    .from('team_members')
+    .select('id,status,role')
+    .eq('team_id', teamId)
+    .eq('user_id', userId)
+    .single();
+
+  if (existing) {
+    // Update status to active if needed
+    if (existing.status !== 'active') {
+      await supabase.from('team_members').update({ status:'active' }).eq('id', existing.id);
+    }
+    return existing;
+  }
+
+  // Insert as manager
+  const { data } = await supabase.from('team_members').insert({
+    team_id: teamId,
+    user_id: userId,
+    email: email,
+    name: name || email.split('@')[0],
+    role: 'manager',
+    designation: 'Team Manager',
+    status: 'active',
+    color: '#818CF8',
+  }).select().single();
+  return data;
+}
+
 // ── Chat messages (persistent + realtime) ─────────────────────────────────────
 export async function getChatMessages(teamId, limit = 50) {
   const { data } = await supabase
