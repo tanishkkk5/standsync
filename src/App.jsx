@@ -224,6 +224,22 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
   const [teamName,setTeamName]=useState(''); const [standupName,setStandupName]=useState('');
   const [memberEmails,setMemberEmails]=useState(['']); const [creating,setCreating]=useState(false);
   const [createdTeam,setCreatedTeam]=useState(null); const [deletingId,setDeletingId]=useState(null);
+  const [calEvents,setCalEvents]=useState(()=>{ try{ return JSON.parse(sessionStorage.getItem('ss-cal-events')||'[]'); }catch{ return []; } });
+  const [selectedCalEvent,setSelectedCalEvent]=useState(null);
+  // Load today's calendar events if gapi is connected
+  useEffect(()=>{
+    const saved=sessionStorage.getItem('ss-cal-events');
+    if(saved)try{ setCalEvents(JSON.parse(saved)); }catch{}
+    // Try to get from gapi if connected
+    if(window.gapi?.client?.calendar&&localStorage.getItem('ss-cal-status')==='connected'){
+      const now=new Date();
+      const start=new Date(now.getFullYear(),now.getMonth(),1).toISOString();
+      const end=new Date(now.getFullYear(),now.getMonth()+2,0).toISOString();
+      window.gapi.client.calendar.events.list({calendarId:'primary',timeMin:start,timeMax:end,singleEvents:true,maxResults:200,orderBy:'startTime'})
+        .then(r=>{ const items=r.result.items||[]; setCalEvents(items); try{sessionStorage.setItem('ss-cal-events',JSON.stringify(items));}catch{}; })
+        .catch(()=>{});
+    }
+  },[]);
   const [roomId,setRoomId]=useState(''); const [roomPass,setRoomPass]=useState('');
   const [joinLoading,setJoinLoading]=useState(false); const [joinError,setJoinError]=useState('');
   const name=session?.user?.user_metadata?.name||session?.user?.email?.split('@')[0]||'there';
@@ -304,29 +320,150 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
   // ── Team list ──────────────────────────────────────────────────────────────
   if(view==='list') return(
     <div style={{ minHeight:'100vh',position:'relative',zIndex:1,animation:'fadeIn .3s ease' }}>
+      {/* Nav */}
       <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(24px)',position:'sticky',top:0,zIndex:100 }}>
-        <div style={{ maxWidth:920,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:12 }}>
+        <div style={{ maxWidth:960,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:12 }}>
           <Logo size={28}/><div style={{ flex:1 }}/><ThemeToggle/><ProfileMenu session={session} onSettings={onSettings} onLogout={onLogout}/>
         </div>
       </div>
-      <div style={{ maxWidth:920,margin:'0 auto',padding:'36px 24px' }}>
-        <h1 style={{ fontSize:24,fontWeight:800,color:c.text,marginBottom:6 }}>Good morning, {name} 👋</h1>
-        <p style={{ color:c.mut,fontSize:14,marginBottom:28 }}>Your teams and projects — select one or join / create.</p>
-        {!SB.IS_LIVE&&<div style={{ background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.3)',borderRadius:12,padding:'14px 18px',marginBottom:20,fontSize:13,color:'#FCD34D' }}>⚡ Demo mode — connect Supabase for real data</div>}
 
-        {/* New user banner */}
-        {!loading&&teams.length===0&&(
-          <div style={{ background:'rgba(99,102,241,.08)',border:'1px solid rgba(99,102,241,.25)',borderRadius:14,padding:'24px',marginBottom:24,textAlign:'center' }}>
-            <div style={{ fontSize:40,marginBottom:12 }}>👋</div>
-            <div style={{ fontSize:17,fontWeight:700,color:c.text,marginBottom:6 }}>Welcome to StandSync!</div>
-            <div style={{ fontSize:14,color:c.mut,marginBottom:20 }}>Create a new team or join an existing one with a Room ID.</div>
-            <div style={{ display:'flex',gap:12,justifyContent:'center',flexWrap:'wrap' }}>
-              <Btn onClick={()=>setView('create')} style={{ padding:'12px 28px',fontSize:14 }}>+ Create a team</Btn>
-              <Btn v="ghost" onClick={()=>setView('join')} style={{ padding:'12px 28px',fontSize:14 }}>🔑 Join with Room ID</Btn>
+      <div style={{ maxWidth:960,margin:'0 auto',padding:'36px 24px' }}>
+        <h1 style={{ fontSize:26,fontWeight:800,color:c.text,marginBottom:4 }}>Good morning, {name} 👋</h1>
+        <p style={{ color:c.mut,fontSize:14,marginBottom:32 }}>What would you like to do today?</p>
+
+        {/* ── TWO-PATH CHOOSER ── */}
+        <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:36 }}>
+          {/* Path 1: Join Standup */}
+          <div onClick={()=>setView('standup-entry')} style={{ padding:'28px 24px',borderRadius:16,border:`2px solid ${c.bord}`,background:c.surf,cursor:'pointer',transition:'all .2s',position:'relative',overflow:'hidden' }}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor='#6366F1';e.currentTarget.style.background=c.dark?'rgba(99,102,241,.08)':'rgba(99,102,241,.05)';}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor=c.bord;e.currentTarget.style.background=c.surf;}}>
+            <div style={{ fontSize:40,marginBottom:14 }}>⚡</div>
+            <div style={{ fontSize:18,fontWeight:800,color:c.text,marginBottom:6 }}>Join Standup</div>
+            <div style={{ fontSize:13,color:c.mut,lineHeight:1.6 }}>Pick today's meeting from your calendar and write tasks in real time — even in PiP mode during Google Meet.</div>
+            <div style={{ marginTop:16,display:'flex',gap:6,flexWrap:'wrap' }}>
+              {['📅 From calendar','✅ Write tasks','🖥️ PiP mode'].map(t=><span key={t} style={{ fontSize:11,background:'rgba(99,102,241,.1)',color:'#818CF8',padding:'3px 9px',borderRadius:20 }}>{t}</span>)}
+            </div>
+          </div>
+
+          {/* Path 2: Team / Projects */}
+          <div onClick={()=>setView('team-entry')} style={{ padding:'28px 24px',borderRadius:16,border:`2px solid ${c.bord}`,background:c.surf,cursor:'pointer',transition:'all .2s',position:'relative',overflow:'hidden' }}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor='#34D399';e.currentTarget.style.background=c.dark?'rgba(52,211,153,.06)':'rgba(52,211,153,.04)';}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor=c.bord;e.currentTarget.style.background=c.surf;}}>
+            <div style={{ fontSize:40,marginBottom:14 }}>👥</div>
+            <div style={{ fontSize:18,fontWeight:800,color:c.text,marginBottom:6 }}>Team & Projects</div>
+            <div style={{ fontSize:13,color:c.mut,lineHeight:1.6 }}>View your teams, manage tasks, check performance, and collaborate in chat — full team dashboard.</div>
+            <div style={{ marginTop:16,display:'flex',gap:6,flexWrap:'wrap' }}>
+              {['💬 Chat','📊 Performance','🗂️ History'].map(t=><span key={t} style={{ fontSize:11,background:'rgba(52,211,153,.1)',color:'#34D399',padding:'3px 9px',borderRadius:20 }}>{t}</span>)}
+            </div>
+          </div>
+        </div>
+
+        {/* Quick-access: your teams */}
+        {teams.length>0&&(
+          <div>
+            <div style={{ fontSize:13,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:12 }}>Your teams</div>
+            <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:10 }}>
+              {teams.map((tm,i)=>(
+                <Card key={tm.team_id} style={{ padding:'16px 18px',position:'relative',cursor:'pointer' }}>
+                  <div onClick={()=>goToTeam(tm.teams,tm.role)} style={{ display:'flex',alignItems:'center',gap:12 }}>
+                    <div style={{ width:38,height:38,borderRadius:10,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:18 }}>{ICONS[i%ICONS.length]}</div>
+                    <div style={{ flex:1,minWidth:0 }}>
+                      <div style={{ fontSize:14,fontWeight:700,color:c.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{tm.teams?.name}</div>
+                      <div style={{ fontSize:11,color:c.mut }}>{tm.role==='manager'?'Manager':'Member'}</div>
+                    </div>
+                  </div>
+                  {tm.role==='manager'&&<button onClick={e=>{e.stopPropagation();if(window.confirm('Delete "'+tm.teams?.name+'"?'))deleteTeam(tm.teams?.id);}} style={{ position:'absolute',top:8,right:8,width:24,height:24,borderRadius:6,background:'rgba(239,68,68,.1)',border:'none',color:'#F87171',cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center' }}>🗑</button>}
+                </Card>
+              ))}
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
 
+  // ── STANDUP ENTRY: pick meeting from today's calendar ─────────────────────
+  if(view==='standup-entry'){
+    const todayEvts=calEvents.filter(ev=>{
+      const evDate=new Date(ev.start?.dateTime||ev.start?.date);
+      return evDate.toDateString()===new Date().toDateString();
+    }).sort((a,b)=>new Date(a.start?.dateTime||a.start?.date)-new Date(b.start?.dateTime||b.start?.date));
+    return(
+      <div style={{ minHeight:'100vh',position:'relative',zIndex:1,animation:'fadeIn .3s ease' }}>
+        <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(24px)',position:'sticky',top:0,zIndex:100 }}>
+          <div style={{ maxWidth:760,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:12 }}>
+            <button onClick={()=>setView('list')} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:13,padding:0 }}>← Back</button>
+            <Logo size={26}/>
+            <div style={{ flex:1 }}/>
+            <ThemeToggle/><ProfileMenu session={session} onSettings={onSettings} onLogout={onLogout}/>
+          </div>
+        </div>
+        <div style={{ maxWidth:760,margin:'0 auto',padding:'36px 24px' }}>
+          <h2 style={{ fontSize:22,fontWeight:800,color:c.text,marginBottom:4 }}>Join Standup ⚡</h2>
+          <p style={{ color:c.mut,fontSize:14,marginBottom:28 }}>Pick a meeting to write tasks for, or jump straight into a team.</p>
+
+          {/* Today's meetings from calendar */}
+          {todayEvts.length>0&&(
+            <div style={{ marginBottom:28 }}>
+              <div style={{ fontSize:13,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:12 }}>Today's meetings ({new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})})</div>
+              <div style={{ display:'flex',flexDirection:'column',gap:8 }}>
+                {todayEvts.map(ev=>(
+                  <div key={ev.id} onClick={()=>{setSelectedCalEvent(ev);setView('standup-select-team');}} style={{ padding:'16px 18px',borderRadius:12,border:`1.5px solid ${c.bord}`,background:c.surf,cursor:'pointer',display:'flex',alignItems:'center',gap:14,transition:'all .15s' }}
+                    onMouseEnter={e=>{e.currentTarget.style.borderColor='#6366F1';}}
+                    onMouseLeave={e=>{e.currentTarget.style.borderColor=c.bord;}}>
+                    <div style={{ width:8,borderRadius:4,alignSelf:'stretch',background:ev.colorId?'#'+ev.colorId:'#6366F1',flexShrink:0 }}/>
+                    <div style={{ flex:1,minWidth:0 }}>
+                      <div style={{ fontSize:15,fontWeight:700,color:c.text,marginBottom:3 }}>{ev.summary||'Untitled'}</div>
+                      <div style={{ fontSize:12,color:c.mut }}>{ev.start?.dateTime?new Date(ev.start.dateTime).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'All day'}{ev.attendees?` · ${ev.attendees.length} attendees`:''}</div>
+                    </div>
+                    <span style={{ fontSize:13,color:'#818CF8',fontWeight:600,flexShrink:0 }}>Join →</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {todayEvts.length===0&&(
+            <div style={{ padding:'24px',borderRadius:12,background:c.surf,border:`1px solid ${c.bord}`,textAlign:'center',marginBottom:28 }}>
+              <div style={{ fontSize:32,marginBottom:8 }}>📅</div>
+              <div style={{ fontSize:14,color:c.mut }}>No meetings found for today. Connect Google Calendar in the Calendar tab to see your meetings here.</div>
+            </div>
+          )}
+
+          {/* Jump to team directly */}
+          {teams.length>0&&(
+            <div>
+              <div style={{ fontSize:13,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:12 }}>Or jump to a team</div>
+              <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:8 }}>
+                {teams.map((tm,i)=>(
+                  <div key={tm.team_id} onClick={()=>goToTeam(tm.teams,tm.role)} style={{ padding:'14px 16px',borderRadius:10,border:`1px solid ${c.bord}`,background:c.surf,cursor:'pointer',display:'flex',alignItems:'center',gap:10,transition:'all .15s' }}
+                    onMouseEnter={e=>{e.currentTarget.style.borderColor='#6366F1';}}
+                    onMouseLeave={e=>{e.currentTarget.style.borderColor=c.bord;}}>
+                    <div style={{ width:32,height:32,borderRadius:9,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>{ICONS[i%ICONS.length]}</div>
+                    <div style={{ flex:1,minWidth:0 }}><div style={{ fontSize:13,fontWeight:700,color:c.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{tm.teams?.name}</div><div style={{ fontSize:11,color:c.mut }}>{tm.role==='manager'?'Manager':'Member'}</div></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {teams.length===0&&<div style={{ marginTop:8 }}><Btn onClick={()=>setView('create')}>+ Create your first team</Btn></div>}
+        </div>
+      </div>
+    );
+  }
+
+  // ── TEAM ENTRY: select project / team ────────────────────────────────────
+  if(view==='team-entry') return(
+    <div style={{ minHeight:'100vh',position:'relative',zIndex:1,animation:'fadeIn .3s ease' }}>
+      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(24px)',position:'sticky',top:0,zIndex:100 }}>
+        <div style={{ maxWidth:920,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:12 }}>
+          <button onClick={()=>setView('list')} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:13,padding:0 }}>← Back</button>
+          <Logo size={26}/>
+          <div style={{ flex:1 }}/><ThemeToggle/><ProfileMenu session={session} onSettings={onSettings} onLogout={onLogout}/>
+        </div>
+      </div>
+      <div style={{ maxWidth:920,margin:'0 auto',padding:'36px 24px' }}>
+        <h2 style={{ fontSize:22,fontWeight:800,color:c.text,marginBottom:4 }}>Teams & Projects 👥</h2>
+        <p style={{ color:c.mut,fontSize:14,marginBottom:28 }}>Select a team to open the dashboard.</p>
         {loading?<div style={{ display:'flex',justifyContent:'center',padding:40 }}><Spin/></div>:(
           <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(230px,1fr))',gap:14 }}>
             {teams.map((tm,i)=>(
@@ -337,19 +474,17 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
                   <div style={{ fontSize:12,color:c.mut,marginBottom:8 }}>{tm.role==='manager'?'Manager':'Member'} · {tm.teams?.standup_name||'Standup'}</div>
                   <span style={{ fontSize:11,background:'rgba(99,102,241,.12)',color:'#818CF8',padding:'3px 9px',borderRadius:20 }}>Active</span>
                 </div>
-                {tm.role==='manager'&&<button onClick={e=>{e.stopPropagation();if(window.confirm('Delete "'+tm.teams?.name+'"? This removes all tasks, members and history. This cannot be undone.'))deleteTeam(tm.teams?.id);}} style={{ position:'absolute',top:10,right:10,width:28,height:28,borderRadius:8,background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',color:'#F87171',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13 }} title="Delete team">🗑</button>}
+                {tm.role==='manager'&&<button onClick={e=>{e.stopPropagation();if(window.confirm('Delete "'+tm.teams?.name+'"?'))deleteTeam(tm.teams?.id);}} style={{ position:'absolute',top:10,right:10,width:28,height:28,borderRadius:8,background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',color:'#F87171',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13 }}>🗑</button>}
               </Card>
             ))}
-            {teams.length>0&&(<>
-              <Card onClick={()=>setView('create')} style={{ padding:'22px',cursor:'pointer',border:`1.5px dashed ${c.bord}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,minHeight:130 }}>
-                <div style={{ width:38,height:38,borderRadius:'50%',background:'rgba(99,102,241,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20 }}>+</div>
-                <div style={{ fontSize:13,color:c.sub,fontWeight:600 }}>New team</div>
-              </Card>
-              <Card onClick={()=>setView('join')} style={{ padding:'22px',cursor:'pointer',border:`1.5px dashed ${c.bord}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,minHeight:130 }}>
-                <div style={{ width:38,height:38,borderRadius:'50%',background:'rgba(99,102,241,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20 }}>🔑</div>
-                <div style={{ fontSize:13,color:c.sub,fontWeight:600 }}>Join a team</div>
-              </Card>
-            </>)}
+            <Card onClick={()=>setView('create')} style={{ padding:'22px',cursor:'pointer',border:`1.5px dashed ${c.bord}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,minHeight:130 }}>
+              <div style={{ width:38,height:38,borderRadius:'50%',background:'rgba(99,102,241,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20 }}>+</div>
+              <div style={{ fontSize:13,color:c.sub,fontWeight:600 }}>New team</div>
+            </Card>
+            <Card onClick={()=>setView('join')} style={{ padding:'22px',cursor:'pointer',border:`1.5px dashed ${c.bord}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,minHeight:130 }}>
+              <div style={{ width:38,height:38,borderRadius:'50%',background:'rgba(99,102,241,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20 }}>🔑</div>
+              <div style={{ fontSize:13,color:c.sub,fontWeight:600 }}>Join a team</div>
+            </Card>
           </div>
         )}
       </div>
@@ -1097,17 +1232,45 @@ function RemindersPanel() {
 // ─── GOOGLE CALENDAR ─────────────────────────────────────────────────────
 function CalendarPanel({ team, session, members, onInviteMember }) {
   const c=useC();
-  const [status,setStatus]=useState('idle'); // idle | loading | connected | error
+  // Persist connection status so tab switches don't disconnect
+  const [status,setStatus]=useState(()=>localStorage.getItem('ss-cal-status')||'idle');
   const [events,setEvents]=useState([]);
-  const [view,setView]=useState('week'); // week | month | agenda
+  const [view,setView]=useState('week');
   const [currentDate,setCurrentDate]=useState(new Date());
   const [selectedEvent,setSelectedEvent]=useState(null);
   const [error,setError]=useState('');
   const [detectedStandups,setDetectedStandups]=useState([]);
-  const [selectedStandup,setSelectedStandup]=useState(null); // chosen standup meeting
+  const [selectedStandup,setSelectedStandup]=useState(null);
   const [showStandupPicker,setShowStandupPicker]=useState(false);
   const CLIENT_ID=process.env.REACT_APP_GOOGLE_CLIENT_ID;
   const SCOPES='https://www.googleapis.com/auth/calendar.readonly';
+
+  // Auto-reconnect when component mounts if was previously connected
+  useEffect(()=>{
+    if(status==='connected'&&events.length===0){
+      reconnectSilent();
+    }
+  },[]);
+
+  const reconnectSilent=async()=>{
+    if(!CLIENT_ID||!window.gapi)return;
+    try{
+      await loadScript('https://apis.google.com/js/api.js');
+      await loadScript('https://accounts.google.com/gsi/client');
+      await new Promise(res=>window.gapi.load('client',res));
+      await window.gapi.client.init({});
+      await window.gapi.client.load('https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest');
+      // Request token silently (no prompt)
+      const tc=window.google.accounts.oauth2.initTokenClient({
+        client_id:CLIENT_ID,scope:SCOPES,
+        callback:async(resp)=>{
+          if(!resp.error) await fetchEvents();
+          else setStatus('idle');
+        },
+      });
+      tc.requestAccessToken({prompt:''});
+    }catch(e){ setStatus('idle'); }
+  };
 
   // Load a script tag and resolve when ready
   const loadScript=(src)=>new Promise((res,rej)=>{
@@ -1194,7 +1357,13 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
 
   const disconnect=()=>{
     setStatus('idle');setEvents([]);setSelectedEvent(null);setError('');
+    localStorage.removeItem('ss-cal-status');
   };
+
+  // Save status to localStorage whenever it changes
+  useEffect(()=>{
+    localStorage.setItem('ss-cal-status',status);
+  },[status]);
 
   // Calendar helpers
   const getDaysInMonth=(date)=>{
@@ -1208,23 +1377,29 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
     return days;
   };
 
+  const toYMD=(date)=>{
+    const y=date.getFullYear();
+    const m=String(date.getMonth()+1).padStart(2,'0');
+    const d=String(date.getDate()).padStart(2,'0');
+    return y+'-'+m+'-'+d;
+  };
+
   const getEventsForDay=(date)=>{
     if(!date)return[];
-    const dateStr=date.toDateString();
+    const ymd=toYMD(date); // "2026-06-15"
     return events.filter(ev=>{
       if(ev.start?.dateTime){
-        return new Date(ev.start.dateTime).toDateString()===dateStr;
+        // Parse the dateTime and get its LOCAL date (not UTC)
+        const evLocal=new Date(ev.start.dateTime);
+        return toYMD(evLocal)===ymd;
       }
       if(ev.start?.date){
-        // All-day event: compare YYYY-MM-DD strings to avoid timezone issues
-        const evDate=ev.start.date; // "2026-06-15"
-        const y=date.getFullYear(),m=String(date.getMonth()+1).padStart(2,'0'),d=String(date.getDate()).padStart(2,'0');
-        return evDate===y+'-'+m+'-'+d;
+        return ev.start.date===ymd;
       }
       return false;
     }).sort((a,b)=>{
-      const ta=new Date(a.start?.dateTime||a.start?.date+'T00:00');
-      const tb=new Date(b.start?.dateTime||b.start?.date+'T00:00');
+      const ta=new Date(a.start?.dateTime||a.start?.date+'T00:00:00');
+      const tb=new Date(b.start?.dateTime||b.start?.date+'T00:00:00');
       return ta-tb;
     });
   };
@@ -1963,7 +2138,7 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
 // ─── MANAGER VIEW ─────────────────────────────────────────────────────────────
 const MGR_TABS=[{id:'live',l:'Live board',i:'⚡'},{id:'team',l:'Team',i:'👥'},{id:'perf',l:'Performance',i:'📊'},{id:'ai',l:'AI Assistant',i:'🤖'},{id:'chat',l:'Chat',i:'💬'},{id:'cal',l:'Calendar',i:'📅'},{id:'remind',l:'Reminders',i:'🔔'},{id:'hist',l:'History',i:'🗂️'},{id:'tset',l:'Settings',i:'⚙️'}];
 
-function ManagerView({ session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers }) {
+function ManagerView({ session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers, setShowPip }) {
   const c=useC(); const [tab,setTab]=useState('live');
   const [unreadChat,setUnreadChat]=useState(0);
   const prevMsgCount=useRef(messages.length);
@@ -1986,7 +2161,8 @@ function ManagerView({ session, team, tasks, members, history, standup, onStatus
         <div style={{ maxWidth:1200,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:10 }}>
           <Logo size={26} onClick={onBack}/>
           <nav style={{ display:'flex',gap:1,flex:1,overflowX:'auto' }}>
-            {MGR_TABS.map(t=>(
+            <button onClick={()=>setShowPip&&setShowPip(p=>!p)} title="Toggle PiP task window" style={{ padding:'4px 10px',borderRadius:8,border:`1px solid ${c.bord}`,background:'rgba(99,102,241,.08)',color:'#818CF8',cursor:'pointer',fontSize:11,fontWeight:700,flexShrink:0,display:'flex',alignItems:'center',gap:5 }}>🖥️ PiP</button>
+        {MGR_TABS.map(t=>(
               <button key={t.id} onClick={()=>setTabClear(t.id)} style={{ padding:'5px 10px',borderRadius:8,border:'none',background:tab===t.id?'rgba(129,140,248,.18)':'transparent',color:tab===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:11,fontWeight:tab===t.id?700:400,display:'flex',alignItems:'center',gap:4,transition:'all .15s',whiteSpace:'nowrap',flexShrink:0,position:'relative' }}>
                 <span>{t.i}</span>{t.l}
                 {t.id==='chat'&&unreadChat>0&&<span style={{ position:'absolute',top:0,right:0,minWidth:16,height:16,borderRadius:8,background:'#EF4444',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 3px',lineHeight:1 }}>{unreadChat>9?'9+':unreadChat}</span>}
@@ -2020,6 +2196,74 @@ function ManagerView({ session, team, tasks, members, history, standup, onStatus
     </div>
   );
 }
+
+// ─── PIP TASK WINDOW ─────────────────────────────────────────────────────────
+// Floats over Google Meet / any video call so you can write tasks without switching windows
+function PipWindow({ tasks, onAdd, onStatus, session, team, standup, onClose }) {
+  const c=useC();
+  const [newTask,setNewTask]=useState(''); const [adding,setAdding]=useState(false);
+  const [pos,setPos]=useState({x:window.innerWidth-340,y:60});
+  const [dragging,setDragging]=useState(false); const [dragOffset,setDragOffset]=useState({x:0,y:0});
+  const [minimized,setMinimized]=useState(false);
+  const myEmail=session?.user?.email||'';
+  const myTasks=tasks.filter(t=>t.assignee_email===myEmail);
+  const done=myTasks.filter(t=>t.status==='done').length;
+
+  const startDrag=(e)=>{ setDragging(true); setDragOffset({x:e.clientX-pos.x,y:e.clientY-pos.y}); };
+  useEffect(()=>{
+    if(!dragging)return;
+    const mv=(e)=>setPos({x:Math.max(0,Math.min(window.innerWidth-320,e.clientX-dragOffset.x)),y:Math.max(0,Math.min(window.innerHeight-60,e.clientY-dragOffset.y))});
+    const up=()=>setDragging(false);
+    window.addEventListener('mousemove',mv); window.addEventListener('mouseup',up);
+    return()=>{ window.removeEventListener('mousemove',mv); window.removeEventListener('mouseup',up); };
+  },[dragging,dragOffset]);
+
+  const addTask=async()=>{
+    if(!newTask.trim())return; setAdding(true);
+    const myName=session?.user?.user_metadata?.name||myEmail.split('@')[0];
+    await onAdd({title:newTask.trim(),status:'todo',priority:'medium',assignee_email:myEmail,assignee_name:myName,standup_id:standup?.id,team_id:team?.id});
+    setNewTask(''); setAdding(false);
+  };
+
+  const statusIcon={todo:'⬜',['in-progress']:'🔵',done:'✅',blocked:'🔴'};
+  const nextStatus={todo:'in-progress',['in-progress']:'done',done:'todo',blocked:'todo'};
+
+  return(
+    <div style={{ position:'fixed',left:pos.x,top:pos.y,zIndex:99999,width:310,borderRadius:14,background:c.dark?'rgba(15,13,42,.97)':'rgba(255,255,255,.97)',border:`1px solid ${c.bord}`,boxShadow:'0 8px 40px rgba(0,0,0,.45)',backdropFilter:'blur(20px)',overflow:'hidden',userSelect:'none',transition:dragging?'none':'box-shadow .2s' }}>
+      {/* Header / drag handle */}
+      <div onMouseDown={startDrag} style={{ padding:'10px 12px',background:c.dark?'rgba(99,102,241,.15)':'rgba(99,102,241,.08)',cursor:'grab',display:'flex',alignItems:'center',gap:8 }}>
+        <div style={{ width:8,height:8,borderRadius:'50%',background:'#34D399',flexShrink:0 }}/>
+        <span style={{ fontSize:12,fontWeight:700,color:'#818CF8',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>StandSync PiP · {team?.name||'Tasks'}</span>
+        <span style={{ fontSize:11,color:c.mut }}>{done}/{myTasks.length}</span>
+        <button onClick={()=>setMinimized(!minimized)} style={{ background:'none',border:'none',cursor:'pointer',color:c.mut,fontSize:14,padding:'0 2px' }}>{minimized?'▼':'▲'}</button>
+        <button onClick={onClose} style={{ background:'none',border:'none',cursor:'pointer',color:c.mut,fontSize:16,padding:'0 2px' }}>×</button>
+      </div>
+
+      {!minimized&&(
+        <>
+          {/* Task list */}
+          <div style={{ maxHeight:260,overflowY:'auto',padding:'6px 0' }}>
+            {myTasks.length===0&&<div style={{ padding:'12px 14px',fontSize:12,color:c.mut,textAlign:'center' }}>No tasks yet — add one below</div>}
+            {myTasks.map(t=>(
+              <div key={t.id} style={{ display:'flex',alignItems:'center',gap:8,padding:'7px 12px',borderBottom:`1px solid ${c.bord}11` }}>
+                <button onClick={()=>onStatus(t.id,nextStatus[t.status])} style={{ background:'none',border:'none',cursor:'pointer',fontSize:16,padding:0,flexShrink:0 }}>{statusIcon[t.status]||'⬜'}</button>
+                <span style={{ flex:1,fontSize:12,color:t.status==='done'?c.mut:c.text,textDecoration:t.status==='done'?'line-through':'none',lineHeight:1.4 }}>{t.title}</span>
+                <span style={{ fontSize:9,color:c.mut,textTransform:'uppercase',flexShrink:0 }}>{t.priority}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Add task input */}
+          <div style={{ padding:'8px 10px',borderTop:`1px solid ${c.bord}`,display:'flex',gap:6 }}>
+            <input value={newTask} onChange={e=>setNewTask(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addTask()} placeholder="Add a task..." style={{ flex:1,background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:8,padding:'6px 10px',color:c.text,fontSize:12,outline:'none' }}/>
+            <button onClick={addTask} disabled={!newTask.trim()||adding} style={{ width:30,height:30,borderRadius:8,background:newTask.trim()?'#6366F1':'transparent',border:newTask.trim()?'none':`1px solid ${c.bord}`,color:newTask.trim()?'#fff':c.mut,cursor:newTask.trim()?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>↑</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
 const DEMO_MEMBERS=[
@@ -2073,6 +2317,7 @@ export default function App() {
   const [homeKey,setHomeKey]=useState(0); const [tasks,setTasks]=useState([]); const [standup,setStandup]=useState(null);
   const [history,setHistory]=useState([]); const [messages,setMessages]=useState([]); const [chatTheme,setChatTheme]=useState('default');
   const [toast,setToast]=useState(null); const [emailBusy,setEmailBusy]=useState(false); const [inviteToken,setInviteToken]=useState(null);
+  const [showPip,setShowPip]=useState(false);
   const isManager=myRole==='manager'||!SB.IS_LIVE;
   const showToast=useCallback((msg,type='success')=>setToast({msg,type}),[]);
 
@@ -2238,7 +2483,9 @@ export default function App() {
       {/* App views */}
       {(session||!SB.IS_LIVE)&&view==='home'&&<HomeView key={homeKey} session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onSelectTeam={handleSelectTeam} onLogout={handleLogout} onSettings={()=>setView('settings')}/>}
       {(session||!SB.IS_LIVE)&&view==='settings'&&<SettingsPage session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onBack={()=>setView(team?'standup':'home')} onSaved={d=>showToast('Profile saved')}/>}
-      {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers}/>}
+      {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} setShowPip={setShowPip}/>}
+      {/* PiP floating window */}
+      {showPip&&view==='standup'&&<PipWindow tasks={tasks} onAdd={handleAddTask} onStatus={handleStatus} session={session} team={team} standup={standup} onClose={()=>setShowPip(false)}/>}
       {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<MemberView user={userForView} myMember={myMember} tasks={tasks} onAdd={handleAddTask} onStatus={handleStatus} onBlocker={handleBlocker} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} members={members} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme}/>}
     </ThemeCtx.Provider>
   );
