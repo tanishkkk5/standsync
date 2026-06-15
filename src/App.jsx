@@ -229,7 +229,22 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
   const name=session?.user?.user_metadata?.name||session?.user?.email?.split('@')[0]||'there';
   const ICONS=['⚡','🚀','🎯','🔥','💡','🌟','🏗️','🎨','🔬','📱'];
 
-  useEffect(()=>{ if(!SB.IS_LIVE){setLoading(false);return;} SB.getMyTeams(session.user.id).then(d=>{setTeams(d);setLoading(false);}); },[session]);
+  useEffect(()=>{
+    if(!SB.IS_LIVE){setLoading(false);return;}
+    setLoading(true);
+    SB.getMyTeams(session.user.id).then(d=>{
+      setTeams(d);
+      setLoading(false);
+      // If empty, retry once after 1.5s in case of schema cache delay
+      if(!d||d.length===0){
+        setTimeout(()=>{
+          SB.getMyTeams(session.user.id).then(d2=>{
+            if(d2&&d2.length>0) setTeams(d2);
+          });
+        },1500);
+      }
+    });
+  },[session]);
 
   const [createError,setCreateError]=useState('');
   const create=async()=>{
@@ -1163,7 +1178,21 @@ export default function App() {
   const handlePriority=useCallback(async(id,priority)=>{ if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,priority}:t));return;} await SB.updateTask(id,{priority}); },[]);
   const handleNote=useCallback(async(id,manager_note)=>{ if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,manager_note}:t));return;} await SB.updateTask(id,{manager_note}); },[]);
   const handleBlocker=useCallback(async(id,blocker)=>{ const u={status:'blocked',blocker}; if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));showToast('⚠️ Blocker reported');return;} await SB.updateTask(id,u); const task=tasks.find(t=>t.id===id),manager=members.find(m=>m.role==='manager'); if(task&&manager)await Email.sendBlockerAlert(manager.email,{email:session.user.email,name:session.user.user_metadata?.name},{...task,blocker}); showToast('⚠️ Blocker reported — manager notified'); },[tasks,members,session,showToast]);
-  const handleDigest=useCallback(async()=>{ setEmailBusy(true); let sent=0; for(const m of members.filter(x=>x.role!=='manager')){const mt=tasks.filter(t=>t.assignee_email===m.email);if(mt.length>0){await Email.sendMorningDigest(m,mt,team?.name||'Team');sent++;}} setEmailBusy(false); showToast(`📧 Digest sent to ${sent} member${sent!==1?'s':''}`); },[tasks,members,team,showToast]);
+  const handleDigest=useCallback(async()=>{
+    setEmailBusy(true);
+    if(!process.env.REACT_APP_RESEND_KEY){ showToast('⚠️ Add REACT_APP_RESEND_KEY to Vercel to send emails','error'); setEmailBusy(false); return; }
+    let sent=0;
+    const nonManagers=members.filter(x=>x.role!=='manager');
+    if(nonManagers.length===0){ showToast('No team members to send digest to — invite members first','error'); setEmailBusy(false); return; }
+    for(const m of nonManagers){
+      const mt=tasks.filter(t=>t.assignee_email===m.email);
+      // Send digest even if no tasks — member should know standup started
+      await Email.sendMorningDigest(m,mt,team?.name||'Team');
+      sent++;
+    }
+    setEmailBusy(false);
+    showToast('📧 Digest sent to '+sent+' member'+(sent!==1?'s':''));
+  },[tasks,members,team,showToast]);
   const handleEOD=useCallback(async()=>{ setEmailBusy(true); try{ for(const m of members.filter(x=>x.role!=='manager')){const p=tasks.filter(t=>t.assignee_email===m.email&&t.status!=='done');if(p.length>0)await Email.sendEODBacklog(m,p,team?.name||'Team');} const mg=members.find(m=>m.role==='manager'); if(mg)await Email.sendManagerSummary(mg.email,tasks,members,team?.name||'Team'); showToast('🕕 EOD summary sent'); }catch(e){showToast('Failed to send EOD','error');} setEmailBusy(false); },[tasks,members,team,showToast]);
   const handleLogin=useCallback(async(sess)=>{ setSession(sess); if(inviteToken&&SB.IS_LIVE){const r=await SB.acceptInvite(inviteToken,sess.user.id,sess.user.email,sess.user.user_metadata?.name||sess.user.email);if(r.teamId)showToast(`✅ Joined: ${r.teamName}`);window.history.replaceState({},'',window.location.pathname);setInviteToken(null);} setView('home'); },[inviteToken,showToast]);
   const handleSelectTeam=useCallback((t,role)=>{ setTeam(t);setMyRole(role);setView('standup'); if(!SB.IS_LIVE){setMembers(DEMO_MEMBERS);setTasks([]);} },[]);
