@@ -100,11 +100,23 @@ export async function createTeam(name, ownerId, ownerEmail, ownerName, standupNa
   if (!team) return { __error: 'No data returned from teams insert' };
 
   // Add owner as manager
-  await supabase.from('team_members').insert({
+  const { error: memberErr } = await supabase.from('team_members').insert({
     team_id: team.id, user_id: ownerId, email: ownerEmail,
     name: ownerName, role: 'manager', designation: 'Team Manager',
     status: 'active', color: '#818CF8',
   });
+  if (memberErr) {
+    console.error('team_members insert error:', memberErr.message, memberErr.code);
+    // If duplicate, that is fine — member already exists
+    if (memberErr.code !== '23505') {
+      // Try upsert as fallback
+      await supabase.from('team_members').upsert({
+        team_id: team.id, user_id: ownerId, email: ownerEmail,
+        name: ownerName, role: 'manager', designation: 'Team Manager',
+        status: 'active', color: '#818CF8',
+      }, { onConflict: 'team_id,user_id' });
+    }
+  }
 
   // Create default room with unique ID
   const room_id = genRoomId(name);
@@ -121,11 +133,12 @@ export async function createTeam(name, ownerId, ownerEmail, ownerName, standupNa
 }
 
 export async function getMyTeams(userId) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('team_members')
     .select('team_id, role, designation, teams(*)')
     .eq('user_id', userId)
     .eq('status', 'active');
+  if (error) console.error('getMyTeams error:', error.message, error.code);
   return data || [];
 }
 
