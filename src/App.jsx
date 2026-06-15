@@ -292,7 +292,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
     setJoinLoading(false);
   };
 
-  const goToTeam=(team,role)=>{onSelectTeam(team,role);};
+  const goToTeam=(team,role)=>{ if(team&&team.id) onSelectTeam(team,role); };
 
   // ── Team list ──────────────────────────────────────────────────────────────
   if(view==='list') return(
@@ -1317,10 +1317,21 @@ export default function App() {
         setMessages(msgs||[]);
         if(mems&&mems.length>0){
           setMembers(mems);
+          // Verify and correct role from DB (fixes manager showing as member)
+          const myMem=mems.find(m=>m.user_id===session?.user?.id);
+          if(myMem&&myMem.role!==myRole){
+            setMyRole(myMem.role);
+            try{ localStorage.setItem('ss-role',myMem.role); }catch(e){}
+          }
         } else {
-          const fallback=[{id:'me',user_id:session?.user?.id,email:session?.user?.email||'',name:session?.user?.user_metadata?.name||session?.user?.email?.split('@')[0]||'You',role:'manager',designation:'Team Manager',color:'#818CF8',status:'active'}];
-          setMembers(fallback);
-          setTimeout(()=>SB.getTeamMembers(team.id).then(m=>{if(m&&m.length>0)setMembers(m);}),1500);
+          // No members yet — create self as manager in DB then reload
+          if(session?.user?.id){
+            await SB.ensureManagerMember(team.id,session.user.id,session.user.email,
+              session.user.user_metadata?.name||session.user.email.split('@')[0]);
+            const mems2=await SB.getTeamMembers(team.id);
+            if(mems2&&mems2.length>0) setMembers(mems2);
+            else setMembers([{id:'me',user_id:session.user.id,email:session.user.email,name:session.user.user_metadata?.name||'You',role:'manager',designation:'Team Manager',color:'#818CF8',status:'active'}]);
+          }
         }
       } catch(err) {
         console.error('Team load error:',err.message);
@@ -1356,7 +1367,12 @@ export default function App() {
   const handleEOD=useCallback(async()=>{ setEmailBusy(true); try{ for(const m of members.filter(x=>x.role!=='manager')){const p=tasks.filter(t=>t.assignee_email===m.email&&t.status!=='done');if(p.length>0)await Email.sendEODBacklog(m,p,team?.name||'Team');} const mg=members.find(m=>m.role==='manager'); if(mg)await Email.sendManagerSummary(mg.email,tasks,members,team?.name||'Team'); showToast('🕕 EOD summary sent'); }catch(e){showToast('Failed to send EOD','error');} setEmailBusy(false); },[tasks,members,team,showToast]);
   const handleLogin=useCallback(async(sess)=>{ setSession(sess); if(inviteToken&&SB.IS_LIVE){const r=await SB.acceptInvite(inviteToken,sess.user.id,sess.user.email,sess.user.user_metadata?.name||sess.user.email);if(r.teamId)showToast(`✅ Joined: ${r.teamName}`);window.history.replaceState({},'',window.location.pathname);setInviteToken(null);} setView('home'); },[inviteToken,showToast]);
   const handleSelectTeam=useCallback((t,role)=>{
-    setTeam(t); setMyRole(role||'member'); setView('standup');
+    // Normalize: if t comes from getMyTeams it might be tm.teams
+    // Ensure it always has .id at top level
+    const normalized = t && t.id ? t : (t && t.teams ? t.teams : t);
+    setTeam(normalized);
+    setMyRole(role||'member');
+    setView('standup');
     if(!SB.IS_LIVE){ setMembers(DEMO_MEMBERS); setTasks([]); }
   },[]);
   const handleLogout=useCallback(()=>{
