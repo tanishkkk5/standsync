@@ -99,23 +99,14 @@ export async function createTeam(name, ownerId, ownerEmail, ownerName, standupNa
   }
   if (!team) return { __error: 'No data returned from teams insert' };
 
-  // Add owner as manager
-  const { error: memberErr } = await supabase.from('team_members').insert({
+  // Add owner as manager - use upsert to handle any duplicates
+  const { error: memberErr } = await supabase.from('team_members').upsert({
     team_id: team.id, user_id: ownerId, email: ownerEmail,
     name: ownerName, role: 'manager', designation: 'Team Manager',
     status: 'active', color: '#818CF8',
-  });
+  }, { onConflict: 'team_id,user_id' });
   if (memberErr) {
-    console.error('team_members insert error:', memberErr.message, memberErr.code);
-    // If duplicate, that is fine — member already exists
-    if (memberErr.code !== '23505') {
-      // Try upsert as fallback
-      await supabase.from('team_members').upsert({
-        team_id: team.id, user_id: ownerId, email: ownerEmail,
-        name: ownerName, role: 'manager', designation: 'Team Manager',
-        status: 'active', color: '#818CF8',
-      }, { onConflict: 'team_id,user_id' });
-    }
+    console.error('team_members upsert error:', memberErr.message, memberErr.code, memberErr.hint);
   }
 
   // Create default room with unique ID
@@ -138,8 +129,12 @@ export async function getMyTeams(userId) {
     .select('team_id, role, designation, teams(*)')
     .eq('user_id', userId)
     .eq('status', 'active');
-  if (error) console.error('getMyTeams error:', error.message, error.code);
-  return data || [];
+  if (error) {
+    console.error('getMyTeams error:', error.message, error.code, error.hint);
+    return [];
+  }
+  // Filter out entries where teams relation failed to load
+  return (data || []).filter(row => row.teams && row.teams.id);
 }
 
 export async function getTeamMembers(teamId) {
