@@ -613,7 +613,7 @@ function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], te
 // ─── RICH CHAT ──────────────────────────────────────────────────────────
 function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='default', onChangeTheme }) {
   const c=useC(); const [msg,setMsg]=useState(''); const [showGif,setShowGif]=useState(false);
-  const [gifSearch,setGifSearch]=useState(''); const [gifs,setGifs]=useState([]); const [gifLoading,setGifLoading]=useState(false);
+  const [gifSearch,setGifSearch]=useState(''); const [gifs,setGifs]=useState([]); const [gifLoading,setGifLoading]=useState(false); const [gifError,setGifError]=useState('');
   const [showTheme,setShowTheme]=useState(false);
   const bottomRef=useRef(); const fileRef=useRef();
   const myEmail=session?.user?.email||'demo@standsync.app';
@@ -626,9 +626,18 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
     if(type==='text')setMsg(''); setShowGif(false);
   };
   const searchGifs=async(q)=>{
-    if(!q.trim())return; setGifLoading(true);
-    try{ const r=await fetch('https://api.giphy.com/v1/gifs/search?api_key='+GIPHY_KEY+'&q='+encodeURIComponent(q)+'&limit=12&rating=g'); const d=await r.json(); setGifs(d.data||[]); }
-    catch(e){ setGifs([]); }
+    if(!q.trim())return; setGifLoading(true); setGifError('');
+    try{
+      // Try Giphy first with user's key, fall back to trending
+      const key=process.env.REACT_APP_GIPHY_KEY||GIPHY_KEY;
+      const url='https://api.giphy.com/v1/gifs/search?api_key='+key+'&q='+encodeURIComponent(q)+'&limit=12&rating=g&lang=en';
+      const r=await fetch(url);
+      if(!r.ok){setGifError('GIF search unavailable. Add REACT_APP_GIPHY_KEY to Vercel (free at developers.giphy.com)');setGifLoading(false);return;}
+      const d=await r.json();
+      if(d.meta?.status===403||d.meta?.status===401){setGifError('GIF key invalid. Get a free key at developers.giphy.com → Create App → Add REACT_APP_GIPHY_KEY to Vercel');setGifLoading(false);return;}
+      setGifs(d.data||[]);
+      if(!d.data?.length)setGifError('No GIFs found for "'+q+'" — try a different search');
+    }catch(e){setGifError('Could not connect to Giphy. Check your internet connection.');}
     setGifLoading(false);
   };
   const handleImage=(e)=>{
@@ -677,7 +686,8 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
           <button onClick={()=>setShowGif(false)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:18 }}>&times;</button>
         </div>
         {gifs.length>0&&<div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:4,maxHeight:130,overflowY:'auto' }}>{gifs.map(g=><img key={g.id} src={g.images.fixed_height_small.url} alt={g.title} onClick={()=>sendMsg('','gif',g.images.fixed_height.url)} style={{ width:'100%',height:66,objectFit:'cover',borderRadius:6,cursor:'pointer' }} onMouseEnter={e=>e.target.style.opacity='.7'} onMouseLeave={e=>e.target.style.opacity='1'}/>)}</div>}
-        {gifs.length===0&&!gifLoading&&gifSearch&&<div style={{ fontSize:12,color:c.mut,textAlign:'center',padding:'6px 0' }}>No GIFs found</div>}
+        {gifError&&<div style={{ fontSize:12,color:'#F87171',textAlign:'center',padding:'6px 0',lineHeight:1.5 }}>{gifError}</div>}
+        {gifs.length===0&&!gifLoading&&!gifError&&gifSearch&&<div style={{ fontSize:12,color:c.mut,textAlign:'center',padding:'6px 0' }}>No GIFs found — try another search</div>}
       </div>}
       <div style={{ padding:'9px 11px',background:c.nav,borderTop:`1px solid ${c.bord}`,display:'flex',gap:7,alignItems:'center',flexShrink:0 }}>
         <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} style={{ display:'none' }}/>
