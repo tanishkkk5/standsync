@@ -239,8 +239,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
     if(SB.IS_LIVE){
       try{
         const team=await SB.createTeam(teamName.trim(),session.user.id,session.user.email,myName,standupName.trim());
-        if(team){
-          // Block inviting own email
+        if(team&&!team.__error){
           const ownEmail=session?.user?.email?.toLowerCase();
           const validEmails=memberEmails.filter(e=>e.trim()&&e.includes('@')&&e.trim().toLowerCase()!==ownEmail);
           for(const em of validEmails){
@@ -251,7 +250,8 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
           }
           setCreatedTeam(team);
         } else {
-          setCreateError('Failed to create team. This might be a database issue — make sure you have run the SQL schema in Supabase. Check Supabase → Table Editor and confirm the teams table exists.');
+          const msg=team?.__error||'Unknown error';
+          setCreateError('DB error: '+msg+'. Open browser console (F12) for full details.');
         }
       }catch(err){
         setCreateError('Error: '+err.message);
