@@ -1128,7 +1128,31 @@ export default function App() {
 
   useEffect(()=>{
     if(!team||!SB.IS_LIVE)return;
-    const load=async()=>{ const sd=await SB.getOrCreateStandup(team.id,TODAY()); setStandup(sd); const [t,past,mems]=await Promise.all([SB.getTasks(sd.id),SB.getPastStandups(team.id,30),SB.getTeamMembers(team.id)]); setTasks(t);setHistory(past.filter(p=>p.date!==TODAY()));setMembers(mems); };
+    const load=async()=>{
+      try {
+        const sd=await SB.getOrCreateStandup(team.id,TODAY());
+        setStandup(sd);
+        const [t,past,mems]=await Promise.all([
+          SB.getTasks(sd?.id),
+          SB.getPastStandups(team.id,30),
+          SB.getTeamMembers(team.id)
+        ]);
+        setTasks(t||[]);
+        setHistory((past||[]).filter(p=>p.date!==TODAY()));
+        // Always show at least the current user
+        if(mems&&mems.length>0){
+          setMembers(mems);
+        } else {
+          // Fallback: show current user while members load
+          const fallback=[{id:'me',user_id:session?.user?.id,email:session?.user?.email||'',name:session?.user?.user_metadata?.name||session?.user?.email?.split('@')[0]||'You',role:'manager',designation:'Team Manager',color:'#818CF8',status:'active'}];
+          setMembers(fallback);
+          // Retry after 1s in case of schema cache delay
+          setTimeout(()=>SB.getTeamMembers(team.id).then(m=>{if(m&&m.length>0)setMembers(m);}),1500);
+        }
+      } catch(err) {
+        console.error('Team load error:',err.message);
+      }
+    };
     load();
   },[team]);
 
