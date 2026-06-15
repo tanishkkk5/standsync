@@ -6,7 +6,8 @@ export const supabase = (SUPA_URL && SUPA_KEY) ? createClient(SUPA_URL, SUPA_KEY
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: true,   // needed for Google OAuth redirect
+    flowType: 'pkce',
     storageKey: 'ss-auth',
   }
 }) : null;
@@ -88,20 +89,12 @@ const COLORS = ['#818CF8','#38BDF8','#34D399','#F472B6','#FB923C','#E879F9','#F5
 
 // ── Teams ─────────────────────────────────────────────────────────────────────
 export async function createTeam(name, ownerId, ownerEmail, ownerName, standupName) {
-  const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + Math.random().toString(36).slice(2, 6);
-  // Try with slug first, fall back without it if column doesn't exist
-  let team = null;
-  let err1 = null;
-  const payload = { name, slug, owner_id: ownerId, standup_name: standupName || name };
-  const res1 = await supabase.from('teams').insert(payload).select().single();
-  if (res1.error) {
-    // Retry without slug in case column doesn't exist
-    const res2 = await supabase.from('teams').insert({ name, owner_id: ownerId, standup_name: standupName || name }).select().single();
-    if (res2.error) { console.error('createTeam error:', res2.error); return null; }
-    team = res2.data;
-  } else {
-    team = res1.data;
-  }
+  // Insert team - no slug required
+  const { data: team, error } = await supabase
+    .from('teams')
+    .insert({ name, owner_id: ownerId, standup_name: standupName || name })
+    .select().single();
+  if (error) { console.error('createTeam error:', error.message, error.details); return null; }
   if (!team) return null;
 
   // Add owner as manager
