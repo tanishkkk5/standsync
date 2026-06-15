@@ -3,15 +3,13 @@ import * as Email from './lib/email';
 import { askAI } from './lib/ai';
 import { getPriority, getStatus, PRIORITIES, STATUSES, TODAY, FAQ, CHAT_THEMES, MEMBER_COLORS } from './lib/constants';
 
-// Use require() to load supabase - avoids ES module TDZ issue with Terser
-// require() is CommonJS and gets bundled differently, no circular const problem
-var _createClient = null;
-try { _createClient = require('@supabase/supabase-js').createClient; } catch(e) {}
+// Supabase via npm - Terser mangling disabled via craco so no TDZ crash
+import { createClient as _createClient } from '@supabase/supabase-js';
 var _SURL = process.env.REACT_APP_SUPABASE_URL || '';
 var _SKEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 var _sc = null;
 try {
-  if (_createClient && _SURL && _SKEY && _SURL.startsWith('http')) {
+  if (_SURL && _SKEY && _SURL.startsWith('http')) {
     _sc = _createClient(_SURL, _SKEY, {
       auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storageKey:'ss-auth' }
     });
