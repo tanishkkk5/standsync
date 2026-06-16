@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
+const { ICONS: STANDSYNC_ICONS_MAP, MGR_TABS: STANDSYNC_MGR_TABS_DATA } = require('./tabs');
 import * as Email from './lib/email';
 import { askAI } from './lib/ai';
 import { getPriority, getStatus, PRIORITIES, STATUSES, TODAY, FAQ, CHAT_THEMES, MEMBER_COLORS } from './lib/constants';
@@ -2475,28 +2476,9 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
 function ManagerView({
  session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers, openPip, pipOpen }) {
 
-// Tab icons — plain text symbols, no JSX at module level
-// eslint-disable-next-line
-var STANDSYNC_ICONS_MAP={
-  live:'◉', team:'⚇', perf:'↗', analysis:'▤', ai:'✦',
-  chat:'◌', cal:'⊟', notes:'≡', remind:'◔', hist:'↺', tset:'⚙', pip:'⧉'
-};
-// I object maps to same strings for backward compat
-var I=STANDSYNC_ICONS_MAP;
-
-var STANDSYNC_MGR_TABS=[
-  {id:'live',     l:'Live board',    ic:'◉'},
-  {id:'team',     l:'Team',          ic:'⚇'},
-  {id:'perf',     l:'Performance',   ic:'↗'},
-  {id:'analysis', l:'Analysis',      ic:'▤'},
-  {id:'ai',       l:'AI',            ic:'✦'},
-  {id:'chat',     l:'Chat',          ic:'◌'},
-  {id:'cal',      l:'Calendar',      ic:'⊟'},
-  {id:'notes',    l:'Notes',         ic:'≡'},
-  {id:'remind',   l:'Reminders',     ic:'◔'},
-  {id:'hist',     l:'History',       ic:'↺'},
-  {id:'tset',     l:'Settings',      ic:'⚙'},
-];
+// Icons and tabs loaded from separate module (prevents Terser TDZ)
+var STANDSYNC_MGR_TABS = STANDSYNC_MGR_TABS_DATA;
+var I = STANDSYNC_ICONS_MAP;
 
   const c=useC(); const [tab,setTab]=useState('live');
   const [unreadChat,setUnreadChat]=useState(0);
