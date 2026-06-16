@@ -5,13 +5,13 @@
   "dependencies": {
     "@supabase/supabase-js": "2.39.8",
     "react": "^18.2.0",
+    "react-app-rewired": "^2.2.1",
     "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "@craco/craco": "^7.1.0"
+    "react-scripts": "5.0.1"
   },
   "scripts": {
-    "start": "craco start",
-    "build": "craco build"
+    "start": "react-app-rewired start",
+    "build": "react-app-rewired build"
   },
   "browserslist": {
     "production": [
@@ -25,7 +25,10 @@
     ]
   },
   "browser": {
-    "ws": false
-  },
-  "devDependencies": {}
+    "@supabase/supabase-js": "./node_modules/@supabase/supabase-js/dist/main/index.js",
+    "@supabase/auth-js": "./node_modules/@supabase/auth-js/dist/main/index.js",
+    "@supabase/realtime-js": "./node_modules/@supabase/realtime-js/dist/main/index.js",
+    "@supabase/storage-js": "./node_modules/@supabase/storage-js/dist/module/index.js",
+    "@supabase/postgrest-js": "./node_modules/@supabase/postgrest-js/dist/cjs/index.js"
+  }
 }
