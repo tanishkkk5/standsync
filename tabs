@@ -1,0 +1,22 @@
+// Tab configuration - separate file so Terser treats it as isolated module
+// No circular imports, no hooks, pure data - Terser can't cause TDZ here
+var ICONS = {
+  live:'◉', team:'⚇', perf:'↗', analysis:'▤', ai:'✦',
+  chat:'◌', cal:'⊟', notes:'≡', remind:'◔', hist:'↺', tset:'⚙', pip:'⧉'
+};
+
+var MGR_TABS = [
+  {id:'live',     l:'Live board',    ic:'◉'},
+  {id:'team',     l:'Team',          ic:'⚇'},
+  {id:'perf',     l:'Performance',   ic:'↗'},
+  {id:'analysis', l:'Analysis',      ic:'▤'},
+  {id:'ai',       l:'AI',            ic:'✦'},
+  {id:'chat',     l:'Chat',          ic:'◌'},
+  {id:'cal',      l:'Calendar',      ic:'⊟'},
+  {id:'notes',    l:'Notes',         ic:'≡'},
+  {id:'remind',   l:'Reminders',     ic:'◔'},
+  {id:'hist',     l:'History',       ic:'↺'},
+  {id:'tset',     l:'Settings',      ic:'⚙'},
+];
+
+module.exports = { ICONS, MGR_TABS };
