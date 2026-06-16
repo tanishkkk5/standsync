@@ -2676,10 +2676,6 @@ export default function App() {
   const [homeKey,setHomeKey]=useState(0); const [tasks,setTasks]=useState([]); const [standup,setStandup]=useState(null);
   const [history,setHistory]=useState([]); const [messages,setMessages]=useState([]); const [chatTheme,setChatTheme]=useState('default');
   const [toast,setToast]=useState(null); const [emailBusy,setEmailBusy]=useState(false); const [inviteToken,setInviteToken]=useState(null);
-  // Real PiP — popup window that survives tab switches
-  const { openPip, closePip, isOpen: pipOpen } = usePip({
-    tasks, onAdd: handleAddTask, onStatus: handleStatus, session, team, standup
-  });
   const [showPip,setShowPip]=useState(false); // legacy, not used
   const isManager=myRole==='manager'||!SB.IS_LIVE;
   const showToast=useCallback((msg,type='success')=>setToast({msg,type}),[]);
@@ -2847,6 +2843,11 @@ export default function App() {
       setMessages(p=>[...p,m]);
     }
   },[team]);
+
+  // PiP popup — declared AFTER all handlers to avoid TDZ
+  const { openPip, isOpen: pipOpen } = usePip({
+    tasks, onAdd: handleAddTask, onStatus: handleStatus, session, team, standup
+  });
 
   const myMember=members.find(m=>m.user_id===(session?.user?.id||'u1'));
   const userForView={email:session?.user?.email||'tanisk.pandey@xtransmatrix.com',name:session?.user?.user_metadata?.name||'Tanisk Pandey'};
