@@ -1,9 +1,8 @@
-// Disable Terser entirely to prevent TDZ "Cannot access X before initialization" crashes
-module.exports = function override(config, env) {
-  if (config.optimization) {
-    // Completely disable minimization - guarantees no Terser variable renaming TDZ bug
-    config.optimization.minimize = false;
-    config.optimization.minimizer = [];
-  }
+// Disables JS minification so Terser cannot create the
+// "Cannot access X before initialization" TDZ crash.
+module.exports = function override(config) {
+  config.optimization = config.optimization || {};
+  config.optimization.minimize = false;
+  config.optimization.minimizer = [];
   return config;
 };
