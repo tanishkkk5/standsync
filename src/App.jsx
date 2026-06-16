@@ -1,84 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
-import { createClient as _supabaseCreate } from '@supabase/supabase-js';
+import * as SB from './lib/supabase';
 import * as Email from './lib/email';
 import { askAI } from './lib/ai';
 import { getPriority, getStatus, PRIORITIES, STATUSES, TODAY, FAQ, CHAT_THEMES, MEMBER_COLORS } from './lib/constants';
-var _SURL = process.env.REACT_APP_SUPABASE_URL || '';
-var _SKEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
-var _sc = null;
-try {
-  if (_SURL && _SKEY && _SURL.startsWith('http')) {
-    _sc = _supabaseCreate(_SURL, _SKEY, {
-      auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storageKey:'ss-auth' }
-    });
-  }
-} catch(e) { console.warn('Supabase init error:', e.message); }
-function initSupabase(){}
-var SB = {
-  supabase:_sc, IS_LIVE:!!_sc,
-  signIn:(e,p)=>_sc?_sc.auth.signInWithPassword({email:e,password:p}):Promise.resolve({error:{message:'Demo mode'}}),
-  signUp:(e,p,n)=>_sc?_sc.auth.signUp({email:e,password:p,options:{data:{name:n}}}):Promise.resolve({error:{message:'Demo mode'}}),
-  signOut:()=>_sc?_sc.auth.signOut():Promise.resolve(),
-  getSession:async()=>{if(!_sc)return null;try{const{data}=await _sc.auth.getSession();return data?.session||null;}catch{return null;}},
-  getTeams:async(uid)=>{if(!_sc)return[];try{const{data}=await _sc.from('team_members').select('*,teams(*)').eq('user_id',uid);return data||[];}catch{return[];}},
-  getMembers:async(tid)=>{if(!_sc)return[];try{const{data}=await _sc.from('team_members').select('*').eq('team_id',tid);return data||[];}catch{return[];}},
-  getTasks:async(tid,date)=>{if(!_sc)return[];try{const{data}=await _sc.from('tasks').select('*').eq('team_id',tid).gte('created_at',date+'T00:00:00').lte('created_at',date+'T23:59:59');return data||[];}catch{return[];}},
-  addTask:async(t)=>{if(!_sc)return{data:{...t,id:'demo-'+Date.now()}};try{return await _sc.from('tasks').insert(t).select().single();}catch(e){return{error:e};}},
-  updateTask:async(id,u)=>{if(!_sc)return;try{await _sc.from('tasks').update(u).eq('id',id);}catch{}},
-  deleteTask:async(id)=>{if(!_sc)return;try{await _sc.from('tasks').delete().eq('id',id);}catch{}},
-  getHistory:async(tid)=>{if(!_sc)return[];try{const{data}=await _sc.from('standups').select('*').eq('team_id',tid).order('date',{ascending:false}).limit(30);return data||[];}catch{return[];}},
-  ensureStandup:async(tid,date)=>{if(!_sc)return{id:'demo',date};try{const{data:ex}=await _sc.from('standups').select('*').eq('team_id',tid).eq('date',date).maybeSingle();if(ex)return ex;const{data}=await _sc.from('standups').insert({team_id:tid,date}).select().single();return data;}catch{return{id:'demo',date};}},
-  createTeam:async(name,uid,uname,opts={})=>{if(!_sc)return{error:{message:'Demo mode'}};try{const rid=Math.random().toString(36).slice(2,8).toUpperCase();const pin=Math.floor(1000+Math.random()*9000).toString();const{data:t,error}=await _sc.from('teams').insert({name,standup_name:opts.standup_name||name,standup_days:opts.days||[1,2,3,4,5],standup_time:opts.time||'09:00',room_id:rid,room_password:pin}).select().single();if(error||!t)return{error};await _sc.from('team_members').insert({team_id:t.id,user_id:uid,email:uname,name:uname,role:'manager'});return{data:t};}catch(e){return{error:e};}},
-  joinTeam:async(rid,pin,uid,email,name)=>{if(!_sc)return{error:{message:'Demo mode'}};try{const{data:t}=await _sc.from('teams').select('*').eq('room_id',rid).eq('room_password',pin).maybeSingle();if(!t)return{error:{message:'Invalid Room ID or PIN'}};const{error}=await _sc.from('team_members').insert({team_id:t.id,user_id:uid,email,name,role:'member'});return{data:t,error};}catch(e){return{error:e};}},
-  deleteTeam:async(tid)=>{if(!_sc)return;try{await _sc.from('tasks').delete().eq('team_id',tid);await _sc.from('team_members').delete().eq('team_id',tid);await _sc.from('standups').delete().eq('team_id',tid);await _sc.from('teams').delete().eq('id',tid);}catch{}},
-  uploadAvatar:async(uid,file)=>{if(!_sc)return null;try{const ext=file.name.split('.').pop();const path=uid+'.'+ext;await _sc.storage.from('avatars').upload(path,file,{upsert:true});const{data}=_sc.storage.from('avatars').getPublicUrl(path);return data?.publicUrl||null;}catch{return null;}},
-  subscribeToTasks:()=>()=>{},
-  ensureManagerMember:async()=>{},
-  signInWithGoogle:async()=>{
-    if(!_sc)return{error:{message:'Demo mode'}};
-    try{
-      return await _sc.auth.signInWithOAuth({
-        provider:'google',
-        options:{redirectTo:window.location.origin}
-      });
-    }catch(e){return{error:e};}
-  },
-  getMyTeams:async(uid)=>{
-    if(!_sc)return[];
-    try{
-      const{data}=await _sc.from('team_members').select('*,teams(*)').eq('user_id',uid);
-      return data||[];
-    }catch(e){return[];}
-  },
-  sendChatMessage:async(teamId,m)=>{
-    if(!_sc)return null;
-    try{
-      const{data}=await _sc.from('messages').insert({
-        team_id:teamId,text:m.text||'',type:m.type||'text',
-        url:m.url||'',filename:m.filename||'',filesize:m.filesize||0,
-        sender_email:m.sender_email,sender_name:m.sender_name,
-        space:m.space||'general',dm_to:m.dm_to||null,
-        reply_to:m.reply_to||null,
-      }).select().single();
-      return data;
-    }catch(e){return null;}
-  },
-  broadcastMessage:async(teamId,m)=>{
-    if(!_sc)return;
-    try{
-      const channel=_sc.channel('room:'+teamId);
-      await channel.send({type:'broadcast',event:'message',payload:m});
-    }catch(e){}
-  },
-  getTeamMembers:async(teamId)=>{
-    if(!_sc)return[];
-    try{
-      const{data}=await _sc.from('team_members').select('*').eq('team_id',teamId);
-      return data||[];
-    }catch{return[];}
-  },
-};
-
 // ─── THEME ────────────────────────────────────────────────────────────────────
 const ThemeCtx = createContext({ dark:true, toggle:()=>{} });
 const useTheme = () => useContext(ThemeCtx);
