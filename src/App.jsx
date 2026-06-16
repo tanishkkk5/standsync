@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
+import { createClient as _supabaseCreate } from '@supabase/supabase-js';
 import * as Email from './lib/email';
 import { askAI } from './lib/ai';
 import { getPriority, getStatus, PRIORITIES, STATUSES, TODAY, FAQ, CHAT_THEMES, MEMBER_COLORS } from './lib/constants';
@@ -10,7 +11,7 @@ var _SKEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 var _sc = null;
 try {
   if (_SURL && _SKEY && _SURL.startsWith('http')) {
-    _sc = _createClient(_SURL, _SKEY, {
+    _sc = _supabaseCreate(_SURL, _SKEY, {
       auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storageKey:'ss-auth' }
     });
   }
