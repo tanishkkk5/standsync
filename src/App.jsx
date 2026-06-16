@@ -3,9 +3,6 @@ import { createClient as _supabaseCreate } from '@supabase/supabase-js';
 import * as Email from './lib/email';
 import { askAI } from './lib/ai';
 import { getPriority, getStatus, PRIORITIES, STATUSES, TODAY, FAQ, CHAT_THEMES, MEMBER_COLORS } from './lib/constants';
-
-// Supabase via npm - Terser mangling disabled via craco so no TDZ crash
-import { createClient as _createClient } from '@supabase/supabase-js';
 var _SURL = process.env.REACT_APP_SUPABASE_URL || '';
 var _SKEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 var _sc = null;
@@ -37,6 +34,49 @@ var SB = {
   uploadAvatar:async(uid,file)=>{if(!_sc)return null;try{const ext=file.name.split('.').pop();const path=uid+'.'+ext;await _sc.storage.from('avatars').upload(path,file,{upsert:true});const{data}=_sc.storage.from('avatars').getPublicUrl(path);return data?.publicUrl||null;}catch{return null;}},
   subscribeToTasks:()=>()=>{},
   ensureManagerMember:async()=>{},
+  signInWithGoogle:async()=>{
+    if(!_sc)return{error:{message:'Demo mode'}};
+    try{
+      return await _sc.auth.signInWithOAuth({
+        provider:'google',
+        options:{redirectTo:window.location.origin}
+      });
+    }catch(e){return{error:e};}
+  },
+  getMyTeams:async(uid)=>{
+    if(!_sc)return[];
+    try{
+      const{data}=await _sc.from('team_members').select('*,teams(*)').eq('user_id',uid);
+      return data||[];
+    }catch(e){return[];}
+  },
+  sendChatMessage:async(teamId,m)=>{
+    if(!_sc)return null;
+    try{
+      const{data}=await _sc.from('messages').insert({
+        team_id:teamId,text:m.text||'',type:m.type||'text',
+        url:m.url||'',filename:m.filename||'',filesize:m.filesize||0,
+        sender_email:m.sender_email,sender_name:m.sender_name,
+        space:m.space||'general',dm_to:m.dm_to||null,
+        reply_to:m.reply_to||null,
+      }).select().single();
+      return data;
+    }catch(e){return null;}
+  },
+  broadcastMessage:async(teamId,m)=>{
+    if(!_sc)return;
+    try{
+      const channel=_sc.channel('room:'+teamId);
+      await channel.send({type:'broadcast',event:'message',payload:m});
+    }catch(e){}
+  },
+  getTeamMembers:async(teamId)=>{
+    if(!_sc)return[];
+    try{
+      const{data}=await _sc.from('team_members').select('*').eq('team_id',teamId);
+      return data||[];
+    }catch{return[];}
+  },
 };
 
 // ─── THEME ────────────────────────────────────────────────────────────────────
