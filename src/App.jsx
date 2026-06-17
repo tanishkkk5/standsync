@@ -10,12 +10,12 @@ const useTheme = () => useContext(ThemeCtx);
 function useC() {
   const { dark } = useTheme();
   return dark ? {
-    bg:'#06040F', surf:'rgba(255,255,255,.05)', surfH:'rgba(255,255,255,.08)',
-    bord:'rgba(255,255,255,.07)', bordH:'rgba(148,130,255,.3)',
-    text:'#F0ECFF', sub:'rgba(240,236,255,.62)', mut:'rgba(240,236,255,.3)',
-    nav:'rgba(6,4,15,.80)', inp:'rgba(255,255,255,.055)', inpB:'rgba(148,130,255,.18)',
-    sel:'rgba(16,12,42,.97)', row:'rgba(255,255,255,.022)',
-    accent:'#7C6EF5', glow:'rgba(124,110,245,.2)', dark:true,
+    bg:'#0B1020', surf:'#111827', surfH:'#161E2E',
+    bord:'rgba(255,255,255,.08)', bordH:'rgba(129,140,248,.35)',
+    text:'#F1F4F9', sub:'rgba(241,244,249,.64)', mut:'rgba(241,244,249,.42)',
+    nav:'rgba(11,16,32,.88)', inp:'rgba(255,255,255,.04)', inpB:'rgba(129,140,248,.22)',
+    sel:'#111827', row:'rgba(255,255,255,.02)',
+    accent:'#818CF8', glow:'rgba(99,102,241,.18)', dark:true,
   } : {
     bg:'#ECEEFF', surf:'rgba(255,255,255,.72)', surfH:'rgba(255,255,255,.95)',
     bord:'rgba(99,102,241,.11)', bordH:'rgba(99,102,241,.32)',
@@ -51,6 +51,12 @@ input,select,textarea,button{font-family:inherit}
 ::-webkit-scrollbar-thumb{background:rgba(124,110,245,.25);border-radius:10px}
 ::-webkit-scrollbar-thumb:hover{background:rgba(124,110,245,.45)}
 ::selection{background:rgba(124,110,245,.3);color:inherit}
+.ss-sidebar-desktop{display:block}
+@media(max-width:900px){
+  .ss-sidebar-desktop{display:none}
+  .ss-burger{display:flex!important}
+  .ss-create-label{display:none}
+}
 `;
 
 // ─── PRIMITIVES ───────────────────────────────────────────────────────────────
@@ -129,15 +135,14 @@ function StatCard({ label, value, color='#818CF8', sub, icon }) {
 function Lbl({ children, style={} }) { const c=useC(); return <div style={{ fontSize:10,fontWeight:700,letterSpacing:'.1em',color:c.mut,textTransform:'uppercase',marginBottom:8,...style }}>{children}</div>; }
 function BgEl() {
   const { dark }=useTheme();
-  const base=dark?'linear-gradient(150deg,#06040F 0%,#0A0618 30%,#080E1C 65%,#050912 100%)':'linear-gradient(135deg,#ECEEFF 0%,#E8ECFF 30%,#EFEEFF 60%,#E9F3FF 100%)';
-  const orbs=[{w:560,h:560,top:'-130px',left:'-90px',c:'#3730A3',d:9},{w:420,h:420,top:'25%',right:'-70px',c:'#0C4A6E',d:13},{w:300,h:300,bottom:'8%',left:'12%',c:'#581C87',d:11},{w:240,h:240,top:'60%',right:'16%',c:'#064E3B',d:15}];
+  // Premium SaaS: solid base, no glowing orbs, no gaming aesthetics.
+  // Dark = #0B1020 deep navy. Light = clean off-white. One barely-there top accent only.
+  const base = dark ? '#0B1020' : '#F7F8FC';
   return(
     <div style={{ position:'fixed',inset:0,zIndex:0,overflow:'hidden',pointerEvents:'none' }}>
       <div style={{ position:'absolute',inset:0,background:base }}/>
-      {orbs.map((o,i)=>(<div key={i} style={{ position:'absolute',width:o.w,height:o.h,borderRadius:'50%',background:'radial-gradient(circle at 35% 35%,'+o.c+',transparent 70%)',top:o.top,left:o.left,right:o.right,bottom:o.bottom,animation:'orb '+o.d+'s ease-in-out infinite alternate',animationDelay:(o.delay||i*1.5)+'s',filter:'blur(48px)' }}/>))}
-      <div style={{ position:'absolute',inset:0,opacity:dark?.018:.025,backgroundImage:'radial-gradient(circle at 1px 1px,rgba(160,140,255,1) 1px,transparent 0)',backgroundSize:'36px 36px' }}/>
-      {dark&&<div style={{ position:'absolute',inset:0,background:'radial-gradient(ellipse at 50% 0%,rgba(124,110,245,.1) 0%,transparent 55%)' }}/>}
-      {dark&&<div style={{ position:'absolute',inset:0,background:'radial-gradient(ellipse at 50% 100%,rgba(45,110,250,.06) 0%,transparent 50%)' }}/>}
+      {/* one extremely subtle top vignette for depth — no blobs, no color fog */}
+      {dark && <div style={{ position:'absolute',inset:0,background:'linear-gradient(180deg,rgba(99,102,241,.04) 0%,transparent 22%)' }}/>}
     </div>
   );
 }
@@ -4565,81 +4570,369 @@ function BrainstormSpace({ team, session, members=[] }) {
 
 // ─── MANAGER VIEW ─────────────────────────────────────────────────────────────
 
-function ManagerView({
- session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers, openPip, pipOpen }) {
+// ─── HOME COMMAND CENTER ──────────────────────────────────────────────────────
+// Daily landing page. Focus, not clutter. Replaces the "everything exposed" dashboard.
+function HomeCommand({ session, team, tasks, members, onGoto, onAddTask, onStartStandup }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const name = (session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || 'there').split(' ')[0];
 
-// Icons and tabs - inline object literals (not const, so no Terser TDZ)
-var STANDSYNC_ICONS_MAP = {live:'◉',team:'⚇',perf:'↗',analysis:'▤',ai:'✦',chat:'◌',cal:'⊟',notes:'≡',remind:'◔',hist:'↺',tset:'⚙',pip:'⧉'};
-var I = STANDSYNC_ICONS_MAP;
-var STANDSYNC_MGR_TABS = [{id:'live',l:'Live board',ic:'◉'},{id:'team',l:'Team',ic:'⚇'},{id:'perf',l:'Performance',ic:'↗'},{id:'analysis',l:'Analysis',ic:'▤'},{id:'ai',l:'AI',ic:'✦'},{id:'chat',l:'Chat',ic:'◌'},{id:'cal',l:'Calendar',ic:'⊟'},{id:'notes',l:'Notes',ic:'≡'},{id:'wiki',l:'Project Wiki',ic:'📚'},{id:'brain',l:'Brainstorm',ic:'⬡'},{id:'remind',l:'Reminders',ic:'◔'},{id:'hist',l:'History',ic:'↺'},{id:'tset',l:'Settings',ic:'⚙'}];
+  const myEmail = session?.user?.email;
+  const blocked = tasks.filter(t => t.status === 'blocked');
+  const inProgress = tasks.filter(t => t.status === 'in_progress' || t.status === 'inprogress');
+  const done = tasks.filter(t => t.status === 'done');
+  const active = tasks.filter(t => t.status !== 'done');
+  const completion = tasks.length ? Math.round(done.length / tasks.length * 100) : 0;
 
-  const c=useC(); const [tab,setTab]=useState('live');
-  const [unreadChat,setUnreadChat]=useState(0);
-  const prevMsgCount=useRef(messages.length);
-  useEffect(()=>{
-    if(messages.length>prevMsgCount.current&&tab!=='chat'){
-      const newMsgs=messages.slice(prevMsgCount.current);
-      const myEmail=session?.user?.email;
-      const externalNew=newMsgs.filter(m=>m.sender_email!==myEmail);
-      if(externalNew.length>0) setUnreadChat(n=>n+externalNew.length);
-    }
-    prevMsgCount.current=messages.length;
-  },[messages,tab]);
-  const setTabClear=(t)=>{ setTab(t); if(t==='chat') setUnreadChat(0); };
-  const blocked=tasks.filter(t=>t.status==='blocked').length;
-  const name=session?.user?.user_metadata?.name||session?.user?.email?.split('@')[0]||'Manager';
-  const myTasks=tasks.filter(t=>t.assignee_email===session?.user?.email);
-  return(
-    <div style={{ position:'relative',zIndex:1,minHeight:'100vh' }}>
-      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100,overflow:'visible' }}>
-        <div style={{ maxWidth:1200,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:10 }}>
-          <Logo size={26} onClick={onBack}/>
-          <nav style={{ display:'flex',gap:1,flex:1,overflowX:'auto',overflowY:'visible' }}>
-            <button onClick={()=>openPip&&openPip()} title="Open PiP — stays visible when you switch tabs" style={{ padding:'5px 10px',borderRadius:10,border:`1px solid ${pipOpen?'rgba(124,110,245,.5)':c.bord}`,background:pipOpen?'rgba(124,110,245,.18)':'rgba(124,110,245,.08)',color:'#A78BFA',cursor:'pointer',fontSize:11,fontWeight:600,flexShrink:0,display:'flex',alignItems:'center',gap:6 }}><span style={{ width:14,height:14,display:'flex',alignItems:'center',justifyContent:'center' }}>{I.pip}</span>{pipOpen?'PiP ●':'PiP'}</button>
-        {STANDSYNC_MGR_TABS.map(t=>{
-              const isA=tab===t.id;
-              return(
-                <button key={t.id} onClick={()=>setTabClear(t.id)}
-                  className="ss-tip" data-tip={t.l}
-                  style={{ padding:'5px 8px',borderRadius:9,border:'none',background:isA?'rgba(124,110,245,.16)':'transparent',color:isA?'#C4B5FD':c.mut,cursor:'pointer',fontWeight:isA?600:400,display:'flex',alignItems:'center',gap:5,transition:'all .15s',whiteSpace:'nowrap',flexShrink:0,position:'relative' }}>
-                  <span style={{ fontSize:16,lineHeight:1,transition:'transform .15s' }}>{t.ic||t.i}</span>
-                  {isA&&<span style={{ fontSize:11 }}>{t.l}</span>}
-                  {t.id==='chat'&&unreadChat>0&&<span style={{ position:'absolute',top:0,right:0,minWidth:14,height:14,borderRadius:7,background:'#EF4444',color:'#fff',fontSize:8,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 2px' }}>{unreadChat>9?'9+':unreadChat}</span>}
-                </button>
-              );
-            })}
-          </nav>
-          <div style={{ display:'flex',alignItems:'center',gap:7,flexShrink:0 }}>
-            {blocked>0&&<div style={{ fontSize:11,color:'#F87171',background:'rgba(239,68,68,.12)',border:'1px solid rgba(239,68,68,.25)',padding:'3px 9px',borderRadius:8,fontWeight:700 }}>⚠️ {blocked}</div>}
-            <Btn v="ghost" onClick={onDigest} loading={emailBusy} style={{ padding:'5px 10px',fontSize:11 }}>📧</Btn>
-            <Btn v="warn" onClick={onEOD} loading={emailBusy} style={{ padding:'5px 10px',fontSize:11 }}>🕕</Btn>
-            <ThemeToggle/><ProfileMenu session={session} onSettings={onSettings} onLogout={onLogout}/>
+  // Today's focus — max 5, prioritized: blocked first, then high priority, then in progress
+  const focus = [...tasks]
+    .filter(t => t.status !== 'done')
+    .sort((a, b) => {
+      const score = t => (t.status === 'blocked' ? 3 : 0) + (t.priority === 'high' ? 2 : t.priority === 'medium' ? 1 : 0);
+      return score(b) - score(a);
+    })
+    .slice(0, 5);
+
+  const greeting = (() => {
+    const h = new Date().getHours();
+    return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  })();
+
+  const aiSummary = (() => {
+    const parts = [];
+    parts.push(`You have ${active.length} active task${active.length !== 1 ? 's' : ''}.`);
+    if (blocked.length) parts.push(`${blocked.length} ${blocked.length === 1 ? 'is' : 'are'} blocked.`);
+    if (inProgress.length) parts.push(`${inProgress.length} in progress.`);
+    if (!active.length) parts.push(`You're all caught up. 🎉`);
+    return parts.join(' ');
+  })();
+
+  const Stat = ({ label, value, accent, onClick }) => (
+    <div onClick={onClick} style={{ flex: 1, padding: '16px 18px', borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, cursor: onClick ? 'pointer' : 'default', transition: 'border-color .15s' }}
+      onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = c.bordH)}
+      onMouseLeave={e => onClick && (e.currentTarget.style.borderColor = c.bord)}>
+      <div style={{ fontSize: 28, fontWeight: 800, color: accent || c.text, letterSpacing: '-.02em', lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 12, color: c.mut, marginTop: 6, fontWeight: 500 }}>{label}</div>
+    </div>
+  );
+
+  const prioColor = p => p === 'high' ? '#F87171' : p === 'medium' ? '#FBBF24' : '#818CF8';
+
+  return (
+    <div style={{ maxWidth: 1040, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+      {/* Greeting + AI summary */}
+      <div>
+        <h1 style={{ fontSize: 32, fontWeight: 800, color: c.text, letterSpacing: '-.03em', margin: 0 }}>{greeting}, {name}</h1>
+        <p style={{ fontSize: 15, color: c.sub, margin: '8px 0 0', lineHeight: 1.5, maxWidth: 600 }}>{aiSummary}</p>
+      </div>
+
+      {/* Quick actions */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {[
+          { l: 'New task', icon: '＋', primary: true, fn: () => onAddTask && onAddTask() },
+          { l: 'Start standup', icon: '◉', fn: () => onStartStandup ? onStartStandup() : onGoto('tasks') },
+          { l: 'New doc', icon: '≡', fn: () => onGoto('knowledge') },
+          { l: 'Ask AI', icon: '✦', fn: () => onGoto('insights') },
+        ].map(a => (
+          <button key={a.l} onClick={a.fn}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all .15s',
+              border: a.primary ? 'none' : `1px solid ${c.bord}`,
+              background: a.primary ? 'linear-gradient(135deg,#6366F1,#818CF8)' : c.surf,
+              color: a.primary ? '#fff' : c.text }}>
+            <span style={{ fontSize: 16 }}>{a.icon}</span>{a.l}
+          </button>
+        ))}
+      </div>
+
+      {/* Two-column: Focus + Team snapshot */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)', gap: 16 }}>
+
+        {/* Today's focus */}
+        <div style={{ borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: `1px solid ${c.bord}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 18, fontWeight: 700, color: c.text }}>Today's focus</span>
+            <button onClick={() => onGoto('tasks')} style={{ fontSize: 13, color: c.accent, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>View all →</button>
+          </div>
+          <div style={{ padding: 8 }}>
+            {focus.length === 0 ? (
+              <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>🎯</div>
+                <div style={{ fontSize: 14, color: c.sub, fontWeight: 600, marginBottom: 4 }}>Nothing urgent right now</div>
+                <div style={{ fontSize: 13, color: c.mut, marginBottom: 16 }}>Add a task to start planning your day</div>
+                <button onClick={() => onAddTask && onAddTask()} style={{ padding: '8px 18px', borderRadius: 10, background: 'linear-gradient(135deg,#6366F1,#818CF8)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>＋ New task</button>
+              </div>
+            ) : focus.map(t => (
+              <div key={t.id} onClick={() => onGoto('tasks')}
+                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderRadius: 10, cursor: 'pointer', transition: 'background .12s' }}
+                onMouseEnter={e => e.currentTarget.style.background = c.row}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: prioColor(t.priority), flexShrink: 0 }}/>
+                <span style={{ flex: 1, fontSize: 14, color: c.text, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title || t.text || 'Untitled task'}</span>
+                {t.status === 'blocked' && <span style={{ fontSize: 11, color: '#F87171', background: 'rgba(248,113,113,.12)', padding: '2px 8px', borderRadius: 6, fontWeight: 600, flexShrink: 0 }}>Blocked</span>}
+                {(t.status === 'in_progress' || t.status === 'inprogress') && <span style={{ fontSize: 11, color: '#FBBF24', background: 'rgba(251,191,36,.12)', padding: '2px 8px', borderRadius: 6, fontWeight: 600, flexShrink: 0 }}>In progress</span>}
+                <span style={{ fontSize: 12, color: c.mut, flexShrink: 0 }}>{(t.assignee_email || '').split('@')[0]}</span>
+              </div>
+            ))}
           </div>
         </div>
-      </div>
-      <div style={{ maxWidth:1200,margin:'0 auto',padding:'18px 24px 8px' }}>
-        <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:3 }}><LiveDot/><span style={{ fontSize:11,color:'#34D399',textTransform:'uppercase',letterSpacing:'.08em',fontWeight:700 }}>Live · {team?.standup_name||team?.name||'Standup'}</span></div>
-        <h1 style={{ margin:'0 0 2px',fontSize:20,fontWeight:800,color:c.text,letterSpacing:'-.025em' }}>Good morning, {name.split(' ')[0]} 👋</h1>
-        <p style={{ margin:0,color:c.mut,fontSize:12 }}>{members.length} members · {tasks.length} tasks today</p>
-      </div>
-      <div style={{ maxWidth:1200,margin:'0 auto',padding:'0 24px 48px' }}>
-        {tab==='live'&&<LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} session={session}/>}
-        {tab==='team'&&<TeamTab tasks={tasks} members={members}/>}
-        {tab==='perf'&&<PerfTab tasks={tasks} history={history} members={members}/>}
-        {tab==='ai'&&<AIAssistant tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name||'Team'}/>}
-        {tab==='chat'&&<RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme} isManager={true}/>}
-        {tab==='cal'&&<CalendarPanel team={team} members={members} session={session}/>}
-        {tab==='notes'&&<ManagerNotesTab session={session} team={team}/>}
-        {tab==='brain'&&<BrainstormSpace team={team} session={session} members={members}/>}
-        {tab==='wiki'&&<ProjectWiki team={team} session={session} members={members}/>}
-        {tab==='analysis'&&<TeamAnalysisTab tasks={tasks} members={members}/>}
-        {tab==='remind'&&<RemindersPanel team={team} members={members} session={session}/>}
-        {tab==='hist'&&<HistTab history={history} members={members}/>}
-        {tab==='tset'&&<TeamSettingsTab team={team} members={members} session={session} onMembersUpdate={()=>{if(setMembers&&SB.IS_LIVE)SB.getTeamMembers(team.id).then(m=>setMembers(m||[]))}}/>}
+
+        {/* Team snapshot */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, padding: 20 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: c.text, marginBottom: 16 }}>Team snapshot</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 13, color: c.sub }}>Completion</span>
+                  <span style={{ fontSize: 13, color: c.text, fontWeight: 700 }}>{completion}%</span>
+                </div>
+                <div style={{ height: 8, borderRadius: 4, background: c.row, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${completion}%`, background: 'linear-gradient(90deg,#6366F1,#818CF8)', borderRadius: 4, transition: 'width .4s' }}/>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <Stat label="Blocked" value={blocked.length} accent={blocked.length ? '#F87171' : c.text} onClick={() => onGoto('tasks')}/>
+                <Stat label="Members" value={members.length} onClick={() => onGoto('team')}/>
+              </div>
+            </div>
+          </div>
+
+          {/* AI insights */}
+          <div style={{ borderRadius: 16, background: dark ? 'rgba(99,102,241,.06)' : 'rgba(99,102,241,.04)', border: `1px solid rgba(99,102,241,.2)`, padding: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <span style={{ fontSize: 15 }}>✦</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Needs attention</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {blocked.length > 0 && <div style={{ fontSize: 13, color: c.sub, lineHeight: 1.5 }}>🚧 {blocked.length} blocked task{blocked.length !== 1 ? 's' : ''} need unblocking</div>}
+              {inProgress.length > 3 && <div style={{ fontSize: 13, color: c.sub, lineHeight: 1.5 }}>⚡ {inProgress.length} tasks in progress — consider focusing</div>}
+              {completion >= 80 && <div style={{ fontSize: 13, color: c.sub, lineHeight: 1.5 }}>🎉 Strong progress — {completion}% complete</div>}
+              {blocked.length === 0 && inProgress.length <= 3 && completion < 80 && <div style={{ fontSize: 13, color: c.sub, lineHeight: 1.5 }}>✓ Everything looks healthy. Keep going.</div>}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
+
+function ManagerView({
+ session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers, openPip, pipOpen }) {
+
+  const c = useC();
+  const { dark } = useTheme();
+
+  // ── New IA: 6 primary areas + Calendar + Settings ──
+  // area = top-level nav; sub = sub-tab within Knowledge / Insights
+  const [area, setArea] = useState('home');
+  const [knowledgeSub, setKnowledgeSub] = useState('docs');   // docs | brainstorm
+  const [insightsSub, setInsightsSub]   = useState('overview'); // overview | performance | history
+  const [mobileNav, setMobileNav] = useState(false);
+
+  const [unreadChat, setUnreadChat] = useState(0);
+  const prevMsgCount = useRef(messages.length);
+  useEffect(() => {
+    if (messages.length > prevMsgCount.current && area !== 'communication') {
+      const myEmail = session?.user?.email;
+      const externalNew = messages.slice(prevMsgCount.current).filter(m => m.sender_email !== myEmail);
+      if (externalNew.length) setUnreadChat(n => n + externalNew.length);
+    }
+    prevMsgCount.current = messages.length;
+  }, [messages, area]);
+
+  const goArea = (a) => { setArea(a); setMobileNav(false); if (a === 'communication') setUnreadChat(0); };
+
+  const blocked = tasks.filter(t => t.status === 'blocked').length;
+  const myTasks = tasks.filter(t => t.assignee_email === session?.user?.email);
+
+  // ── Nav model ──
+  const NAV = [
+    { id: 'home',          label: 'Home',          icon: '⌂' },
+    { id: 'tasks',         label: 'Tasks',         icon: '◎' },
+    { id: 'team',          label: 'Team',          icon: '⚇' },
+    { id: 'communication', label: 'Communication', icon: '◌', badge: unreadChat },
+    { id: 'knowledge',     label: 'Knowledge',     icon: '◈' },
+    { id: 'insights',      label: 'Insights',      icon: '▤' },
+    { id: 'calendar',      label: 'Calendar',      icon: '⊟' },
+  ];
+
+  const areaTitle = {
+    home: 'Home', tasks: 'Tasks', team: 'Team', communication: 'Communication',
+    knowledge: 'Knowledge', insights: 'Insights', calendar: 'Calendar', settings: 'Settings',
+  };
+
+  // ── Sidebar ──
+  const SidebarNav = ({ inDrawer }) => (
+    <div style={{ width: 260, flexShrink: 0, height: '100vh', position: inDrawer ? 'relative' : 'sticky', top: 0,
+      background: dark ? '#0D1322' : '#FFFFFF', borderRight: `1px solid ${c.bord}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Logo + team */}
+      <div style={{ padding: '18px 20px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Logo size={26} onClick={onBack}/>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{team?.name || 'StandSync'}</div>
+          <div style={{ fontSize: 11, color: c.mut }}>Manager workspace</div>
+        </div>
+      </div>
+
+      {/* Primary nav */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '6px 12px' }}>
+        {NAV.map(n => {
+          const on = area === n.id;
+          return (
+            <button key={n.id} onClick={() => goArea(n.id)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                background: on ? (dark ? 'rgba(129,140,248,.14)' : 'rgba(99,102,241,.1)') : 'transparent',
+                color: on ? c.accent : c.sub, fontSize: 14, fontWeight: on ? 600 : 500, marginBottom: 2, textAlign: 'left', transition: 'all .12s', position: 'relative' }}
+              onMouseEnter={e => { if (!on) e.currentTarget.style.background = c.row; }}
+              onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent'; }}>
+              <span style={{ fontSize: 18, width: 20, textAlign: 'center', flexShrink: 0 }}>{n.icon}</span>
+              <span style={{ flex: 1 }}>{n.label}</span>
+              {n.badge > 0 && <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: '#EF4444', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{n.badge > 9 ? '9+' : n.badge}</span>}
+              {n.id === 'tasks' && blocked > 0 && <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: 'rgba(248,113,113,.18)', color: '#F87171', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{blocked}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Bottom: Settings + PiP */}
+      <div style={{ padding: '10px 12px', borderTop: `1px solid ${c.bord}` }}>
+        <button onClick={() => openPip && openPip()}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', borderRadius: 10, border: 'none', cursor: 'pointer', background: pipOpen ? 'rgba(129,140,248,.14)' : 'transparent', color: pipOpen ? c.accent : c.sub, fontSize: 14, fontWeight: 500, marginBottom: 2, textAlign: 'left' }}>
+          <span style={{ fontSize: 18, width: 20, textAlign: 'center' }}>⧉</span>
+          <span style={{ flex: 1 }}>Picture-in-picture</span>
+          {pipOpen && <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#34D399' }}/>}
+        </button>
+        <button onClick={() => goArea('settings')}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', borderRadius: 10, border: 'none', cursor: 'pointer', background: area === 'settings' ? (dark ? 'rgba(129,140,248,.14)' : 'rgba(99,102,241,.1)') : 'transparent', color: area === 'settings' ? c.accent : c.sub, fontSize: 14, fontWeight: 500, textAlign: 'left' }}>
+          <span style={{ fontSize: 18, width: 20, textAlign: 'center' }}>⚙</span>
+          <span style={{ flex: 1 }}>Settings</span>
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── Sub-tab pill bar ──
+  const SubTabs = ({ tabs, value, onChange }) => (
+    <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: `1px solid ${c.bord}`, paddingBottom: 0 }}>
+      {tabs.map(t => {
+        const on = value === t.id;
+        return (
+          <button key={t.id} onClick={() => onChange(t.id)}
+            style={{ padding: '8px 14px', border: 'none', borderBottom: `2px solid ${on ? c.accent : 'transparent'}`, background: 'transparent', color: on ? c.text : c.mut, fontSize: 13, fontWeight: on ? 700 : 500, cursor: 'pointer', marginBottom: -1, transition: 'all .12s' }}>
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <div style={{ position: 'relative', zIndex: 1, display: 'flex', minHeight: '100vh' }}>
+
+      {/* Desktop sidebar */}
+      <div className="ss-sidebar-desktop"><SidebarNav/></div>
+
+      {/* Mobile drawer */}
+      {mobileNav && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex' }} onClick={() => setMobileNav(false)}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.5)' }}/>
+          <div style={{ position: 'relative', zIndex: 1 }} onClick={e => e.stopPropagation()}><SidebarNav inDrawer/></div>
+        </div>
+      )}
+
+      {/* Main column */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+
+        {/* Top header — max 4 controls */}
+        <div style={{ height: 60, borderBottom: `1px solid ${c.bord}`, background: c.nav, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', position: 'sticky', top: 0, zIndex: 100, display: 'flex', alignItems: 'center', gap: 12, padding: '0 24px' }}>
+          <button className="ss-burger" onClick={() => setMobileNav(true)} style={{ display: 'none', width: 38, height: 38, borderRadius: 10, border: `1px solid ${c.bord}`, background: 'transparent', color: c.text, cursor: 'pointer', fontSize: 18, alignItems: 'center', justifyContent: 'center' }}>☰</button>
+
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: c.text, margin: 0, flexShrink: 0 }}>{areaTitle[area]}</h2>
+
+          {/* Search */}
+          <div style={{ flex: 1, maxWidth: 420, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, background: c.inp, border: `1px solid ${c.bord}`, marginLeft: 8 }}>
+            <span style={{ fontSize: 14, color: c.mut }}>⌕</span>
+            <input placeholder="Search tasks, docs, people…" style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: c.text, fontSize: 13, minWidth: 0 }}/>
+          </div>
+
+          <div style={{ flex: 1 }}/>
+
+          {/* 4 controls: Create, Notifications, Theme, Profile */}
+          <button onClick={() => onAddTask && onAddTask()} title="Create"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, height: 38, padding: '0 16px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#6366F1,#818CF8)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
+            <span style={{ fontSize: 16 }}>＋</span><span className="ss-create-label">Create</span>
+          </button>
+          <button onClick={onDigest} title="Send digest" disabled={emailBusy}
+            style={{ width: 38, height: 38, borderRadius: 10, border: `1px solid ${c.bord}`, background: 'transparent', color: blocked > 0 ? '#F87171' : c.sub, cursor: 'pointer', fontSize: 16, flexShrink: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            ◔{blocked > 0 && <span style={{ position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: '50%', background: '#F87171' }}/>}
+          </button>
+          <ThemeToggle/>
+          <ProfileMenu session={session} onSettings={onSettings} onLogout={onLogout}/>
+        </div>
+
+        {/* Live status strip (only on Home/Tasks) */}
+        {(area === 'home' || area === 'tasks') && (
+          <div style={{ padding: '10px 32px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <LiveDot/><span style={{ fontSize: 11, color: '#34D399', textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 700 }}>Live · {team?.standup_name || team?.name || 'Standup'}</span>
+          </div>
+        )}
+
+        {/* Content */}
+        <div style={{ flex: 1, padding: '24px 32px 48px', maxWidth: 1280, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+
+          {area === 'home' && (
+            <HomeCommand session={session} team={team} tasks={tasks} members={members}
+              onGoto={goArea} onAddTask={onAddTask} onStartStandup={() => goArea('tasks')}/>
+          )}
+
+          {area === 'tasks' && (
+            <LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} session={session}/>
+          )}
+
+          {area === 'team' && <TeamTab tasks={tasks} members={members}/>}
+
+          {area === 'communication' && (
+            <RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme} isManager={true}/>
+          )}
+
+          {area === 'knowledge' && (
+            <>
+              <SubTabs value={knowledgeSub} onChange={setKnowledgeSub}
+                tabs={[{ id: 'docs', label: 'Docs & SOPs' }, { id: 'brainstorm', label: 'Brainstorm' }, { id: 'meetings', label: 'Meeting notes' }]}/>
+              {knowledgeSub === 'docs' && <ProjectWiki team={team} session={session} members={members}/>}
+              {knowledgeSub === 'brainstorm' && <BrainstormSpace team={team} session={session} members={members}/>}
+              {knowledgeSub === 'meetings' && <ManagerNotesTab session={session} team={team}/>}
+            </>
+          )}
+
+          {area === 'insights' && (
+            <>
+              <SubTabs value={insightsSub} onChange={setInsightsSub}
+                tabs={[{ id: 'overview', label: 'Overview' }, { id: 'performance', label: 'Performance' }, { id: 'ai', label: 'Ask AI' }, { id: 'history', label: 'History' }]}/>
+              {insightsSub === 'overview' && <TeamAnalysisTab tasks={tasks} members={members}/>}
+              {insightsSub === 'performance' && <PerfTab tasks={tasks} history={history} members={members}/>}
+              {insightsSub === 'ai' && <AIAssistant tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name || 'Team'}/>}
+              {insightsSub === 'history' && <HistTab history={history} members={members}/>}
+            </>
+          )}
+
+          {area === 'calendar' && <CalendarPanel team={team} members={members} session={session}/>}
+
+          {area === 'settings' && (
+            <>
+              <SubTabs value={insightsSub === 'reminders' ? 'reminders' : 'team'} onChange={(v) => setInsightsSub(v)}
+                tabs={[{ id: 'team', label: 'Team settings' }, { id: 'reminders', label: 'Reminders' }]}/>
+              {insightsSub !== 'reminders' && <TeamSettingsTab team={team} members={members} session={session} onMembersUpdate={() => { if (setMembers && SB.IS_LIVE) SB.getTeamMembers(team.id).then(m => setMembers(m || [])); }}/>}
+              {insightsSub === 'reminders' && <RemindersPanel team={team} members={members} session={session}/>}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 // ─── PIP TASK WINDOW ─────────────────────────────────────────────────────────
 // Floats over Google Meet / any video call so you can write tasks without switching windows
