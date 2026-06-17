@@ -776,6 +776,8 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
 
   return (
     <>
+      {/* Close panel on outside click */}
+      {open&&<div onClick={()=>setOpen(false)} style={{ position:'fixed',inset:0,zIndex:898 }}/>}
       {/* Frosted glass AI orb button */}
       <button
         onMouseDown={onMouseDown}
@@ -2091,14 +2093,13 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
     {id:'cal',     l:'Calendar',      ic:'⊟'},
     {id:'ai',      l:'AI assistant',  ic:'◉'},
   ];
-  const [meetingNotes,setMeetingNotes]=useState(''); const [notesSaved,setNotesSaved]=useState(false);
+  // meetingNotes moved to NotesTab component
   const [selfTasks,setSelfTasks]=useState(()=>{ try{return JSON.parse(localStorage.getItem('ss-self-tasks-'+(user.email||''))||'[]');}catch{return[];} });
   const [selfTitle,setSelfTitle]=useState(''); const [selfPriority,setSelfPriority]=useState('medium');
   const saveSelfTask=()=>{ if(!selfTitle.trim())return; const t={id:'s'+Date.now(),title:selfTitle.trim(),priority:selfPriority,done:false,created_at:new Date().toISOString()}; const updated=[...selfTasks,t]; setSelfTasks(updated); try{localStorage.setItem('ss-self-tasks-'+(user.email||''),JSON.stringify(updated));}catch{}; setSelfTitle(''); };
   const toggleSelf=(id)=>{ const updated=selfTasks.map(t=>t.id===id?{...t,done:!t.done}:t); setSelfTasks(updated); try{localStorage.setItem('ss-self-tasks-'+(user.email||''),JSON.stringify(updated));}catch{}; };
   const deleteSelf=(id)=>{ const updated=selfTasks.filter(t=>t.id!==id); setSelfTasks(updated); try{localStorage.setItem('ss-self-tasks-'+(user.email||''),JSON.stringify(updated));}catch{}; };
-  const saveNotes=()=>{ try{localStorage.setItem('ss-notes-'+(user.email||''),meetingNotes);}catch{}; setNotesSaved(true); setTimeout(()=>setNotesSaved(false),2000); };
-  useEffect(()=>{ try{const n=localStorage.getItem('ss-notes-'+(user.email||'')); if(n)setMeetingNotes(n);}catch{}; },[]);
+
   return (
     <div style={{ position:'relative',zIndex:1,minHeight:'100vh' }}>
       <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100,overflow:'visible' }}>
@@ -2236,21 +2237,7 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
         })()}
 
         {/* ── MEETING NOTES ── */}
-        {activeTab==='notes'&&(
-          <div>
-            <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16 }}>
-              <div>
-                <h2 style={{ fontSize:18,fontWeight:700,color:c.text,marginBottom:2 }}>📝 Meeting notes</h2>
-                <p style={{ fontSize:13,color:c.mut,margin:0 }}>Private notes for today's standup — auto-saved locally.</p>
-              </div>
-              <Btn onClick={saveNotes} style={{ flexShrink:0 }}>{notesSaved?'✓ Saved!':'Save notes'}</Btn>
-            </div>
-            <Card style={{ padding:'4px' }}>
-              <textarea value={meetingNotes} onChange={e=>{setMeetingNotes(e.target.value);}} onBlur={saveNotes} placeholder="Add your meeting notes here..."   style={{ width:'100%',minHeight:420,background:'transparent',border:'none',color:c.text,fontSize:14,lineHeight:1.8,padding:'16px',outline:'none',resize:'vertical',fontFamily:'inherit',boxSizing:'border-box' }}/>
-            </Card>
-            <div style={{ marginTop:10,fontSize:12,color:c.mut }}>Notes are saved privately to your browser — not shared with your team.</div>
-          </div>
-        )}
+        {activeTab==='notes'&&<NotesTab session={session} team={{id:user?.team_id||'t1'}} role={'member-'+user?.email}/>}
       </div>
     </div>
   );
@@ -2837,7 +2824,7 @@ export default function App() {
   // Real-time chat subscription
   useEffect(()=>{ if(!team||!SB.IS_LIVE)return; return SB.subscribeToMessages(team.id,(msg)=>{setMessages(p=>{if(p.find(m=>m.id===msg.id))return p;return [...p,msg];});}); },[team]);
 
-  const handleAddTask=useCallback(async(d)=>{ if(!SB.IS_LIVE){setTasks(p=>[...p,{id:'demo_'+Date.now(),...d,created_at:new Date().toISOString()}]);return;} await SB.addTask({...d,standup_id:standup?.id}); },[standup]);
+  const handleAddTask=useCallback(async(d)=>{ if(!d?.title?.trim()) return; if(!SB.IS_LIVE){setTasks(p=>[...p,{id:'demo_'+Date.now(),...d,created_at:new Date().toISOString()}]);return;} const{data}=await SB.addTask({...d,standup_id:standup?.id}); if(data) setTasks(p=>[...p,data]); },[standup]);
   const handleStatus=useCallback(async(id,status)=>{ const u={status,...(status==='done'?{completed_at:new Date().toISOString()}:{})}; if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));return;} await SB.updateTask(id,u); },[]);
   const handlePriority=useCallback(async(id,priority)=>{ if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,priority}:t));return;} await SB.updateTask(id,{priority}); },[]);
   const handleNote=useCallback(async(id,manager_note)=>{ if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,manager_note}:t));return;} await SB.updateTask(id,{manager_note}); },[]);
@@ -2926,25 +2913,140 @@ export default function App() {
 }
 
 // ─── MANAGER MEETING NOTES ───────────────────────────────────────────────────
-function ManagerNotesTab({ session, team }) {
+function NotesTab({ session, team, role='manager' }) {
   const c=useC();
-  const key='ss-mgr-notes-'+(team?.id||'');
-  const [notes,setNotes]=useState(()=>{ try{return localStorage.getItem(key)||'';}catch{return '';} });
+  const teamId=team?.id||'demo';
+  const userId=session?.user?.email||'user';
+  const storageKey=(type,id)=>'ss-notes-'+role+'-'+teamId+'-'+type+'-'+id;
+
+  const todayKey=new Date().toISOString().slice(0,10);
+  const [view,setView]=useState('list'); // list | editor
+  const [noteType,setNoteType]=useState('meeting'); // meeting | project
+  const [selectedNote,setSelectedNote]=useState(null);
+  const [noteContent,setNoteContent]=useState('');
+  const [noteTitle,setNoteTitle]=useState('');
   const [saved,setSaved]=useState(false);
-  const save=()=>{ try{localStorage.setItem(key,notes);}catch{}; setSaved(true); setTimeout(()=>setSaved(false),2000); };
-  const date=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  return(
+
+  // Load all saved notes
+  const [allNotes,setAllNotes]=useState(()=>{
+    try{
+      const raw=localStorage.getItem('ss-notesindex-'+role+'-'+teamId);
+      return raw?JSON.parse(raw):[];
+    }catch{return [];}
+  });
+
+  const saveIndex=(notes)=>{
+    try{localStorage.setItem('ss-notesindex-'+role+'-'+teamId,JSON.stringify(notes));}catch{}
+  };
+
+  const openNote=(note)=>{
+    setSelectedNote(note);
+    setNoteTitle(note.title);
+    setNoteType(note.type);
+    try{setNoteContent(localStorage.getItem(storageKey(note.type,note.id))||'');}catch{setNoteContent('');}
+    setView('editor');
+  };
+
+  const newNote=(type)=>{
+    const id='note-'+Date.now();
+    const title=type==='meeting'
+      ?'Meeting · '+new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
+      :'Project note · '+new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+    const note={id,type,title,created:new Date().toISOString()};
+    const updated=[note,...allNotes];
+    setAllNotes(updated); saveIndex(updated);
+    openNote(note);
+  };
+
+  const saveNote=()=>{
+    if(!selectedNote)return;
+    try{localStorage.setItem(storageKey(selectedNote.type,selectedNote.id),noteContent);}catch{}
+    // Update title in index
+    const updated=allNotes.map(n=>n.id===selectedNote.id?{...n,title:noteTitle,updated:new Date().toISOString()}:n);
+    setAllNotes(updated); saveIndex(updated);
+    setSaved(true); setTimeout(()=>setSaved(false),2000);
+  };
+
+  const deleteNote=(id,e)=>{
+    e.stopPropagation();
+    if(!window.confirm('Delete this note?'))return;
+    const updated=allNotes.filter(n=>n.id!==id);
+    setAllNotes(updated); saveIndex(updated);
+    try{localStorage.removeItem(storageKey(allNotes.find(n=>n.id===id)?.type||'meeting',id));}catch{}
+    if(selectedNote?.id===id){setView('list');setSelectedNote(null);}
+  };
+
+  const meeting=allNotes.filter(n=>n.type==='meeting');
+  const project=allNotes.filter(n=>n.type==='project');
+
+  if(view==='editor') return(
     <div>
-      <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16 }}>
-        <div><h2 style={{ fontSize:18,fontWeight:700,color:c.text,marginBottom:2 }}>📝 Meeting notes</h2><p style={{ fontSize:13,color:c.mut,margin:0 }}>{date} · {team?.name}</p></div>
-        <Btn onClick={save}>{saved?'✓ Saved!':'Save'}</Btn>
+      <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:14 }}>
+        <button onClick={()=>setView('list')} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:13,padding:0 }}>← Back</button>
+        <span style={{ fontSize:11,padding:'2px 8px',borderRadius:20,background:selectedNote?.type==='meeting'?'rgba(99,102,241,.12)':'rgba(52,211,153,.12)',color:selectedNote?.type==='meeting'?'#818CF8':'#34D399',fontWeight:600 }}>{selectedNote?.type==='meeting'?'📅 Meeting':'📁 Project'}</span>
+        <div style={{ flex:1 }}/>
+        <Btn onClick={saveNote}>{saved?'✓ Saved!':'Save'}</Btn>
       </div>
+      <input value={noteTitle} onChange={e=>setNoteTitle(e.target.value)} onBlur={saveNote} style={{ width:'100%',background:'transparent',border:'none',borderBottom:`1px solid ${c.bord}`,color:c.text,fontSize:18,fontWeight:700,padding:'0 0 10px',outline:'none',marginBottom:12,boxSizing:'border-box' }}/>
       <Card style={{ padding:'4px' }}>
-        <textarea value={notes} onChange={e=>setNotes(e.target.value)} onBlur={save} placeholder={'Meeting notes for '+date+'\n\nAgenda:\n- \n\nDiscussed:\n- \n\nAction items:\n- \n\nDecisions:\n- \n\nNext steps:\n- '} style={{ width:'100%',minHeight:480,background:'transparent',border:'none',color:c.text,fontSize:14,lineHeight:1.8,padding:'20px',outline:'none',resize:'vertical',fontFamily:'inherit',boxSizing:'border-box' }}/>
+        <textarea value={noteContent} onChange={e=>setNoteContent(e.target.value)} onBlur={saveNote}
+          placeholder="Write your notes here..."
+          style={{ width:'100%',minHeight:460,background:'transparent',border:'none',color:c.text,fontSize:14,lineHeight:1.8,padding:'16px',outline:'none',resize:'vertical',fontFamily:'inherit',boxSizing:'border-box' }}/>
       </Card>
     </div>
   );
+
+  return(
+    <div>
+      <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:18 }}>
+        <h2 style={{ fontSize:18,fontWeight:700,color:c.text,margin:0 }}>📝 Notes</h2>
+        <div style={{ display:'flex',gap:7 }}>
+          <Btn onClick={()=>newNote('meeting')} style={{ fontSize:12,padding:'6px 12px' }}>+ Meeting note</Btn>
+          <Btn v="ghost" onClick={()=>newNote('project')} style={{ fontSize:12,padding:'6px 12px' }}>+ Project note</Btn>
+        </div>
+      </div>
+      {/* Meeting notes section */}
+      <div style={{ marginBottom:20 }}>
+        <div style={{ fontSize:12,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.07em',marginBottom:10,display:'flex',alignItems:'center',gap:6 }}>
+          <span>📅 Meeting notes</span><span style={{ fontSize:11,fontWeight:400 }}>({meeting.length})</span>
+        </div>
+        {meeting.length===0&&<div style={{ fontSize:13,color:c.mut,padding:'12px 0' }}>No meeting notes yet — click "+ Meeting note" to create one</div>}
+        <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
+          {meeting.map(n=>(
+            <Card key={n.id} onClick={()=>openNote(n)} style={{ padding:'12px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:10 }}>
+              <span style={{ fontSize:18 }}>📅</span>
+              <div style={{ flex:1,minWidth:0 }}>
+                <div style={{ fontSize:13,fontWeight:600,color:c.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{n.title}</div>
+                <div style={{ fontSize:11,color:c.mut }}>{n.updated?new Date(n.updated).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):new Date(n.created).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
+              </div>
+              <button onClick={e=>deleteNote(n.id,e)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:14,opacity:.5,flexShrink:0 }}>🗑</button>
+            </Card>
+          ))}
+        </div>
+      </div>
+      {/* Project notes section */}
+      <div>
+        <div style={{ fontSize:12,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.07em',marginBottom:10,display:'flex',alignItems:'center',gap:6 }}>
+          <span>📁 Project notes</span><span style={{ fontSize:11,fontWeight:400 }}>({project.length})</span>
+        </div>
+        {project.length===0&&<div style={{ fontSize:13,color:c.mut,padding:'12px 0' }}>No project notes yet — click "+ Project note" to create one</div>}
+        <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
+          {project.map(n=>(
+            <Card key={n.id} onClick={()=>openNote(n)} style={{ padding:'12px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:10 }}>
+              <span style={{ fontSize:18 }}>📁</span>
+              <div style={{ flex:1,minWidth:0 }}>
+                <div style={{ fontSize:13,fontWeight:600,color:c.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{n.title}</div>
+                <div style={{ fontSize:11,color:c.mut }}>{n.updated?new Date(n.updated).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):new Date(n.created).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
+              </div>
+              <button onClick={e=>deleteNote(n.id,e)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:14,opacity:.5,flexShrink:0 }}>🗑</button>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
+function ManagerNotesTab({ session, team }) { return <NotesTab session={session} team={team} role="manager"/>; }
 
 // ─── TEAM ANALYSIS TAB ───────────────────────────────────────────────────────
 function TeamAnalysisTab({ tasks, members }) {
