@@ -4369,8 +4369,12 @@ function BrainstormSpace({ team, session, members=[] }) {
         {/* Transform layer */}
         <div style={{position:'absolute',left:pan.x,top:pan.y,transform:`scale(${zoom})`,transformOrigin:'0 0',width:0,height:0}}>
 
-          {/* SVG: connections + draw paths — at 0,0 origin */}
-          <svg style={{position:'absolute',left:0,top:0,width:0,height:0,overflow:'visible',pointerEvents:'none'}}>
+          {/* SVG: connections + draw paths.
+              CRITICAL: an SVG with width/height 0 clips its children regardless of
+              CSS overflow:visible (the SVG VIEWPORT clips, not the CSS box).
+              Give it a large viewBox offset to cover negative coords too. */}
+          <svg width="40000" height="40000" viewBox="-20000 -20000 40000 40000"
+            style={{position:'absolute',left:-20000,top:-20000,overflow:'visible',pointerEvents:'none'}}>
             <defs>
               <marker id="bsarr-black"   markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto"><path d="M0,0 L0,8 L10,4 z" fill="#000"/></marker>
               <marker id="bsarr-indigo"  markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto"><path d="M0,0 L0,8 L10,4 z" fill="#818CF8"/></marker>
@@ -4400,11 +4404,13 @@ function BrainstormSpace({ team, session, members=[] }) {
             })}
 
             {/* Connect preview line */}
-            {(connectFrom||portDrag)&&connPreviewPt&&(()=>{
-              const fromId=portDrag?.fromId||connectFrom;
-              const f=getCenter(fromId);
-              if(!f) return null;
-              return <path d={connPath(f.x,f.y,connPreviewPt.x,connPreviewPt.y,connType)} fill="none" stroke="#34D399" strokeWidth={2} strokeDasharray="7,4" markerEnd="url(#bsarr-preview)"/>;
+            {(() => {
+              const fromId = portDrag?.fromId || connectFrom;
+              const preview = portDrag?.preview || connPreviewPt;
+              if (!fromId || !preview) return null;
+              const f = getCenter(fromId);
+              if (!f) return null;
+              return <path d={connPath(f.x,f.y,preview.x,preview.y,connType)} fill="none" stroke="#34D399" strokeWidth={2} strokeDasharray="7,4" markerEnd="url(#bsarr-preview)"/>;
             })()}
 
             {/* Saved draw paths */}
