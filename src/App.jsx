@@ -2037,7 +2037,15 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
   const color=myMember?.color||'#818CF8';
   const submit=()=>{ if(!title.trim())return; onAdd({title:title.trim(),assignee_email:user.email,assignee_name:user.name||user.email,priority,status:'todo',timeline:showCustom?custom:tl,notes,manager_note:'',blocker:''}); setTitle('');setPriority('medium');setTl('Today EOD (6 PM)');setNotes('');setShowCustom(false);setCustom(''); };
   const hTl=v=>{ if(v==='Custom...'){setShowCustom(true);setTl('');}else{setShowCustom(false);setTl(v);}};
-  const TABS=[{id:'tasks',l:'My tasks',i:'📋'},{id:'self',l:'Self tasks',i:'✨'},{id:'overview',l:'My overview',i:'📊'},{id:'notes',l:'Meeting notes',i:'📝'},{id:'chat',l:'Team chat',i:'💬'},{id:'cal',l:'Calendar',i:'📅'},{id:'ai',l:'AI assistant',i:'🤖'}];
+  const TABS=[
+    {id:'tasks',   l:'My tasks',      ic:'◈'},
+    {id:'self',    l:'Self tasks',    ic:'✦'},
+    {id:'overview',l:'My overview',   ic:'▤'},
+    {id:'notes',   l:'Meeting notes', ic:'≡'},
+    {id:'chat',    l:'Team chat',     ic:'◌'},
+    {id:'cal',     l:'Calendar',      ic:'⊟'},
+    {id:'ai',      l:'AI assistant',  ic:'◉'},
+  ];
   const [meetingNotes,setMeetingNotes]=useState(''); const [notesSaved,setNotesSaved]=useState(false);
   const [selfTasks,setSelfTasks]=useState(()=>{ try{return JSON.parse(localStorage.getItem('ss-self-tasks-'+(user.email||''))||'[]');}catch{return[];} });
   const [selfTitle,setSelfTitle]=useState(''); const [selfPriority,setSelfPriority]=useState('medium');
@@ -2051,8 +2059,19 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
       <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100 }}>
         <div style={{ maxWidth:800,margin:'0 auto',padding:'0 20px',height:56,display:'flex',alignItems:'center',gap:12 }}>
           <Logo size={26} onClick={onBack}/>
-          <div style={{ display:'flex',gap:2,flex:1 }}>{TABS.map(t=><button key={t.id} onClick={()=>setActiveTab(t.id)} style={{ padding:'5px 12px',borderRadius:8,border:'none',background:activeTab===t.id?'rgba(129,140,248,.18)':'transparent',color:activeTab===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:12,fontWeight:activeTab===t.id?700:400,display:'flex',alignItems:'center',gap:5 }}><span>{t.i}</span>{t.l}</button>)}</div>
-          <div style={{ display:'flex',alignItems:'center',gap:5,fontSize:12,color:c.mut }}><LiveDot/><span>Live</span></div>
+          <div style={{ display:'flex',gap:2,flex:1,overflowX:'auto' }}>
+            {TABS.map(t=>{
+              const isA=activeTab===t.id;
+              return(
+                <button key={t.id} onClick={()=>setActiveTab(t.id)} title={t.l}
+                  style={{ padding:'6px 8px',borderRadius:9,border:'none',background:isA?'rgba(124,110,245,.16)':'transparent',color:isA?'#C4B5FD':c.mut,cursor:'pointer',fontSize:11,fontWeight:isA?600:400,display:'flex',alignItems:'center',gap:5,transition:'all .14s',whiteSpace:'nowrap',flexShrink:0,position:'relative' }}>
+                  <span style={{ fontSize:15,display:'flex',alignItems:'center',justifyContent:'center' }}>{t.ic}</span>
+                  {isA&&<span style={{ fontSize:11 }}>{t.l}</span>}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display:'flex',alignItems:'center',gap:5,fontSize:12,color:c.mut,flexShrink:0 }}><LiveDot/><span>Live</span></div>
           <ThemeToggle/><ProfileMenu session={session} onSettings={onSettings} onLogout={onBack}/>
         </div>
       </div>
@@ -2528,16 +2547,26 @@ function usePip({ tasks, onAdd, onStatus, session, team, standup }) {
 
   const openPip = () => {
     if (winRef.current && !winRef.current.closed) { winRef.current.focus(); return; }
-    const w=340, h=520;
-    const left = Math.max(0, (window.screen.width||1200) - w - 20);
-    const top  = Math.max(0, (window.screen.height||800) - h - 60);
-    const win  = window.open(
-      '/pip.html', 'standsync_pip',
-      'width='+w+',height='+h+',left='+left+',top='+top+',resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no,status=no'
-    );
-    if (!win) { alert('Allow popups for this site to use PiP mode.'); return; }
+    // Open as a proper popup window — stays visible when switching tabs or minimizing
+    // NOTE: Browser must allow popups for standsync-olive.vercel.app
+    const w=360, h=580;
+    const left = Math.max(0, (window.screen.availWidth||1200) - w - 20);
+    const top  = Math.max(0, (window.screen.availHeight||800) - h - 60);
+    const features = [
+      'width='+w, 'height='+h,
+      'left='+left, 'top='+top,
+      'resizable=yes', 'scrollbars=no',
+      'toolbar=no', 'menubar=no',
+      'location=no', 'status=no',
+      'popup=yes',   // modern browsers: force popup not tab
+    ].join(',');
+    const win = window.open('/pip.html', 'standsync_pip', features);
+    if (!win || win.closed) {
+      alert('PiP blocked!\n\nClick the popup blocked icon in your address bar and select "Always allow popups from standsync-olive.vercel.app", then click PiP again.');
+      return;
+    }
 
-    // Send data once window loads
+    // Send init data once window loads
     win.addEventListener('load', function() {
       win.postMessage({ type:'init', tasks, myEmail, myName, teamName: team ? team.name : 'Team' }, '*');
     });
@@ -2546,16 +2575,26 @@ function usePip({ tasks, onAdd, onStatus, session, team, standup }) {
     const handler = (e) => {
       if (!e.data) return;
       if (e.data.type === 'status') onStatus(e.data.id, e.data.status);
-      if (e.data.type === 'addTask') onAdd({
-        title: e.data.title, status:'todo', priority:'medium',
-        assignee_email: e.data.myEmail, assignee_name: e.data.myName,
-        standup_id: standup ? standup.id : null,
-        team_id: team ? team.id : null,
-      });
+      if (e.data.type === 'addTask') {
+        const t = e.data.task || {};
+        onAdd({
+          title: t.title || e.data.title || '',
+          status: 'todo',
+          priority: t.priority || 'medium',
+          due_label: t.due_label || '',
+          assignee_email: t.assignee_email || myEmail,
+          assignee_name: t.assignee_name || myName,
+          standup_id: standup ? standup.id : null,
+          team_id: team ? team.id : null,
+        });
+      }
     };
     window.addEventListener('message', handler);
-    win.onbeforeunload = () => { window.removeEventListener('message', handler); setIsOpen(false); winRef.current = null; };
-
+    win.onbeforeunload = () => {
+      window.removeEventListener('message', handler);
+      setIsOpen(false);
+      winRef.current = null;
+    };
     winRef.current = win;
     setIsOpen(true);
   };
