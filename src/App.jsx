@@ -2717,63 +2717,220 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
 // callout, code, divider, table, image-url, quote
 
 // ─── PROJECT FILE PANEL ───────────────────────────────────────────────────────
-function ProjectFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, projects, pages, dark, c }) {
+// ─── WIKI AI PANEL ───────────────────────────────────────────────────────────
+// Standalone stable component — never defined inside another render
+// This fixes the "loses focus after one keystroke" bug completely
+function WikiAIPanel({ projectId, projectName, getProjectContext, compact }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const [query, setQuery]     = useState('');
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const inputRef   = useRef();
+  const bottomRef  = useRef();
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [history, loading]);
+
+  const ask = async (q) => {
+    const text = (q || query).trim();
+    if (!text || loading) return;
+    setHistory(h => [...h, { role: 'user', text }]);
+    setQuery('');
+    setLoading(true);
+    // keep focus on input after clearing
+    setTimeout(() => inputRef.current?.focus(), 0);
+    try {
+      const ctx = getProjectContext(projectId);
+      const hasFiles = ctx.includes('===FILE ATTACHMENTS===') || ctx.includes('[PDF:') || ctx.includes('[Presentation:');
+      const prompt = `You are a helpful project assistant for "${projectName || 'this project'}".
+
+${ctx ? `Here is the complete project documentation, pages, and uploaded files:\n\n${ctx}` : 'No documentation added yet.'}
+
+---
+User question: "${text}"
+
+Instructions:
+- Answer based on the project documentation above
+- If files are mentioned (PDFs, presentations, docs), reference them by name
+- If the answer isn't in the docs, say so clearly and offer general guidance
+- Use bullet points for lists
+- Be concise and specific`;
+
+      const reply = await askAI(prompt, { teamName: projectName || 'Project' });
+      setHistory(h => [...h, { role: 'assistant', text: reply }]);
+    } catch(e) {
+      setHistory(h => [...h, { role: 'assistant', text: 'Could not reach AI. Make sure REACT_APP_GEMINI_KEY is set in Vercel.' }]);
+    }
+    setLoading(false);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  const QUICK = ['Summarize this project', 'What SOPs are documented?', 'What are the key processes?', 'What files are uploaded?'];
+
+  return (
+    <div style={{ borderRadius: 14, border: `1px solid rgba(124,110,245,.25)`, background: dark ? 'rgba(99,102,241,.06)' : 'rgba(99,102,241,.04)', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '12px 18px', borderBottom: `1px solid rgba(124,110,245,.15)`, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z" fill="#A78BFA"/></svg>
+        <span style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Ask AI about this project</span>
+        <span style={{ fontSize: 11, color: '#818CF8', background: 'rgba(99,102,241,.1)', padding: '2px 8px', borderRadius: 20 }}>Gemini · Free</span>
+        {history.length > 0 && (
+          <button onClick={() => setHistory([])} style={{ marginLeft: 'auto', fontSize: 11, color: c.mut, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 8px' }}>Clear chat</button>
+        )}
+      </div>
+
+      {/* Chat */}
+      {history.length > 0 && (
+        <div style={{ maxHeight: 340, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {history.map((msg, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, flexDirection: msg.role === 'user' ? 'row-reverse' : 'row', alignItems: 'flex-start' }}>
+              {msg.role === 'assistant' && (
+                <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(124,110,245,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 13 }}>✦</div>
+              )}
+              <div style={{ maxWidth: '82%', padding: '9px 13px', borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '4px 14px 14px 14px',
+                background: msg.role === 'user' ? 'linear-gradient(135deg,#6B5FE4,#9B8AFB)' : (dark ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.95)'),
+                color: msg.role === 'user' ? '#fff' : c.text, fontSize: 13, lineHeight: 1.65,
+                border: msg.role === 'user' ? 'none' : `1px solid ${c.bord}`, whiteSpace: 'pre-wrap' }}>
+                {msg.text}
+              </div>
+            </div>
+          ))}
+          {loading && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(124,110,245,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>✦</div>
+              <div style={{ padding: '10px 14px', background: dark ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.95)', borderRadius: '4px 14px 14px 14px', border: `1px solid ${c.bord}`, display: 'flex', gap: 5, alignItems: 'center' }}>
+                {[0,1,2].map(i => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#818CF8', animation: `bounce .8s ease ${i*.18}s infinite` }}/>)}
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef}/>
+        </div>
+      )}
+
+      {/* Quick prompts */}
+      {history.length === 0 && (
+        <div style={{ padding: '10px 16px 4px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {QUICK.map(q => (
+            <button key={q} onClick={() => ask(q)} style={{ fontSize: 11, padding: '5px 12px', borderRadius: 20, border: `1px solid rgba(124,110,245,.28)`, background: 'rgba(99,102,241,.07)', color: '#818CF8', cursor: 'pointer' }}>{q}</button>
+          ))}
+        </div>
+      )}
+
+      {/* Input — ALWAYS mounted, never remounts */}
+      <div style={{ padding: '10px 14px', display: 'flex', gap: 8, borderTop: history.length ? `1px solid rgba(124,110,245,.1)` : 'none', alignItems: 'center' }}>
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); } }}
+          placeholder="Ask anything about this project, its files, SOPs…"
+          style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: c.text, fontSize: 13, lineHeight: 1.5, minWidth: 0 }}
+        />
+        <button onClick={() => ask()} disabled={!query.trim() || loading}
+          style={{ padding: '7px 18px', borderRadius: 9, background: query.trim() && !loading ? 'linear-gradient(135deg,#6B5FE4,#9B8AFB)' : 'transparent',
+            border: query.trim() && !loading ? 'none' : `1px solid ${c.bord}`, color: query.trim() && !loading ? '#fff' : c.mut,
+            cursor: query.trim() && !loading ? 'pointer' : 'default', fontSize: 13, fontWeight: 600, flexShrink: 0, transition: 'all .15s', whiteSpace: 'nowrap' }}>
+          {loading ? '…' : '✦ Ask'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── WIKI FILE PANEL ──────────────────────────────────────────────────────────
+// Handles upload, PDF text extraction, image preview, file viewer modal
+function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, projects, pages, dark, c }) {
   const [extracting, setExtracting] = useState(false);
+  const [preview, setPreview]       = useState(null); // {file} for modal
   const fileInputRef = useRef();
   const files = projectFiles[selProject] || [];
 
   const fileIcon = (f) => {
     if (f.type?.startsWith('image/')) return '🖼️';
-    if (f.type === 'application/pdf' || f.name?.match(/\.pdf$/i)) return '📄';
+    if (f.name?.match(/\.pdf$/i)) return '📄';
     if (f.name?.match(/\.pptx?$/i)) return '📊';
     if (f.name?.match(/\.docx?$/i)) return '📝';
     if (f.name?.match(/\.xlsx?$/i)) return '📈';
-    if (f.type?.includes('text')) return '📃';
     return '📎';
+  };
+
+  // Extract text from PDF using PDF.js CDN
+  const extractPDFText = async (dataUrl) => {
+    try {
+      // Load PDF.js from CDN if not already loaded
+      if (!window.pdfjsLib) {
+        await new Promise((res, rej) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+          s.onload = res; s.onerror = rej;
+          document.head.appendChild(s);
+        });
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      }
+      const base64 = dataUrl.split(',')[1];
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const pdf = await window.pdfjsLib.getDocument({ data: bytes }).promise;
+      let text = '';
+      for (let p = 1; p <= Math.min(pdf.numPages, 30); p++) {
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        text += content.items.map(i => i.str).join(' ') + '\n';
+      }
+      return text.trim() || null;
+    } catch(e) {
+      return null;
+    }
   };
 
   const handleFiles = async (fileList) => {
     if (!fileList?.length) return;
     setExtracting(true);
     const newFiles = [];
+
     for (const file of Array.from(fileList)) {
       const id = 'f' + Date.now() + Math.random().toString(36).slice(2);
-      const type = file.type;
+      const type = file.type || '';
       let extractedText = '';
       let dataUrl = '';
-      const readAsDataUrl = () => new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(file); });
-      const readAsText = () => new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsText(file); });
+
+      const readDataUrl = () => new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(file); });
+      const readText    = () => new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsText(file); });
 
       try {
-        if (type === 'text/plain' || type === 'text/csv' || type.includes('json') || file.name?.match(/\.(txt|csv|json|md)$/i)) {
-          extractedText = await readAsText();
-        } else if (type.startsWith('image/')) {
-          dataUrl = await readAsDataUrl();
-          extractedText = `[Image file: ${file.name}]`;
-        } else if (type === 'application/pdf' || file.name?.match(/\.pdf$/i)) {
-          dataUrl = await readAsDataUrl();
-          extractedText = `[PDF: ${file.name} · ${Math.round(file.size/1024)}KB · Uploaded for AI reference. The AI will use this filename and description when answering questions about it.]`;
+        if (type.startsWith('image/')) {
+          dataUrl = await readDataUrl();
+          extractedText = `[Image: ${file.name}]`;
+        } else if (file.name?.match(/\.pdf$/i) || type === 'application/pdf') {
+          dataUrl = await readDataUrl();
+          // Try real text extraction
+          const pdfText = await extractPDFText(dataUrl);
+          if (pdfText && pdfText.length > 50) {
+            extractedText = pdfText;
+          } else {
+            extractedText = `[PDF file: ${file.name} · ${Math.round(file.size/1024)}KB · Could not extract text — may be scanned/image-based]`;
+          }
         } else if (file.name?.match(/\.pptx?$/i) || type.includes('presentation')) {
-          dataUrl = await readAsDataUrl();
-          extractedText = `[Presentation: ${file.name} · ${Math.round(file.size/1024)}KB · Uploaded for AI reference.]`;
+          dataUrl = await readDataUrl();
+          extractedText = `[Presentation: ${file.name} · ${Math.round(file.size/1024)}KB · PPTX text extraction not supported in browser — describe this file's contents in a wiki page for AI to reference]`;
         } else if (file.name?.match(/\.docx?$/i) || type.includes('word')) {
-          dataUrl = await readAsDataUrl();
-          extractedText = `[Word document: ${file.name} · ${Math.round(file.size/1024)}KB · Uploaded for AI reference.]`;
-        } else if (file.name?.match(/\.xlsx?$/i) || type.includes('excel') || type.includes('spreadsheet')) {
-          dataUrl = await readAsDataUrl();
-          extractedText = `[Spreadsheet: ${file.name} · ${Math.round(file.size/1024)}KB · Uploaded for AI reference.]`;
+          dataUrl = await readDataUrl();
+          extractedText = `[Word document: ${file.name} · ${Math.round(file.size/1024)}KB]`;
+        } else if (file.name?.match(/\.(txt|md|csv|json)$/i) || type.includes('text')) {
+          extractedText = await readText();
+          dataUrl = await readDataUrl();
         } else {
-          dataUrl = await readAsDataUrl();
+          dataUrl = await readDataUrl();
           extractedText = `[File: ${file.name} · ${Math.round(file.size/1024)}KB]`;
         }
-      } catch(e) { extractedText = `[${file.name}]`; }
+      } catch(e) {
+        extractedText = `[${file.name}]`;
+      }
 
-      newFiles.push({
-        id, name: file.name, type, size: file.size,
-        dataUrl: type.startsWith('image/') ? dataUrl : undefined,
-        extractedText, uploadedAt: Date.now()
-      });
+      newFiles.push({ id, name: file.name, type, size: file.size, dataUrl, extractedText, uploadedAt: Date.now() });
     }
+
     const updated = { ...projectFiles, [selProject]: [...files, ...newFiles] };
     setProjectFiles(updated);
     saveWiki(projects, pages, updated);
@@ -2781,108 +2938,250 @@ function ProjectFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki,
   };
 
   const removeFile = (fid) => {
+    if (!window.confirm('Remove this file?')) return;
     const updated = { ...projectFiles, [selProject]: files.filter(f => f.id !== fid) };
     setProjectFiles(updated);
     saveWiki(projects, pages, updated);
   };
 
-  return (
-    <div style={{ marginBottom: 24, borderRadius: 14, border: `1px solid ${c.bord}`, overflow: 'hidden', background: dark ? 'rgba(255,255,255,.03)' : 'rgba(255,255,255,.7)' }}>
-      <div style={{ padding: '12px 18px', borderBottom: `1px solid ${c.bord}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 16 }}>📎</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: c.text, flex: 1 }}>Project Files & SOPs</span>
-        <span style={{ fontSize: 11, color: c.mut }}>{files.length} file{files.length !== 1 ? 's' : ''} · AI reads all</span>
-        <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.ppt,.pptx,.doc,.docx,.txt,.csv,.json,.xlsx,.xls,.md" onChange={e => handleFiles(e.target.files)} style={{ display: 'none' }}/>
-        <button onClick={() => fileInputRef.current?.click()} disabled={extracting}
-          style={{ padding: '6px 14px', borderRadius: 8, background: extracting ? 'rgba(99,102,241,.3)' : 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: extracting ? 'wait' : 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-          {extracting
-            ? <><div style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid rgba(255,255,255,.3)', borderTop: '2px solid #fff', animation: 'spin .75s linear infinite' }}/> Reading…</>
-            : '+ Browse files'}
-        </button>
-      </div>
+  const openFile = (f) => setPreview(f);
 
-      {files.length === 0 ? (
-        <div style={{ padding: '28px', textAlign: 'center', cursor: 'pointer' }} onClick={() => fileInputRef.current?.click()}>
-          <div style={{ fontSize: 36, marginBottom: 8 }}>📁</div>
-          <div style={{ fontSize: 13, color: c.mut, marginBottom: 4 }}>Upload PDFs, presentations, images, docs, SOPs</div>
-          <div style={{ fontSize: 11, color: c.mut, marginBottom: 14 }}>AI will read extracted content and answer questions about it</div>
-          <div style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-            {['📄 PDF','📊 PPT/PPTX','📝 DOC/DOCX','🖼️ Images','📃 TXT/CSV'].map(t => (
-              <span key={t} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: dark ? 'rgba(255,255,255,.06)' : 'rgba(99,102,241,.08)', color: c.mut, border: `1px solid ${c.bord}` }}>{t}</span>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px,1fr))', gap: 10, padding: 14 }}>
-          {files.map(f => (
-            <div key={f.id} style={{ padding: '12px 14px', borderRadius: 10, background: dark ? 'rgba(255,255,255,.05)' : 'rgba(255,255,255,.9)', border: `1px solid ${c.bord}`, position: 'relative' }}>
-              {f.type?.startsWith('image/') && f.dataUrl
-                ? <img src={f.dataUrl} alt={f.name} style={{ width: '100%', height: 72, objectFit: 'cover', borderRadius: 6, marginBottom: 8 }}/>
-                : <div style={{ fontSize: 28, marginBottom: 8, textAlign: 'center' }}>{fileIcon(f)}</div>
-              }
-              <div style={{ fontSize: 12, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }} title={f.name}>{f.name}</div>
-              <div style={{ fontSize: 10, color: c.mut }}>{Math.round(f.size/1024)}KB · {new Date(f.uploadedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
-              <div style={{ fontSize: 10, marginTop: 4, color: f.extractedText && !f.extractedText.startsWith('[') ? '#34D399' : '#818CF8' }}>
-                {f.extractedText && !f.extractedText.startsWith('[') ? '✓ Text extracted · AI readable' : '✦ AI readable via reference'}
-              </div>
-              <button onClick={() => removeFile(f.id)} style={{ position: 'absolute', top: 6, right: 6, width: 20, height: 20, borderRadius: '50%', background: 'rgba(239,68,68,.12)', border: 'none', color: '#F87171', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+  const textExtracted = (f) => f.extractedText && !f.extractedText.startsWith('[');
+
+  return (
+    <>
+      {/* File viewer modal */}
+      {preview && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+          onClick={() => setPreview(null)}>
+          <div style={{ background: dark ? '#12103A' : '#fff', borderRadius: 16, width: '90%', maxWidth: 900, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 80px rgba(0,0,0,.5)' }}
+            onClick={e => e.stopPropagation()}>
+            {/* Modal header */}
+            <div style={{ padding: '14px 20px', borderBottom: `1px solid ${c.bord}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 20 }}>{fileIcon(preview)}</span>
+              <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.name}</span>
+              <span style={{ fontSize: 11, color: c.mut }}>{Math.round(preview.size/1024)}KB</span>
+              {preview.dataUrl && (
+                <a href={preview.dataUrl} download={preview.name}
+                  style={{ padding: '6px 14px', borderRadius: 8, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', textDecoration: 'none', fontSize: 12, fontWeight: 600 }}>
+                  ⬇ Download
+                </a>
+              )}
+              <button onClick={() => setPreview(null)} style={{ width: 32, height: 32, borderRadius: '50%', border: `1px solid ${c.bord}`, background: 'transparent', color: c.text, cursor: 'pointer', fontSize: 18 }}>×</button>
             </div>
-          ))}
-          <div onClick={() => fileInputRef.current?.click()} style={{ padding: 12, borderRadius: 10, border: `1.5px dashed ${c.bord}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer', minHeight: 80 }}
-            onMouseEnter={e => e.currentTarget.style.borderColor = '#818CF8'} onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
-            <div style={{ fontSize: 22, color: c.mut }}>+</div>
-            <div style={{ fontSize: 11, color: c.mut }}>Add more</div>
+            {/* Modal body */}
+            <div style={{ flex: 1, overflow: 'auto', padding: 20 }}>
+              {preview.type?.startsWith('image/') && preview.dataUrl && (
+                <img src={preview.dataUrl} alt={preview.name} style={{ maxWidth: '100%', height: 'auto', borderRadius: 8, display: 'block', margin: '0 auto' }}/>
+              )}
+              {preview.name?.match(/\.pdf$/i) && preview.dataUrl && (
+                <iframe src={preview.dataUrl} title={preview.name} style={{ width: '100%', height: 600, border: 'none', borderRadius: 8 }}/>
+              )}
+              {textExtracted(preview) && !preview.type?.startsWith('image/') && !preview.name?.match(/\.pdf$/i) && (
+                <pre style={{ fontFamily: 'Inter,monospace', fontSize: 13, lineHeight: 1.7, color: c.text, whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: dark ? 'rgba(255,255,255,.04)' : '#f9f9f9', padding: 20, borderRadius: 10, border: `1px solid ${c.bord}` }}>
+                  {preview.extractedText}
+                </pre>
+              )}
+              {!textExtracted(preview) && !preview.type?.startsWith('image/') && !preview.name?.match(/\.pdf$/i) && (
+                <div style={{ textAlign: 'center', padding: 40, color: c.mut }}>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>{fileIcon(preview)}</div>
+                  <div style={{ fontSize: 14, marginBottom: 8 }}>{preview.name}</div>
+                  <div style={{ fontSize: 12 }}>{preview.extractedText}</div>
+                  {preview.dataUrl && (
+                    <a href={preview.dataUrl} download={preview.name} style={{ display: 'inline-block', marginTop: 16, padding: '10px 24px', borderRadius: 10, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>
+                      ⬇ Download file
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
+
+      {/* Panel */}
+      <div style={{ marginBottom: 24, borderRadius: 14, border: `1px solid ${c.bord}`, overflow: 'visible', background: dark ? 'rgba(255,255,255,.03)' : 'rgba(255,255,255,.7)' }}>
+        <div style={{ padding: '12px 18px', borderBottom: `1px solid ${c.bord}`, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 16 }}>📎</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: c.text, flex: 1 }}>Project Files & SOPs</span>
+          <span style={{ fontSize: 11, color: c.mut }}>{files.length} file{files.length !== 1 ? 's' : ''}</span>
+          {files.some(f => textExtracted(f)) && <span style={{ fontSize: 11, color: '#34D399', background: 'rgba(52,211,153,.1)', padding: '2px 8px', borderRadius: 20 }}>✓ AI reads extracted text</span>}
+          <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.ppt,.pptx,.doc,.docx,.txt,.csv,.json,.xlsx,.xls,.md"
+            onChange={e => handleFiles(e.target.files)} style={{ display: 'none' }}/>
+          <button onClick={() => fileInputRef.current?.click()} disabled={extracting}
+            style={{ padding: '6px 16px', borderRadius: 8, background: extracting ? 'rgba(99,102,241,.3)' : 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: extracting ? 'wait' : 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {extracting ? <><div style={{ width: 11, height: 11, borderRadius: '50%', border: '2px solid rgba(255,255,255,.3)', borderTop: '2px solid #fff', animation: 'spin .75s linear infinite' }}/> Extracting…</> : '+ Browse files'}
+          </button>
+        </div>
+
+        {files.length === 0 ? (
+          <div style={{ padding: '28px 20px', textAlign: 'center', cursor: 'pointer' }} onClick={() => fileInputRef.current?.click()}>
+            <div style={{ fontSize: 38, marginBottom: 10 }}>📁</div>
+            <div style={{ fontSize: 13, color: c.text, fontWeight: 600, marginBottom: 5 }}>Upload PDFs, presentations, images, docs, SOPs</div>
+            <div style={{ fontSize: 11, color: c.mut, marginBottom: 14 }}>PDFs: text extracted automatically · AI reads everything</div>
+            <div style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+              {['📄 PDF (text extracted)','📊 PPT/PPTX','📝 DOC/DOCX','🖼️ Images','📃 TXT/CSV/MD'].map(t => (
+                <span key={t} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: dark ? 'rgba(255,255,255,.06)' : 'rgba(99,102,241,.08)', color: c.mut, border: `1px solid ${c.bord}` }}>{t}</span>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px,1fr))', gap: 10, padding: 14 }}>
+            {files.map(f => (
+              <div key={f.id} style={{ padding: '12px 14px', borderRadius: 10, background: dark ? 'rgba(255,255,255,.05)' : 'rgba(255,255,255,.9)', border: `1px solid ${c.bord}`, position: 'relative', cursor: 'pointer', transition: 'border-color .15s' }}
+                onClick={() => openFile(f)}
+                onMouseEnter={e => e.currentTarget.style.borderColor = '#818CF8'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
+                {f.type?.startsWith('image/') && f.dataUrl
+                  ? <img src={f.dataUrl} alt={f.name} style={{ width: '100%', height: 72, objectFit: 'cover', borderRadius: 6, marginBottom: 8 }}/>
+                  : <div style={{ fontSize: 28, marginBottom: 8, textAlign: 'center' }}>{fileIcon(f)}</div>
+                }
+                <div style={{ fontSize: 12, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }} title={f.name}>{f.name}</div>
+                <div style={{ fontSize: 10, color: c.mut, marginBottom: 3 }}>{Math.round(f.size/1024)}KB · {new Date(f.uploadedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
+                <div style={{ fontSize: 10, color: textExtracted(f) ? '#34D399' : '#818CF8' }}>
+                  {textExtracted(f) ? '✓ Text extracted · AI readable' : (f.dataUrl ? '👁 Click to view · AI reference' : '📎 AI reference')}
+                </div>
+                <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
+                  <button onClick={e => { e.stopPropagation(); openFile(f); }}
+                    style={{ flex: 1, padding: '4px 0', borderRadius: 6, background: dark ? 'rgba(255,255,255,.07)' : 'rgba(99,102,241,.08)', border: 'none', color: c.text, cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>👁 View</button>
+                  <button onClick={e => { e.stopPropagation(); removeFile(f.id); }}
+                    style={{ width: 28, padding: '4px 0', borderRadius: 6, background: 'rgba(239,68,68,.08)', border: 'none', color: '#F87171', cursor: 'pointer', fontSize: 11 }}>×</button>
+                </div>
+              </div>
+            ))}
+            <div onClick={() => fileInputRef.current?.click()}
+              style={{ padding: 12, borderRadius: 10, border: `1.5px dashed ${c.bord}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer', minHeight: 80 }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = '#818CF8'}
+              onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
+              <div style={{ fontSize: 22, color: c.mut }}>+</div>
+              <div style={{ fontSize: 11, color: c.mut }}>Add more</div>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ─── PROJECT WIKI OVERVIEW ────────────────────────────────────────────────────
+// Stable top-level component so WikiAIPanel input never loses focus
+function WikiOverview({ curProject, projPages, pinnedPages, projectId, projectFiles, setProjectFiles, saveWiki, projects, pages, getProjectContext, onNewPage, onDeleteProject, onOpenPage, onTogglePin, onDeletePage, dark, c }) {
+  const totalPages = projPages.length;
+  const lastEdited = [...projPages].sort((a,b) => b.updatedAt - a.updatedAt)[0];
+  const wordCount = projPages.reduce((acc, pg) => acc + (pg.blocks?.map(b => b.content||'').join(' ').split(/\s+/).filter(Boolean).length||0), 0);
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '32px 40px', maxWidth: 860, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 28 }}>
+        <div style={{ width: 56, height: 56, borderRadius: 14, background: curProject?.color+'22', border: `2px solid ${curProject?.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, flexShrink: 0 }}>{curProject?.emoji}</div>
+        <div style={{ flex: 1 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: c.text, margin: 0, letterSpacing: '-.025em' }}>{curProject?.name}</h1>
+          {curProject?.desc && <p style={{ color: c.mut, fontSize: 14, marginTop: 5, marginBottom: 0, lineHeight: 1.6 }}>{curProject.desc}</p>}
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          <button onClick={onNewPage} style={{ padding: '8px 16px', borderRadius: 9, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>+ New page</button>
+          <button onClick={onDeleteProject} style={{ padding: '8px 14px', borderRadius: 9, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', color: '#F87171', cursor: 'pointer', fontSize: 13 }}>🗑</button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 24 }}>
+        {[{label:'Pages',value:totalPages,icon:'📄'},{label:'Words documented',value:wordCount.toLocaleString(),icon:'📝'},{label:'Last edited',value:lastEdited?new Date(lastEdited.updatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'—',icon:'🕐'}].map(s=>(
+          <div key={s.label} style={{ padding: '16px 18px', borderRadius: 12, background: dark?'rgba(255,255,255,.04)':'rgba(255,255,255,.8)', border: `1px solid ${c.bord}` }}>
+            <div style={{ fontSize: 22, marginBottom: 6 }}>{s.icon}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: c.text, letterSpacing: '-.02em' }}>{s.value}</div>
+            <div style={{ fontSize: 11, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginTop: 2 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* File panel */}
+      <WikiFilePanel selProject={projectId} projectFiles={projectFiles} setProjectFiles={setProjectFiles} saveWiki={saveWiki} projects={projects} pages={pages} dark={dark} c={c}/>
+
+      {/* AI panel — stable, never remounts */}
+      <div style={{ marginBottom: 24 }}>
+        <WikiAIPanel projectId={projectId} projectName={curProject?.name} getProjectContext={getProjectContext}/>
+      </div>
+
+      {/* Pinned */}
+      {pinnedPages.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>📌 Pinned</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px,1fr))', gap: 10 }}>
+            {pinnedPages.map(pg => (
+              <div key={pg.id} onClick={() => onOpenPage(pg.id)} style={{ padding: '14px 16px', borderRadius: 12, background: dark?'rgba(255,255,255,.05)':'rgba(255,255,255,.8)', border: `1px solid ${c.bord}`, cursor: 'pointer', transition: 'all .15s' }}
+                onMouseEnter={e=>e.currentTarget.style.borderColor='#818CF8'} onMouseLeave={e=>e.currentTarget.style.borderColor=c.bord}>
+                <div style={{ fontSize: 22, marginBottom: 6 }}>{pg.emoji}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 4 }}>{pg.title}</div>
+                <div style={{ fontSize: 11, color: c.mut }}>{new Date(pg.updatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* All pages */}
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>All pages ({projPages.length})</div>
+        {projPages.length === 0 ? (
+          <div style={{ padding: 32, textAlign: 'center', borderRadius: 12, border: `1.5px dashed ${c.bord}` }}>
+            <div style={{ fontSize: 36, marginBottom: 10 }}>📄</div>
+            <div style={{ color: c.mut, fontSize: 14, marginBottom: 14 }}>No pages yet</div>
+            <button onClick={onNewPage} style={{ padding: '9px 20px', borderRadius: 9, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>+ Create first page</button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {projPages.map(pg => (
+              <div key={pg.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', border: '1px solid transparent', transition: 'all .12s' }}
+                onClick={() => onOpenPage(pg.id)}
+                onMouseEnter={e=>{e.currentTarget.style.background=dark?'rgba(255,255,255,.04)':'rgba(99,102,241,.05)';e.currentTarget.style.borderColor=c.bord;}}
+                onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.borderColor='transparent';}}>
+                <span style={{ fontSize: 18, flexShrink: 0 }}>{pg.emoji}</span>
+                <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: c.text }}>{pg.title}</span>
+                <span style={{ fontSize: 11, color: c.mut }}>{new Date(pg.updatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>
+                <span style={{ fontSize: 13, cursor: 'pointer', color: pg.pinned?'#FBBF24':c.mut }} onClick={e=>{e.stopPropagation();onTogglePin(pg.id);}} title={pg.pinned?'Unpin':'Pin'}>{pg.pinned?'📌':'📍'}</span>
+                <span style={{ fontSize: 11, color: '#F87171', cursor: 'pointer', opacity: 0.6 }} onClick={e=>{e.stopPropagation();onDeletePage(pg.id);}} title="Delete">🗑</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
+// ─── PROJECT WIKI ─────────────────────────────────────────────────────────────
 function ProjectWiki({ team, session, members = [] }) {
   const c = useC();
   const { dark } = useTheme();
   const teamId = team?.id || 'demo';
   const WIKI_KEY = `ss-wiki-${teamId}`;
 
-  // ── State ─────────────────────────────────────────────────────────────────
-  const [projects, setProjects] = useState([]);           // [{id,name,emoji,color,desc,createdAt}]
-  const [pages, setPages]       = useState([]);           // [{id,projectId,title,emoji,blocks,updatedAt,pinned}]
-  const [selProject, setSelProject] = useState(null);     // project id
-  const [selPage, setSelPage]   = useState(null);         // page id
-  const [view, setView]         = useState('home');       // home | overview | page | newProject | newPage
+  const [projects, setProjects]     = useState([]);
+  const [pages, setPages]           = useState([]);
+  const [selProject, setSelProject] = useState(null);
+  const [selPage, setSelPage]       = useState(null);
+  const [view, setView]             = useState('home');
   const [sideCollapsed, setSideCollapsed] = useState(false);
-  // File attachments per project: {[projectId]: [{id,name,type,size,dataUrl,extractedText,uploadedAt}]}
-  const [projectFiles, setProjectFiles] = useState({});
+  const [projectFiles, setProjectFiles]   = useState({});
+  const [search, setSearch]         = useState('');
+  const [saving, setSaving]         = useState(false);
 
-  // AI
-  const [aiQuery, setAiQuery]   = useState('');
-  const [aiAnswer, setAiAnswer] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiHistory, setAiHistory] = useState([]);
-  const aiBottomRef = useRef();
+  // new project form
+  const [npName, setNpName]   = useState('');
+  const [npEmoji, setNpEmoji] = useState('📁');
+  const [npColor, setNpColor] = useState('#6366F1');
+  const [npDesc, setNpDesc]   = useState('');
 
-  // New project form
-  const [npName, setNpName]     = useState('');
-  const [npEmoji, setNpEmoji]   = useState('📁');
-  const [npColor, setNpColor]   = useState('#6366F1');
-  const [npDesc, setNpDesc]     = useState('');
-
-  // New page form
-  const [pgTitle, setPgTitle]   = useState('');
-  const [pgEmoji, setPgEmoji]   = useState('📄');
-
-  // Search
-  const [search, setSearch]     = useState('');
-  const [showSearch, setShowSearch] = useState(false);
-
-  // Page overview stats
-  const [saving, setSaving]     = useState(false);
+  // new page form
+  const [pgTitle, setPgTitle] = useState('');
+  const [pgEmoji, setPgEmoji] = useState('📄');
 
   const EMOJI_PRESETS = ['📁','🚀','⚡','🎯','🔥','💡','🏗️','🎨','🔬','📱','📊','🔧','📋','🌟','🛡️','🤖','💬','📅','🔑','🌐'];
   const COLOR_PRESETS = ['#6366F1','#34D399','#F87171','#FBBF24','#60A5FA','#F472B6','#A78BFA','#14B8A6','#F97316','#8B5CF6'];
 
-  // ── Load ──────────────────────────────────────────────────────────────────
+  // ── Load ──
   useEffect(() => {
     try {
       const raw = localStorage.getItem(WIKI_KEY);
@@ -2893,117 +3192,72 @@ function ProjectWiki({ team, session, members = [] }) {
         if (d.projectFiles) setProjectFiles(d.projectFiles);
         if (d.projects?.length) setSelProject(d.projects[0].id);
       } else {
-        // Seed demo
-        const demoProject = { id: 'p1', name: 'Getting Started', emoji: '🚀', color: '#6366F1', desc: 'Learn how to use StandSync Wiki', createdAt: Date.now() };
-        const demoPage = {
-          id: 'pg1', projectId: 'p1', title: 'Welcome to Project Wiki', emoji: '👋', pinned: true, updatedAt: Date.now(),
-          blocks: [
-            { id: 'b1', type: 'heading1', content: 'Welcome to Project Wiki 👋' },
-            { id: 'b2', type: 'callout', content: 'This is your team knowledge base. Create SOPs, docs, and notes — all searchable by AI.', calloutType: 'info' },
-            { id: 'b3', type: 'heading2', content: 'What you can do' },
-            { id: 'b4', type: 'bullet', content: 'Create projects for each product or workstream' },
-            { id: 'b5', type: 'bullet', content: 'Add pages for SOPs, onboarding docs, runbooks, decisions' },
-            { id: 'b6', type: 'bullet', content: 'Ask the AI anything about your project docs' },
-            { id: 'b7', type: 'bullet', content: 'Pin important pages to the top' },
-            { id: 'b8', type: 'heading2', content: 'Keyboard shortcuts' },
-            { id: 'b9', type: 'numbered', content: '/h1  /h2  /h3 — Headings' },
-            { id: 'b10', type: 'numbered', content: '/bullet  /num  /todo — Lists' },
-            { id: 'b11', type: 'numbered', content: '/code  /quote  /callout  /divider — Blocks' },
-            { id: 'b12', type: 'numbered', content: 'Enter — new block   Backspace on empty — delete block' },
-            { id: 'b13', type: 'divider', content: '' },
-            { id: 'b14', type: 'paragraph', content: 'Use the AI button (✦ Ask AI) to ask questions about anything in this project.' },
-          ]
-        };
-        const initP = [demoProject], initPg = [demoPage];
+        const dp = { id:'p1', name:'Getting Started', emoji:'🚀', color:'#6366F1', desc:'Team knowledge base', createdAt:Date.now() };
+        const dpg = { id:'pg1', projectId:'p1', title:'Welcome to Project Wiki', emoji:'👋', pinned:true, updatedAt:Date.now(),
+          blocks:[
+            {id:'b1',type:'heading1',content:'Welcome to Project Wiki 👋'},
+            {id:'b2',type:'callout',content:'Create SOPs, docs, and notes — all searchable by AI.',calloutType:'info'},
+            {id:'b3',type:'heading2',content:'Getting started'},
+            {id:'b4',type:'bullet',content:'Create projects for each product or workstream'},
+            {id:'b5',type:'bullet',content:'Upload PDFs and SOPs — AI extracts and reads them'},
+            {id:'b6',type:'bullet',content:'Ask AI anything about your project'},
+            {id:'b7',type:'divider',content:''},
+            {id:'b8',type:'paragraph',content:'Type / to add block types: /h1 /bullet /todo /callout /code'},
+          ]};
+        const initP=[dp], initPg=[dpg];
         setProjects(initP); setPages(initPg); setSelProject('p1');
-        saveWiki(initP, initPg);
+        saveWiki(initP, initPg, {});
       }
     } catch(e) {}
   }, [WIKI_KEY]);
 
-  // ── Save ──────────────────────────────────────────────────────────────────
   const saveWiki = useCallback((p, pg, pf) => {
     try {
       const files = pf !== undefined ? pf : projectFiles;
-      // Strip dataUrl from files before saving to keep storage small — keep extractedText only
-      const filesForStorage = {};
+      // Strip dataUrls from non-image files to save space
+      const fs = {};
       Object.keys(files).forEach(pid => {
-        filesForStorage[pid] = files[pid].map(f => ({ ...f, dataUrl: f.type?.startsWith('image/') ? f.dataUrl : undefined }));
+        fs[pid] = files[pid].map(f => ({ ...f, dataUrl: f.type?.startsWith('image/') ? f.dataUrl : f.dataUrl }));
       });
-      localStorage.setItem(WIKI_KEY, JSON.stringify({ projects: p, pages: pg, projectFiles: filesForStorage, savedAt: Date.now() }));
+      localStorage.setItem(WIKI_KEY, JSON.stringify({ projects: p, pages: pg, projectFiles: fs, savedAt: Date.now() }));
     } catch(e) {}
   }, [WIKI_KEY, projectFiles]);
 
-  const autoSave = useCallback((p, pg) => {
+  const autoSave = useCallback((p, pg, pf) => {
     setSaving(true);
-    saveWiki(p, pg);
+    saveWiki(p, pg, pf);
     setTimeout(() => setSaving(false), 800);
   }, [saveWiki]);
 
-  // ── Derived ───────────────────────────────────────────────────────────────
-  const curProject = projects.find(p => p.id === selProject);
-  const projPages  = pages.filter(p => p.projectId === selProject);
-  const curPage    = pages.find(p => p.id === selPage);
+  // ── Derived ──
+  const curProject  = projects.find(p => p.id === selProject);
+  const projPages   = pages.filter(p => p.projectId === selProject);
+  const curPage     = pages.find(p => p.id === selPage);
   const pinnedPages = projPages.filter(p => p.pinned);
-  const recentPages = [...projPages].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 5);
 
   const searchResults = search.trim().length > 1
     ? pages.filter(pg => {
         const q = search.toLowerCase();
-        if (pg.title.toLowerCase().includes(q)) return true;
-        return pg.blocks?.some(b => b.content?.toLowerCase().includes(q));
+        return pg.title.toLowerCase().includes(q) || pg.blocks?.some(b => b.content?.toLowerCase().includes(q));
       }).slice(0, 8)
     : [];
 
-  // ── All text from project pages (for AI context) ───────────────────────
+  // ── AI context — includes page text + extracted file text ──
   const getProjectContext = useCallback((projectId) => {
     const pgs = pages.filter(p => p.projectId === projectId);
-    const pageText = pgs.map(pg => {
-      const text = pg.blocks?.map(b => b.content || '').join('\n') || '';
-      return `## ${pg.emoji} ${pg.title}\n${text}`;
-    }).join('\n\n---\n\n');
-    // Include extracted text from uploaded files
+    const pageText = pgs.map(pg => `## ${pg.emoji} ${pg.title}\n${pg.blocks?.map(b=>b.content||'').join('\n')||''}`).join('\n\n---\n\n');
     const files = projectFiles[projectId] || [];
-    const fileText = files.filter(f => f.extractedText).map(f => `## 📎 ${f.name}\n${f.extractedText}`).join('\n\n---\n\n');
-    return [pageText, fileText].filter(Boolean).join('\n\n===FILE ATTACHMENTS===\n\n');
+    const fileText = files.filter(f => f.extractedText).map(f => {
+      const isRealText = f.extractedText && !f.extractedText.startsWith('[');
+      return `## 📎 ${f.name}\n${isRealText ? f.extractedText.slice(0, 8000) : f.extractedText}`;
+    }).join('\n\n---\n\n');
+    return [pageText, fileText].filter(Boolean).join('\n\n=== UPLOADED FILES ===\n\n');
   }, [pages, projectFiles]);
 
-  // ── AI Ask ────────────────────────────────────────────────────────────────
-  const askWikiAI = async (query) => {
-    if (!query.trim() || aiLoading) return;
-    const userMsg = { role: 'user', text: query };
-    setAiHistory(h => [...h, userMsg]);
-    setAiQuery('');
-    setAiLoading(true);
-
-    try {
-      const ctx = getProjectContext(selProject);
-      const prompt = `You are a helpful project assistant for "${curProject?.name || 'this project'}".
-Below is the complete project documentation and SOPs:
-
-${ctx || 'No documentation added yet.'}
-
----
-
-The user asks: "${query}"
-
-Answer clearly and concisely. Reference specific page names or sections when relevant. If the answer is not in the documentation, say so and offer general guidance. Format with bullet points when listing multiple items.`;
-
-      const reply = await askAI(prompt, { teamName: curProject?.name || 'Project' });
-      const assistantMsg = { role: 'assistant', text: reply };
-      setAiHistory(h => [...h, assistantMsg]);
-    } catch(e) {
-      setAiHistory(h => [...h, { role: 'assistant', text: 'Sorry, could not reach AI. Check your REACT_APP_GEMINI_KEY in Vercel.' }]);
-    }
-    setAiLoading(false);
-  };
-
-  useEffect(() => { aiBottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [aiHistory, aiLoading]);
-
-  // ── Project actions ───────────────────────────────────────────────────────
+  // ── Actions ──
   const createProject = () => {
     if (!npName.trim()) return;
-    const p = { id: 'p' + Date.now(), name: npName.trim(), emoji: npEmoji, color: npColor, desc: npDesc.trim(), createdAt: Date.now() };
+    const p = { id:'p'+Date.now(), name:npName.trim(), emoji:npEmoji, color:npColor, desc:npDesc.trim(), createdAt:Date.now() };
     const np = [...projects, p];
     setProjects(np); setSelProject(p.id); setView('overview');
     setNpName(''); setNpDesc(''); setNpEmoji('📁'); setNpColor('#6366F1');
@@ -3020,15 +3274,10 @@ Answer clearly and concisely. Reference specific page names or sections when rel
     autoSave(np, npg);
   };
 
-  // ── Page actions ──────────────────────────────────────────────────────────
   const createPage = () => {
     if (!pgTitle.trim() || !selProject) return;
-    const pg = {
-      id: 'pg' + Date.now(), projectId: selProject,
-      title: pgTitle.trim(), emoji: pgEmoji, pinned: false,
-      updatedAt: Date.now(),
-      blocks: [{ id: 'b' + Date.now(), type: 'heading1', content: pgTitle.trim() }, { id: 'b' + (Date.now()+1), type: 'paragraph', content: '' }]
-    };
+    const pg = { id:'pg'+Date.now(), projectId:selProject, title:pgTitle.trim(), emoji:pgEmoji, pinned:false, updatedAt:Date.now(),
+      blocks:[{id:'b'+Date.now(),type:'heading1',content:pgTitle.trim()},{id:'b'+(Date.now()+1),type:'paragraph',content:''}] };
     const npg = [...pages, pg];
     setPages(npg); setSelPage(pg.id); setView('page');
     setPgTitle(''); setPgEmoji('📄');
@@ -3038,8 +3287,7 @@ Answer clearly and concisely. Reference specific page names or sections when rel
   const deletePage = (id) => {
     if (!window.confirm('Delete this page?')) return;
     const npg = pages.filter(p => p.id !== id);
-    setPages(npg);
-    setSelPage(null); setView('overview');
+    setPages(npg); setSelPage(null); setView('overview');
     autoSave(projects, npg);
   };
 
@@ -3061,86 +3309,77 @@ Answer clearly and concisely. Reference specific page names or sections when rel
     setPages(npg); autoSave(projects, npg);
   };
 
-  // ── Sidebar ───────────────────────────────────────────────────────────────
+  // ── Sidebar ──
   const Sidebar = () => (
-    <div style={{ width: sideCollapsed ? 44 : 240, flexShrink: 0, background: dark ? 'rgba(8,6,22,.97)' : '#F8F8FC', borderRight: `1px solid ${c.bord}`, display: 'flex', flexDirection: 'column', transition: 'width .2s', overflow: 'hidden' }}>
-      {/* Collapse toggle */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: sideCollapsed ? 'center' : 'space-between', padding: sideCollapsed ? '10px 0' : '10px 12px', borderBottom: `1px solid ${c.bord}`, flexShrink: 0 }}>
-        {!sideCollapsed && <span style={{ fontSize: 12, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.08em' }}>Projects</span>}
-        <button onClick={() => setSideCollapsed(s => !s)} style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${c.bord}`, background: 'transparent', color: c.mut, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>
-          {sideCollapsed ? '→' : '←'}
+    <div style={{ width: sideCollapsed?44:240, flexShrink:0, background: dark?'rgba(8,6,22,.97)':'#F8F8FC', borderRight:`1px solid ${c.bord}`, display:'flex', flexDirection:'column', transition:'width .2s', overflow:'hidden' }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:sideCollapsed?'center':'space-between', padding:sideCollapsed?'10px 0':'10px 12px', borderBottom:`1px solid ${c.bord}`, flexShrink:0 }}>
+        {!sideCollapsed && <span style={{ fontSize:12, fontWeight:700, color:c.mut, textTransform:'uppercase', letterSpacing:'.08em' }}>Projects</span>}
+        <button onClick={() => setSideCollapsed(s=>!s)} style={{ width:28, height:28, borderRadius:7, border:`1px solid ${c.bord}`, background:'transparent', color:c.mut, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13 }}>
+          {sideCollapsed?'→':'←'}
         </button>
       </div>
-
       {!sideCollapsed && (
         <>
-          {/* Search */}
-          <div style={{ padding: '8px 10px', borderBottom: `1px solid ${c.bord}`, flexShrink: 0 }}>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍  Search docs..." style={{ width: '100%', background: dark ? 'rgba(255,255,255,.06)' : 'rgba(99,102,241,.07)', border: `1px solid ${c.bord}`, borderRadius: 8, padding: '6px 10px', color: c.text, fontSize: 12, outline: 'none', boxSizing: 'border-box' }}/>
+          <div style={{ padding:'8px 10px', borderBottom:`1px solid ${c.bord}`, flexShrink:0, position:'relative' }}>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Search docs..." style={{ width:'100%', background:dark?'rgba(255,255,255,.06)':'rgba(99,102,241,.07)', border:`1px solid ${c.bord}`, borderRadius:8, padding:'6px 10px', color:c.text, fontSize:12, outline:'none', boxSizing:'border-box' }}/>
             {search && searchResults.length > 0 && (
-              <div style={{ position: 'absolute', zIndex: 100, width: 220, background: dark ? '#12103A' : '#fff', border: `1px solid ${c.bord}`, borderRadius: 10, marginTop: 4, boxShadow: '0 8px 24px rgba(0,0,0,.2)', maxHeight: 240, overflowY: 'auto' }}>
+              <div style={{ position:'absolute', zIndex:100, width:220, background:dark?'#12103A':'#fff', border:`1px solid ${c.bord}`, borderRadius:10, marginTop:4, boxShadow:'0 8px 24px rgba(0,0,0,.2)', maxHeight:240, overflowY:'auto', left:10 }}>
                 {searchResults.map(pg => {
                   const proj = projects.find(p => p.id === pg.projectId);
                   return (
-                    <div key={pg.id} onClick={() => { setSelProject(pg.projectId); setSelPage(pg.id); setView('page'); setSearch(''); }} style={{ padding: '9px 12px', cursor: 'pointer', borderBottom: `1px solid ${c.bord}` }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,102,241,.08)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: c.text }}>{pg.emoji} {pg.title}</div>
-                      <div style={{ fontSize: 10, color: c.mut }}>{proj?.emoji} {proj?.name}</div>
+                    <div key={pg.id} onClick={() => { setSelProject(pg.projectId); setSelPage(pg.id); setView('page'); setSearch(''); }}
+                      style={{ padding:'9px 12px', cursor:'pointer', borderBottom:`1px solid ${c.bord}` }}
+                      onMouseEnter={e=>e.currentTarget.style.background='rgba(99,102,241,.08)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                      <div style={{ fontSize:12, fontWeight:600, color:c.text }}>{pg.emoji} {pg.title}</div>
+                      <div style={{ fontSize:10, color:c.mut }}>{proj?.emoji} {proj?.name}</div>
                     </div>
                   );
                 })}
               </div>
             )}
           </div>
-
-          <div style={{ flex: 1, overflowY: 'auto', padding: '8px 6px' }}>
-            {/* Project list */}
+          <div style={{ flex:1, overflowY:'auto', padding:'8px 6px' }}>
             {projects.map(proj => (
               <div key={proj.id}>
                 <div onClick={() => { setSelProject(proj.id); setView('overview'); setSelPage(null); }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 8px', borderRadius: 8, cursor: 'pointer', background: selProject === proj.id ? (dark ? 'rgba(99,102,241,.18)' : 'rgba(99,102,241,.12)') : 'transparent', marginBottom: 2, transition: 'background .12s' }}
-                  onMouseEnter={e => { if (selProject !== proj.id) e.currentTarget.style.background = dark ? 'rgba(255,255,255,.05)' : 'rgba(99,102,241,.06)'; }}
-                  onMouseLeave={e => { if (selProject !== proj.id) e.currentTarget.style.background = 'transparent'; }}>
-                  <span style={{ fontSize: 15, flexShrink: 0 }}>{proj.emoji}</span>
-                  <span style={{ fontSize: 13, fontWeight: selProject === proj.id ? 700 : 500, color: selProject === proj.id ? '#818CF8' : c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{proj.name}</span>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: proj.color, flexShrink: 0, opacity: 0.7 }}/>
+                  style={{ display:'flex', alignItems:'center', gap:7, padding:'7px 8px', borderRadius:8, cursor:'pointer', background:selProject===proj.id?(dark?'rgba(99,102,241,.18)':'rgba(99,102,241,.12)'):'transparent', marginBottom:2, transition:'background .12s' }}
+                  onMouseEnter={e=>{if(selProject!==proj.id)e.currentTarget.style.background=dark?'rgba(255,255,255,.05)':'rgba(99,102,241,.06)';}}
+                  onMouseLeave={e=>{if(selProject!==proj.id)e.currentTarget.style.background='transparent';}}>
+                  <span style={{ fontSize:15, flexShrink:0 }}>{proj.emoji}</span>
+                  <span style={{ fontSize:13, fontWeight:selProject===proj.id?700:500, color:selProject===proj.id?'#818CF8':c.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>{proj.name}</span>
+                  <div style={{ width:8, height:8, borderRadius:'50%', background:proj.color, flexShrink:0, opacity:.7 }}/>
                 </div>
-                {/* Pages under selected project */}
-                {selProject === proj.id && (
-                  <div style={{ paddingLeft: 16, marginBottom: 4 }}>
-                    {pages.filter(p => p.projectId === proj.id).map(pg => (
-                      <div key={pg.id} onClick={() => { setSelPage(pg.id); setView('page'); }}
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', borderRadius: 7, cursor: 'pointer', background: selPage === pg.id ? (dark ? 'rgba(99,102,241,.14)' : 'rgba(99,102,241,.09)') : 'transparent', marginBottom: 1, transition: 'background .1s' }}
-                        onMouseEnter={e => { if (selPage !== pg.id) e.currentTarget.style.background = dark ? 'rgba(255,255,255,.04)' : 'rgba(99,102,241,.05)'; }}
-                        onMouseLeave={e => { if (selPage !== pg.id) e.currentTarget.style.background = 'transparent'; }}>
-                        <span style={{ fontSize: 12 }}>{pg.pinned ? '📌' : pg.emoji}</span>
-                        <span style={{ fontSize: 12, color: selPage === pg.id ? '#818CF8' : c.sub, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: selPage === pg.id ? 600 : 400 }}>{pg.title}</span>
+                {selProject===proj.id && (
+                  <div style={{ paddingLeft:16, marginBottom:4 }}>
+                    {pages.filter(p=>p.projectId===proj.id).map(pg=>(
+                      <div key={pg.id} onClick={()=>{setSelPage(pg.id);setView('page');}}
+                        style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', borderRadius:7, cursor:'pointer', background:selPage===pg.id?(dark?'rgba(99,102,241,.14)':'rgba(99,102,241,.09)'):'transparent', marginBottom:1, transition:'background .1s' }}
+                        onMouseEnter={e=>{if(selPage!==pg.id)e.currentTarget.style.background=dark?'rgba(255,255,255,.04)':'rgba(99,102,241,.05)';}}
+                        onMouseLeave={e=>{if(selPage!==pg.id)e.currentTarget.style.background='transparent';}}>
+                        <span style={{ fontSize:12 }}>{pg.pinned?'📌':pg.emoji}</span>
+                        <span style={{ fontSize:12, color:selPage===pg.id?'#818CF8':c.sub, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight:selPage===pg.id?600:400 }}>{pg.title}</span>
                       </div>
                     ))}
-                    {/* New page button */}
-                    <button onClick={() => setView('newPage')} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 8px', width: '100%', background: 'transparent', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 11, borderRadius: 6, marginTop: 2 }}
-                      onMouseEnter={e => e.currentTarget.style.background = dark ? 'rgba(255,255,255,.04)' : 'rgba(99,102,241,.06)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                      <span style={{ fontSize: 14, fontWeight: 700 }}>+</span> New page
+                    <button onClick={()=>setView('newPage')} style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 8px', width:'100%', background:'transparent', border:'none', color:c.mut, cursor:'pointer', fontSize:11, borderRadius:6, marginTop:2 }}
+                      onMouseEnter={e=>e.currentTarget.style.background=dark?'rgba(255,255,255,.04)':'rgba(99,102,241,.06)'}
+                      onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                      <span style={{ fontSize:14, fontWeight:700 }}>+</span> New page
                     </button>
                   </div>
                 )}
               </div>
             ))}
-
-            {/* New project button */}
-            <button onClick={() => setView('newProject')} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', width: '100%', background: 'transparent', border: `1px dashed ${c.bord}`, borderRadius: 9, color: c.mut, cursor: 'pointer', fontSize: 12, marginTop: 10 }}>
-              <span style={{ fontSize: 16, fontWeight: 700 }}>+</span> New project
+            <button onClick={()=>setView('newProject')} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px', width:'100%', background:'transparent', border:`1px dashed ${c.bord}`, borderRadius:9, color:c.mut, cursor:'pointer', fontSize:12, marginTop:10 }}>
+              <span style={{ fontSize:16, fontWeight:700 }}>+</span> New project
             </button>
           </div>
         </>
       )}
-
-      {/* Collapsed: just project dots */}
       {sideCollapsed && (
-        <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-          {projects.map(proj => (
-            <button key={proj.id} onClick={() => { setSelProject(proj.id); setView('overview'); setSideCollapsed(false); }} title={proj.name}
-              style={{ width: 32, height: 32, borderRadius: 8, background: selProject === proj.id ? 'rgba(99,102,241,.2)' : 'transparent', border: selProject === proj.id ? '1.5px solid #818CF8' : '1.5px solid transparent', cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ flex:1, overflowY:'auto', padding:'6px 0', display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+          {projects.map(proj=>(
+            <button key={proj.id} onClick={()=>{setSelProject(proj.id);setView('overview');setSideCollapsed(false);}} title={proj.name}
+              style={{ width:32, height:32, borderRadius:8, background:selProject===proj.id?'rgba(99,102,241,.2)':'transparent', border:selProject===proj.id?'1.5px solid #818CF8':'1.5px solid transparent', cursor:'pointer', fontSize:18, display:'flex', alignItems:'center', justifyContent:'center' }}>
               {proj.emoji}
             </button>
           ))}
@@ -3149,475 +3388,178 @@ Answer clearly and concisely. Reference specific page names or sections when rel
     </div>
   );
 
-  // ── Main content area ─────────────────────────────────────────────────────
-
-  // HOME (no project selected)
-  const HomeView = () => (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, gap: 20 }}>
-      <div style={{ fontSize: 56 }}>📚</div>
-      <h2 style={{ fontSize: 24, fontWeight: 800, color: c.text, margin: 0, letterSpacing: '-.02em' }}>Project Wiki</h2>
-      <p style={{ color: c.mut, fontSize: 14, textAlign: 'center', maxWidth: 380, lineHeight: 1.7, margin: 0 }}>Your team knowledge base. SOPs, runbooks, decisions, onboarding docs — all in one place with AI search.</p>
-      <button onClick={() => setView('newProject')} style={{ padding: '12px 28px', borderRadius: 10, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>+ Create your first project</button>
-    </div>
-  );
-
-  // NEW PROJECT
-  const NewProjectView = () => (
-    <div style={{ flex: 1, overflowY: 'auto', padding: 40, display: 'flex', justifyContent: 'center' }}>
-      <div style={{ width: '100%', maxWidth: 520 }}>
-        <button onClick={() => setView(selProject ? 'overview' : 'home')} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 13, marginBottom: 24, padding: 0 }}>← Back</button>
-        <h2 style={{ fontSize: 20, fontWeight: 800, color: c.text, marginBottom: 6 }}>New project</h2>
-        <p style={{ color: c.mut, fontSize: 13, marginBottom: 28 }}>Projects group related pages, SOPs, and docs together.</p>
-
-        {/* Emoji + Name */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-          <div style={{ position: 'relative' }}>
-            <div style={{ width: 52, height: 52, borderRadius: 12, background: dark ? 'rgba(255,255,255,.06)' : 'rgba(99,102,241,.07)', border: `1.5px solid ${c.bord}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, cursor: 'pointer' }}
-              onClick={() => document.getElementById('npe').click()}>
-              {npEmoji}
-            </div>
-            <select id="npe" value={npEmoji} onChange={e => setNpEmoji(e.target.value)} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }}>
-              {EMOJI_PRESETS.map(em => <option key={em} value={em}>{em}</option>)}
-            </select>
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>Project name</div>
-            <input value={npName} onChange={e => setNpName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createProject()} placeholder="e.g. Mobile App, Q3 Sprint, Onboarding…" autoFocus
-              style={{ width: '100%', background: dark ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.9)', border: `1.5px solid ${c.inpB}`, borderRadius: 10, padding: '10px 14px', color: c.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}/>
-          </div>
-        </div>
-
-        {/* Color */}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 8 }}>Color</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {COLOR_PRESETS.map(col => <button key={col} onClick={() => setNpColor(col)} style={{ width: 26, height: 26, borderRadius: '50%', background: col, border: npColor === col ? '3px solid #fff' : '3px solid transparent', cursor: 'pointer', boxShadow: npColor === col ? `0 0 0 2px ${col}` : 'none', transition: 'all .12s' }}/>)}
-          </div>
-        </div>
-
-        {/* Description */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>Description (optional)</div>
-          <textarea value={npDesc} onChange={e => setNpDesc(e.target.value)} placeholder="What is this project about?" rows={3}
-            style={{ width: '100%', background: dark ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.9)', border: `1.5px solid ${c.inpB}`, borderRadius: 10, padding: '10px 14px', color: c.text, fontSize: 13, outline: 'none', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }}/>
-        </div>
-
-        <button onClick={createProject} disabled={!npName.trim()} style={{ padding: '11px 28px', borderRadius: 10, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: npName.trim() ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: 700, opacity: npName.trim() ? 1 : 0.5 }}>Create project</button>
-      </div>
-    </div>
-  );
-
-  // NEW PAGE
-  const NewPageView = () => (
-    <div style={{ flex: 1, overflowY: 'auto', padding: 40, display: 'flex', justifyContent: 'center' }}>
-      <div style={{ width: '100%', maxWidth: 480 }}>
-        <button onClick={() => setView('overview')} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 13, marginBottom: 24, padding: 0 }}>← Back</button>
-        <h2 style={{ fontSize: 20, fontWeight: 800, color: c.text, marginBottom: 6 }}>New page</h2>
-        <p style={{ color: c.mut, fontSize: 13, marginBottom: 24 }}>in <strong>{curProject?.emoji} {curProject?.name}</strong></p>
-
-        <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-          <div style={{ position: 'relative' }}>
-            <div style={{ width: 48, height: 48, borderRadius: 10, background: dark ? 'rgba(255,255,255,.06)' : 'rgba(99,102,241,.07)', border: `1.5px solid ${c.bord}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, cursor: 'pointer' }}>
-              {pgEmoji}
-            </div>
-            <select value={pgEmoji} onChange={e => setPgEmoji(e.target.value)} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }}>
-              {EMOJI_PRESETS.map(em => <option key={em} value={em}>{em}</option>)}
-            </select>
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>Page title</div>
-            <input value={pgTitle} onChange={e => setPgTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && createPage()} placeholder="e.g. Deployment SOP, Onboarding Guide…" autoFocus
-              style={{ width: '100%', background: dark ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.9)', border: `1.5px solid ${c.inpB}`, borderRadius: 10, padding: '10px 14px', color: c.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}/>
-          </div>
-        </div>
-
-        <button onClick={createPage} disabled={!pgTitle.trim()} style={{ padding: '11px 24px', borderRadius: 10, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: pgTitle.trim() ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: 700, opacity: pgTitle.trim() ? 1 : 0.5 }}>Create page</button>
-      </div>
-    </div>
-  );
-
-  // PROJECT OVERVIEW
-  const OverviewContent = () => {
-    const totalPages = projPages.length;
-    const lastEdited = projPages.sort((a,b) => b.updatedAt - a.updatedAt)[0];
-    const wordCount = projPages.reduce((acc, pg) => acc + (pg.blocks?.map(b => b.content || '').join(' ').split(/\s+/).filter(Boolean).length || 0), 0);
-
-    return (
-      <div style={{ flex: 1, overflowY: 'auto', padding: '32px 40px', maxWidth: 860, margin: '0 auto', width: '100%' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 28 }}>
-          <div style={{ width: 56, height: 56, borderRadius: 14, background: curProject?.color + '22', border: `2px solid ${curProject?.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, flexShrink: 0 }}>{curProject?.emoji}</div>
-          <div style={{ flex: 1 }}>
-            <h1 style={{ fontSize: 26, fontWeight: 800, color: c.text, margin: 0, letterSpacing: '-.025em' }}>{curProject?.name}</h1>
-            {curProject?.desc && <p style={{ color: c.mut, fontSize: 14, marginTop: 5, marginBottom: 0, lineHeight: 1.6 }}>{curProject.desc}</p>}
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            <button onClick={() => setView('newPage')} style={{ padding: '8px 16px', borderRadius: 9, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>+ New page</button>
-            <button onClick={() => deleteProject(selProject)} style={{ padding: '8px 14px', borderRadius: 9, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', color: '#F87171', cursor: 'pointer', fontSize: 13 }}>🗑</button>
-          </div>
-        </div>
-
-        {/* Stats row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 28 }}>
-          {[
-            { label: 'Pages', value: totalPages, icon: '📄' },
-            { label: 'Words documented', value: wordCount.toLocaleString(), icon: '📝' },
-            { label: 'Last edited', value: lastEdited ? new Date(lastEdited.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—', icon: '🕐' },
-          ].map(s => (
-            <div key={s.label} style={{ padding: '16px 18px', borderRadius: 12, background: dark ? 'rgba(255,255,255,.04)' : 'rgba(255,255,255,.8)', border: `1px solid ${c.bord}` }}>
-              <div style={{ fontSize: 22, marginBottom: 6 }}>{s.icon}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: c.text, letterSpacing: '-.02em' }}>{s.value}</div>
-              <div style={{ fontSize: 11, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginTop: 2 }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* ── FILE ATTACHMENTS ── */}
-        <ProjectFilePanel selProject={selProject} projectFiles={projectFiles} setProjectFiles={setProjectFiles} saveWiki={saveWiki} projects={projects} pages={pages} dark={dark} c={c}/>
-        <div style={{ marginBottom: 28, borderRadius: 14, border: `1px solid rgba(124,110,245,.25)`, background: dark ? 'rgba(99,102,241,.06)' : 'rgba(99,102,241,.04)', overflow: 'hidden' }}>
-          <div style={{ padding: '14px 18px', borderBottom: `1px solid rgba(124,110,245,.15)`, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z" fill="#A78BFA"/></svg>
-            <span style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Ask AI about this project</span>
-            <span style={{ fontSize: 11, color: '#818CF8', background: 'rgba(99,102,241,.1)', padding: '2px 8px', borderRadius: 20 }}>Powered by Gemini · Free</span>
-            {!process.env.REACT_APP_GEMINI_KEY && <span style={{ fontSize: 11, color: '#F87171', marginLeft: 'auto' }}>⚠️ Add REACT_APP_GEMINI_KEY to Vercel</span>}
-          </div>
-
-          {/* Chat messages */}
-          {aiHistory.length > 0 && (
-            <div style={{ maxHeight: 320, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {aiHistory.map((msg, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, flexDirection: msg.role === 'user' ? 'row-reverse' : 'row', alignItems: 'flex-start' }}>
-                  {msg.role === 'assistant' && (
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(124,110,245,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 14 }}>✦</div>
-                  )}
-                  <div style={{ maxWidth: '82%', padding: '9px 13px', borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px', background: msg.role === 'user' ? 'linear-gradient(135deg,#6B5FE4,#9B8AFB)' : (dark ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.9)'), color: msg.role === 'user' ? '#fff' : c.text, fontSize: 13, lineHeight: 1.6, border: msg.role === 'user' ? 'none' : `1px solid ${c.bord}`, whiteSpace: 'pre-wrap' }}>
-                    {msg.text}
-                  </div>
-                </div>
-              ))}
-              {aiLoading && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(124,110,245,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>✦</div>
-                  <div style={{ padding: '10px 14px', background: dark ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.9)', borderRadius: '14px 14px 14px 4px', border: `1px solid ${c.bord}`, display: 'flex', gap: 4 }}>
-                    {[0,1,2].map(i => <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#818CF8', animation: `bounce .8s ease ${i*.15}s infinite` }}/>)}
-                  </div>
-                </div>
-              )}
-              <div ref={aiBottomRef}/>
-            </div>
-          )}
-
-          {/* Input */}
-          <div style={{ padding: '10px 14px', display: 'flex', gap: 8, borderTop: aiHistory.length ? `1px solid rgba(124,110,245,.1)` : 'none' }}>
-            <input value={aiQuery} onChange={e => setAiQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && askWikiAI(aiQuery)}
-              placeholder="Ask anything about this project… e.g. 'What is the deployment process?'"
-              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: c.text, fontSize: 13, lineHeight: 1.5 }}/>
-            <button onClick={() => askWikiAI(aiQuery)} disabled={!aiQuery.trim() || aiLoading}
-              style={{ padding: '7px 16px', borderRadius: 9, background: aiQuery.trim() ? 'linear-gradient(135deg,#6B5FE4,#9B8AFB)' : 'transparent', border: aiQuery.trim() ? 'none' : `1px solid ${c.bord}`, color: aiQuery.trim() ? '#fff' : c.mut, cursor: aiQuery.trim() ? 'pointer' : 'default', fontSize: 13, fontWeight: 600, flexShrink: 0, transition: 'all .15s' }}>
-              {aiLoading ? '…' : '✦ Ask'}
-            </button>
-          </div>
-
-          {/* Quick prompts */}
-          {aiHistory.length === 0 && (
-            <div style={{ padding: '0 14px 12px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {[
-                'Summarize this project',
-                'What SOPs are documented?',
-                'What are the key processes?',
-                'What is missing from the docs?',
-              ].map(q => (
-                <button key={q} onClick={() => askWikiAI(q)} style={{ fontSize: 11, padding: '4px 11px', borderRadius: 20, border: `1px solid rgba(124,110,245,.25)`, background: 'rgba(99,102,241,.07)', color: '#818CF8', cursor: 'pointer', transition: 'all .12s' }}>{q}</button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Pinned pages */}
-        {pinnedPages.length > 0 && (
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>📌 Pinned</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px,1fr))', gap: 10 }}>
-              {pinnedPages.map(pg => (
-                <div key={pg.id} onClick={() => { setSelPage(pg.id); setView('page'); }} style={{ padding: '14px 16px', borderRadius: 12, background: dark ? 'rgba(255,255,255,.05)' : 'rgba(255,255,255,.8)', border: `1px solid ${c.bord}`, cursor: 'pointer', transition: 'all .15s' }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = '#818CF8'} onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
-                  <div style={{ fontSize: 22, marginBottom: 6 }}>{pg.emoji}</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 4 }}>{pg.title}</div>
-                  <div style={{ fontSize: 11, color: c.mut }}>{new Date(pg.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* All pages */}
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>All pages ({projPages.length})</div>
-          {projPages.length === 0 ? (
-            <div style={{ padding: '32px', textAlign: 'center', borderRadius: 12, border: `1.5px dashed ${c.bord}` }}>
-              <div style={{ fontSize: 36, marginBottom: 10 }}>📄</div>
-              <div style={{ color: c.mut, fontSize: 14, marginBottom: 14 }}>No pages yet</div>
-              <button onClick={() => setView('newPage')} style={{ padding: '9px 20px', borderRadius: 9, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>+ Create first page</button>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {projPages.map(pg => (
-                <div key={pg.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', transition: 'background .12s', border: '1px solid transparent' }}
-                  onClick={() => { setSelPage(pg.id); setView('page'); }}
-                  onMouseEnter={e => { e.currentTarget.style.background = dark ? 'rgba(255,255,255,.04)' : 'rgba(99,102,241,.05)'; e.currentTarget.style.borderColor = c.bord; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; }}>
-                  <span style={{ fontSize: 18, flexShrink: 0 }}>{pg.emoji}</span>
-                  <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: c.text }}>{pg.title}</span>
-                  <span style={{ fontSize: 11, color: c.mut }}>{new Date(pg.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
-                  <span style={{ fontSize: 11, color: pg.pinned ? '#FBBF24' : c.mut, cursor: 'pointer' }} onClick={e => { e.stopPropagation(); togglePin(pg.id); }} title={pg.pinned ? 'Unpin' : 'Pin'}>{pg.pinned ? '📌' : '📍'}</span>
-                  <span style={{ fontSize: 11, color: '#F87171', cursor: 'pointer', opacity: 0.6 }} onClick={e => { e.stopPropagation(); deletePage(pg.id); }} title="Delete">🗑</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // ── Page editor ───────────────────────────────────────────────────────────
+  // ── Page Editor ──
   const PageEditor = ({ page }) => {
-    const [blocks, setBlocks] = useState(() => page.blocks || []);
+    const [blocks, setBlocks]         = useState(() => page.blocks || []);
     const [localTitle, setLocalTitle] = useState(page.title);
     const [localEmoji, setLocalEmoji] = useState(page.emoji);
-    const [showAI, setShowAI] = useState(false);
-    const blockRefs = useRef({});
-    const nextBlockId = useRef(Date.now());
+    const [showAI, setShowAI]         = useState(false);
+    const blockRefs  = useRef({});
+    const nextBId    = useRef(Date.now());
 
-    // Sync blocks up on change (debounced)
     useEffect(() => {
       const t = setTimeout(() => {
         updatePageBlocks(page.id, blocks);
-        if (localTitle !== page.title || localEmoji !== page.emoji) {
-          updatePageMeta(page.id, { title: localTitle, emoji: localEmoji });
-        }
+        if (localTitle !== page.title || localEmoji !== page.emoji)
+          updatePageMeta(page.id, { title:localTitle, emoji:localEmoji });
       }, 600);
       return () => clearTimeout(t);
     }, [blocks, localTitle, localEmoji]);
 
-    const insertBlock = (afterIdx, type = 'paragraph', content = '') => {
-      const id = 'b' + (nextBlockId.current++);
-      const nb = { id, type, content };
-      const newBlocks = [...blocks.slice(0, afterIdx + 1), nb, ...blocks.slice(afterIdx + 1)];
-      setBlocks(newBlocks);
+    const insertBlock = (afterIdx, type='paragraph', content='') => {
+      const id = 'b'+(nextBId.current++);
+      setBlocks(bs => {
+        const nb = { id, type, content };
+        return [...bs.slice(0, afterIdx+1), nb, ...bs.slice(afterIdx+1)];
+      });
       setTimeout(() => blockRefs.current[id]?.focus(), 30);
     };
 
     const deleteBlock = (idx) => {
       if (blocks.length <= 1) return;
-      const prev = blocks[idx - 1];
-      setBlocks(b => b.filter((_, i) => i !== idx));
-      setTimeout(() => { if (prev) blockRefs.current[prev.id]?.focus(); }, 30);
+      const prev = blocks[idx-1];
+      setBlocks(bs => bs.filter((_,i) => i !== idx));
+      setTimeout(() => prev && blockRefs.current[prev.id]?.focus(), 30);
     };
 
-    const updateBlock = (id, props) => {
-      setBlocks(bs => bs.map(b => b.id === id ? { ...b, ...props } : b));
-    };
+    const updateBlock = (id, props) => setBlocks(bs => bs.map(b => b.id===id?{...b,...props}:b));
 
-    const handleBlockKey = (e, block, idx) => {
-      const val = e.currentTarget.value || e.currentTarget.textContent || '';
-
-      if (e.key === 'Enter' && !e.shiftKey) {
+    const handleKey = (e, block, idx) => {
+      const val = e.target.value || '';
+      if (e.key==='Enter' && !e.shiftKey) {
         e.preventDefault();
-        // Check for slash commands
         if (val.startsWith('/')) {
-          const cmd = val.toLowerCase().trim();
-          const typeMap = { '/h1': 'heading1', '/h2': 'heading2', '/h3': 'heading3', '/bullet': 'bullet', '/num': 'numbered', '/todo': 'todo', '/code': 'code', '/quote': 'quote', '/callout': 'callout', '/divider': 'divider' };
-          if (typeMap[cmd]) { updateBlock(block.id, { type: typeMap[cmd], content: '' }); return; }
+          const m={'/h1':'heading1','/h2':'heading2','/h3':'heading3','/bullet':'bullet','/num':'numbered','/todo':'todo','/code':'code','/quote':'quote','/callout':'callout','/divider':'divider'};
+          if (m[val.toLowerCase().trim()]) { updateBlock(block.id,{type:m[val.toLowerCase().trim()],content:''}); return; }
         }
-        insertBlock(idx);
-        return;
+        insertBlock(idx); return;
       }
-      if (e.key === 'Backspace' && !val) {
-        e.preventDefault();
-        deleteBlock(idx);
-        return;
-      }
-      // Navigate up/down
-      if (e.key === 'ArrowUp' && idx > 0) { blockRefs.current[blocks[idx-1]?.id]?.focus(); e.preventDefault(); }
-      if (e.key === 'ArrowDown' && idx < blocks.length - 1) { blockRefs.current[blocks[idx+1]?.id]?.focus(); e.preventDefault(); }
+      if (e.key==='Backspace' && !val) { e.preventDefault(); deleteBlock(idx); return; }
+      if (e.key==='ArrowUp' && idx>0) { blockRefs.current[blocks[idx-1]?.id]?.focus(); e.preventDefault(); }
+      if (e.key==='ArrowDown' && idx<blocks.length-1) { blockRefs.current[blocks[idx+1]?.id]?.focus(); e.preventDefault(); }
     };
 
-    const blockStyle = (type) => {
-      const base = { width: '100%', background: 'transparent', border: 'none', outline: 'none', fontFamily: 'Inter,sans-serif', color: dark ? '#1a1a1a' : '#1a1a1a', resize: 'none', lineHeight: 1.7, display: 'block', boxSizing: 'border-box' };
-      if (type === 'heading1') return { ...base, fontSize: 28, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.3 };
-      if (type === 'heading2') return { ...base, fontSize: 22, fontWeight: 700, letterSpacing: '-.015em' };
-      if (type === 'heading3') return { ...base, fontSize: 17, fontWeight: 700 };
-      if (type === 'code')     return { ...base, fontFamily: 'monospace', fontSize: 13, background: 'rgba(0,0,0,.05)', padding: '12px 14px', borderRadius: 8, color: '#c7254e' };
-      if (type === 'quote')    return { ...base, fontSize: 15, fontStyle: 'italic', borderLeft: '4px solid #818CF8', paddingLeft: 16, color: '#374151' };
-      return { ...base, fontSize: 14 };
+    const bStyle = (type) => {
+      const base = { width:'100%', background:'transparent', border:'none', outline:'none', fontFamily:'Inter,sans-serif', color:'#111827', resize:'none', lineHeight:1.7, display:'block', boxSizing:'border-box', fontSize:14 };
+      if (type==='heading1') return {...base, fontSize:28, fontWeight:800, letterSpacing:'-.02em', lineHeight:1.3};
+      if (type==='heading2') return {...base, fontSize:22, fontWeight:700};
+      if (type==='heading3') return {...base, fontSize:17, fontWeight:700};
+      if (type==='code')     return {...base, fontFamily:'monospace', fontSize:13, background:'rgba(0,0,0,.05)', padding:'12px 14px', borderRadius:8, color:'#c7254e'};
+      if (type==='quote')    return {...base, fontStyle:'italic', borderLeft:'4px solid #818CF8', paddingLeft:16, color:'#374151'};
+      return base;
     };
 
     const renderBlock = (block, idx) => {
-      const isDiv = block.type === 'divider';
-      if (isDiv) return (
-        <div key={block.id} style={{ position: 'relative', padding: '8px 0' }} onMouseEnter={e => e.currentTarget.querySelector('.block-del')?.style && (e.currentTarget.querySelector('.block-del').style.opacity = '1')} onMouseLeave={e => e.currentTarget.querySelector('.block-del')?.style && (e.currentTarget.querySelector('.block-del').style.opacity = '0')}>
-          <hr style={{ border: 'none', borderTop: `2px solid ${c.bord}`, margin: '8px 0' }}/>
-          <button className="block-del" onClick={() => deleteBlock(idx)} style={{ position: 'absolute', right: -28, top: '50%', transform: 'translateY(-50%)', width: 22, height: 22, borderRadius: '50%', background: 'rgba(239,68,68,.1)', border: 'none', color: '#F87171', cursor: 'pointer', fontSize: 12, opacity: 0, transition: 'opacity .15s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+      if (block.type==='divider') return (
+        <div key={block.id} style={{ padding:'8px 0', position:'relative' }}
+          onMouseEnter={e=>e.currentTarget.querySelector('.bdel')&&(e.currentTarget.querySelector('.bdel').style.opacity='1')}
+          onMouseLeave={e=>e.currentTarget.querySelector('.bdel')&&(e.currentTarget.querySelector('.bdel').style.opacity='0')}>
+          <hr style={{ border:'none', borderTop:`2px solid ${c.bord}`, margin:'8px 0' }}/>
+          <button className="bdel" onClick={()=>deleteBlock(idx)} style={{ position:'absolute', right:-26, top:'50%', transform:'translateY(-50%)', width:20, height:20, borderRadius:'50%', background:'rgba(239,68,68,.1)', border:'none', color:'#F87171', cursor:'pointer', opacity:0, transition:'opacity .15s' }}>×</button>
         </div>
       );
 
-      if (block.type === 'callout') {
-        const types = { info: { bg: 'rgba(99,102,241,.08)', border: 'rgba(99,102,241,.25)', icon: 'ℹ️' }, warning: { bg: 'rgba(245,158,11,.08)', border: 'rgba(245,158,11,.25)', icon: '⚠️' }, success: { bg: 'rgba(52,211,153,.08)', border: 'rgba(52,211,153,.25)', icon: '✅' }, danger: { bg: 'rgba(239,68,68,.08)', border: 'rgba(239,68,68,.25)', icon: '🚨' } };
-        const t = types[block.calloutType || 'info'];
+      if (block.type==='callout') {
+        const ts = {info:{bg:'rgba(99,102,241,.08)',border:'rgba(99,102,241,.25)',icon:'ℹ️'},warning:{bg:'rgba(245,158,11,.08)',border:'rgba(245,158,11,.25)',icon:'⚠️'},success:{bg:'rgba(52,211,153,.08)',border:'rgba(52,211,153,.25)',icon:'✅'},danger:{bg:'rgba(239,68,68,.08)',border:'rgba(239,68,68,.25)',icon:'🚨'}};
+        const t = ts[block.calloutType||'info'];
         return (
-          <div key={block.id} style={{ display: 'flex', gap: 12, padding: '12px 16px', background: t.bg, border: `1px solid ${t.border}`, borderRadius: 10, margin: '4px 0', position: 'relative' }}
-            onMouseEnter={e => e.currentTarget.querySelector('.block-del')?.style && (e.currentTarget.querySelector('.block-del').style.opacity = '1')}
-            onMouseLeave={e => e.currentTarget.querySelector('.block-del')?.style && (e.currentTarget.querySelector('.block-del').style.opacity = '0')}>
-            <span style={{ fontSize: 18, flexShrink: 0, marginTop: 2 }}>{t.icon}</span>
-            <textarea ref={el => blockRefs.current[block.id] = el} value={block.content} rows={Math.max(1, (block.content || '').split('\n').length)}
-              onChange={e => updateBlock(block.id, { content: e.target.value })}
-              onKeyDown={e => handleBlockKey(e, block, idx)}
-              style={{ ...blockStyle('paragraph'), lineHeight: 1.6, flex: 1, height: 'auto', minHeight: 24, fontSize: 14 }}
-              placeholder="Callout text…"/>
-            <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-              {Object.keys(types).map(tp => <button key={tp} onClick={() => updateBlock(block.id, { calloutType: tp })} style={{ width: 20, height: 20, borderRadius: '50%', border: 'none', background: types[tp].bg, cursor: 'pointer', fontSize: 10 }}>{types[tp].icon}</button>)}
+          <div key={block.id} style={{ display:'flex', gap:12, padding:'12px 16px', background:t.bg, border:`1px solid ${t.border}`, borderRadius:10, margin:'4px 0', position:'relative' }}
+            onMouseEnter={e=>e.currentTarget.querySelector('.bdel')&&(e.currentTarget.querySelector('.bdel').style.opacity='1')}
+            onMouseLeave={e=>e.currentTarget.querySelector('.bdel')&&(e.currentTarget.querySelector('.bdel').style.opacity='0')}>
+            <span style={{ fontSize:18, flexShrink:0, marginTop:2 }}>{t.icon}</span>
+            <textarea ref={el=>blockRefs.current[block.id]=el} value={block.content} rows={Math.max(1,(block.content||'').split('\n').length)}
+              onChange={e=>updateBlock(block.id,{content:e.target.value})} onKeyDown={e=>handleKey(e,block,idx)}
+              style={{...bStyle('paragraph'),flex:1,height:'auto',minHeight:24}} placeholder="Callout text…"/>
+            <div style={{ display:'flex', gap:3, flexShrink:0 }}>
+              {Object.keys(ts).map(tp=><button key={tp} onClick={()=>updateBlock(block.id,{calloutType:tp})} style={{ width:20, height:20, borderRadius:'50%', border:'none', background:ts[tp].bg, cursor:'pointer', fontSize:10 }}>{ts[tp].icon}</button>)}
             </div>
-            <button className="block-del" onClick={() => deleteBlock(idx)} style={{ position: 'absolute', right: -28, top: 10, width: 22, height: 22, borderRadius: '50%', background: 'rgba(239,68,68,.1)', border: 'none', color: '#F87171', cursor: 'pointer', fontSize: 12, opacity: 0, transition: 'opacity .15s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+            <button className="bdel" onClick={()=>deleteBlock(idx)} style={{ position:'absolute', right:-26, top:10, width:20, height:20, borderRadius:'50%', background:'rgba(239,68,68,.1)', border:'none', color:'#F87171', cursor:'pointer', opacity:0, transition:'opacity .15s' }}>×</button>
           </div>
         );
       }
 
-      if (block.type === 'todo') {
+      if (block.type==='todo') {
         return (
-          <div key={block.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '3px 0', position: 'relative' }}
-            onMouseEnter={e => e.currentTarget.querySelector('.block-del')?.style && (e.currentTarget.querySelector('.block-del').style.opacity = '1')}
-            onMouseLeave={e => e.currentTarget.querySelector('.block-del')?.style && (e.currentTarget.querySelector('.block-del').style.opacity = '0')}>
-            <button onClick={() => updateBlock(block.id, { checked: !block.checked })} style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${block.checked ? '#34D399' : '#94A3B8'}`, background: block.checked ? '#34D399' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 4 }}>
-              {block.checked && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+          <div key={block.id} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'3px 0', position:'relative' }}
+            onMouseEnter={e=>e.currentTarget.querySelector('.bdel')&&(e.currentTarget.querySelector('.bdel').style.opacity='1')}
+            onMouseLeave={e=>e.currentTarget.querySelector('.bdel')&&(e.currentTarget.querySelector('.bdel').style.opacity='0')}>
+            <button onClick={()=>updateBlock(block.id,{checked:!block.checked})} style={{ width:18, height:18, borderRadius:4, border:`2px solid ${block.checked?'#34D399':'#94A3B8'}`, background:block.checked?'#34D399':'transparent', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:4 }}>
+              {block.checked&&<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
             </button>
-            <textarea ref={el => blockRefs.current[block.id] = el} value={block.content} rows={1}
-              onChange={e => updateBlock(block.id, { content: e.target.value })}
-              onKeyDown={e => handleBlockKey(e, block, idx)}
-              style={{ ...blockStyle('paragraph'), textDecoration: block.checked ? 'line-through' : 'none', opacity: block.checked ? 0.55 : 1, flex: 1, height: 'auto', minHeight: 28 }}
-              placeholder="To-do item…"/>
-            <button className="block-del" onClick={() => deleteBlock(idx)} style={{ position: 'absolute', right: -28, top: 4, width: 22, height: 22, borderRadius: '50%', background: 'rgba(239,68,68,.1)', border: 'none', color: '#F87171', cursor: 'pointer', fontSize: 12, opacity: 0, transition: 'opacity .15s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+            <textarea ref={el=>blockRefs.current[block.id]=el} value={block.content} rows={1}
+              onChange={e=>updateBlock(block.id,{content:e.target.value})} onKeyDown={e=>handleKey(e,block,idx)}
+              style={{...bStyle('paragraph'),textDecoration:block.checked?'line-through':'none',opacity:block.checked?.55:1,flex:1,height:'auto',minHeight:28}} placeholder="To-do item…"/>
+            <button className="bdel" onClick={()=>deleteBlock(idx)} style={{ position:'absolute', right:-26, top:4, width:20, height:20, borderRadius:'50%', background:'rgba(239,68,68,.1)', border:'none', color:'#F87171', cursor:'pointer', opacity:0, transition:'opacity .15s' }}>×</button>
           </div>
         );
       }
 
-      const prefix = block.type === 'bullet' ? '•' : block.type === 'numbered' ? `${idx + 1}.` : null;
-
+      const prefix = block.type==='bullet'?'•':block.type==='numbered'?`${idx+1}.`:null;
       return (
-        <div key={block.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '2px 0', position: 'relative' }}
-          onMouseEnter={e => e.currentTarget.querySelector('.block-del')?.style && (e.currentTarget.querySelector('.block-del').style.opacity = '1')}
-          onMouseLeave={e => e.currentTarget.querySelector('.block-del')?.style && (e.currentTarget.querySelector('.block-del').style.opacity = '0')}>
-          {prefix && <span style={{ fontSize: 14, color: '#64748B', flexShrink: 0, marginTop: 4, minWidth: 20, fontWeight: 600 }}>{prefix}</span>}
-          <textarea
-            ref={el => blockRefs.current[block.id] = el}
-            value={block.content}
-            rows={Math.max(1, Math.ceil((block.content || '').length / 80))}
-            onChange={e => {
-              updateBlock(block.id, { content: e.target.value });
-              e.target.style.height = 'auto';
-              e.target.style.height = e.target.scrollHeight + 'px';
-            }}
-            onKeyDown={e => handleBlockKey(e, block, idx)}
-            placeholder={
-              block.type === 'heading1' ? 'Heading 1' :
-              block.type === 'heading2' ? 'Heading 2' :
-              block.type === 'heading3' ? 'Heading 3' :
-              block.type === 'code'     ? 'Code…' :
-              block.type === 'quote'    ? 'Quote…' :
-              block.type === 'bullet'   ? 'Bullet point…' :
-              block.type === 'numbered' ? 'Numbered item…' :
-              'Type something, or / for commands…'
-            }
-            style={{ ...blockStyle(block.type), flex: 1, height: 'auto', minHeight: block.type.startsWith('heading') ? 36 : 28 }}
-          />
-          <button className="block-del" onClick={() => deleteBlock(idx)} style={{ position: 'absolute', right: -28, top: 4, width: 22, height: 22, borderRadius: '50%', background: 'rgba(239,68,68,.1)', border: 'none', color: '#F87171', cursor: 'pointer', fontSize: 12, opacity: 0, transition: 'opacity .15s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+        <div key={block.id} style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'2px 0', position:'relative' }}
+          onMouseEnter={e=>e.currentTarget.querySelector('.bdel')&&(e.currentTarget.querySelector('.bdel').style.opacity='1')}
+          onMouseLeave={e=>e.currentTarget.querySelector('.bdel')&&(e.currentTarget.querySelector('.bdel').style.opacity='0')}>
+          {prefix&&<span style={{ fontSize:14, color:'#64748B', flexShrink:0, marginTop:4, minWidth:20, fontWeight:600 }}>{prefix}</span>}
+          <textarea ref={el=>blockRefs.current[block.id]=el} value={block.content}
+            rows={Math.max(1,Math.ceil((block.content||'').length/80))}
+            onChange={e=>{updateBlock(block.id,{content:e.target.value});e.target.style.height='auto';e.target.style.height=e.target.scrollHeight+'px';}}
+            onKeyDown={e=>handleKey(e,block,idx)}
+            placeholder={block.type==='heading1'?'Heading 1':block.type==='heading2'?'Heading 2':block.type==='heading3'?'Heading 3':block.type==='code'?'Code…':block.type==='quote'?'Quote…':block.type==='bullet'?'Bullet…':block.type==='numbered'?'Item…':'Type or / for commands…'}
+            style={{...bStyle(block.type),flex:1,height:'auto',minHeight:block.type.startsWith('heading')?36:28}}/>
+          <button className="bdel" onClick={()=>deleteBlock(idx)} style={{ position:'absolute', right:-26, top:4, width:20, height:20, borderRadius:'50%', background:'rgba(239,68,68,.1)', border:'none', color:'#F87171', cursor:'pointer', opacity:0, transition:'opacity .15s' }}>×</button>
         </div>
       );
     };
 
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff', overflowY: 'auto' }}>
-        {/* Page toolbar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px 10px 24px', borderBottom: '1px solid rgba(0,0,0,.07)', flexShrink: 0, background: '#fafafa', flexWrap: 'wrap' }}>
-          <button onClick={() => { setSelPage(null); setView('overview'); }} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: 13, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+      <div style={{ flex:1, display:'flex', flexDirection:'column', background:'#fff', overflowY:'auto' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 16px 10px 24px', borderBottom:'1px solid rgba(0,0,0,.07)', flexShrink:0, background:'#fafafa', flexWrap:'wrap' }}>
+          <button onClick={()=>{setSelPage(null);setView('overview');}} style={{ background:'none', border:'none', color:'#94A3B8', cursor:'pointer', fontSize:13, padding:0 }}>
             ← {curProject?.emoji} {curProject?.name}
           </button>
-          <span style={{ color: '#CBD5E1', fontSize: 13 }}>/</span>
-          <span style={{ fontSize: 13, color: '#374151', fontWeight: 600 }}>{page.emoji} {page.title}</span>
-          <div style={{ flex: 1 }}/>
-          {saving && <span style={{ fontSize: 11, color: '#94A3B8' }}>Saving…</span>}
-          {!saving && <span style={{ fontSize: 11, color: '#94A3B8' }}>Auto-saved</span>}
-          <button onClick={() => togglePin(page.id)} title={page.pinned ? 'Unpin' : 'Pin'} style={{ padding: '4px 10px', borderRadius: 7, background: page.pinned ? 'rgba(251,191,36,.12)' : 'transparent', border: `1px solid ${page.pinned ? 'rgba(251,191,36,.3)' : 'rgba(0,0,0,.1)'}`, color: page.pinned ? '#D97706' : '#94A3B8', cursor: 'pointer', fontSize: 12 }}>{page.pinned ? '📌 Pinned' : '📍 Pin'}</button>
-          <button onClick={() => setShowAI(s => !s)} style={{ padding: '4px 12px', borderRadius: 7, background: showAI ? 'rgba(99,102,241,.12)' : 'transparent', border: `1px solid ${showAI ? 'rgba(99,102,241,.3)' : 'rgba(0,0,0,.1)'}`, color: showAI ? '#6366F1' : '#94A3B8', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>✦ Ask AI</button>
-          <button onClick={() => deletePage(page.id)} style={{ padding: '4px 10px', borderRadius: 7, background: 'rgba(239,68,68,.06)', border: '1px solid rgba(239,68,68,.15)', color: '#EF4444', cursor: 'pointer', fontSize: 12 }}>🗑 Delete</button>
+          <span style={{ color:'#CBD5E1' }}>/</span>
+          <span style={{ fontSize:13, color:'#374151', fontWeight:600 }}>{page.emoji} {page.title}</span>
+          <div style={{ flex:1 }}/>
+          <span style={{ fontSize:11, color:'#94A3B8' }}>{saving?'Saving…':'Auto-saved'}</span>
+          <button onClick={()=>togglePin(page.id)} style={{ padding:'4px 10px', borderRadius:7, background:page.pinned?'rgba(251,191,36,.12)':'transparent', border:`1px solid ${page.pinned?'rgba(251,191,36,.3)':'rgba(0,0,0,.1)'}`, color:page.pinned?'#D97706':'#94A3B8', cursor:'pointer', fontSize:12 }}>{page.pinned?'📌 Pinned':'📍 Pin'}</button>
+          <button onClick={()=>setShowAI(s=>!s)} style={{ padding:'4px 12px', borderRadius:7, background:showAI?'rgba(99,102,241,.12)':'transparent', border:`1px solid ${showAI?'rgba(99,102,241,.3)':'rgba(0,0,0,.1)'}`, color:showAI?'#6366F1':'#94A3B8', cursor:'pointer', fontSize:12, fontWeight:600 }}>✦ Ask AI</button>
+          <button onClick={()=>deletePage(page.id)} style={{ padding:'4px 10px', borderRadius:7, background:'rgba(239,68,68,.06)', border:'1px solid rgba(239,68,68,.15)', color:'#EF4444', cursor:'pointer', fontSize:12 }}>🗑 Delete</button>
         </div>
 
-        <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-          {/* Editor */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '40px 60px', maxWidth: 780, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
-            {/* Title row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 32 }}>
-              <div style={{ position: 'relative' }}>
-                <div style={{ fontSize: 40, cursor: 'pointer', lineHeight: 1 }}>{localEmoji}</div>
-                <select value={localEmoji} onChange={e => setLocalEmoji(e.target.value)} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }}>
-                  {EMOJI_PRESETS.map(em => <option key={em} value={em}>{em}</option>)}
+        <div style={{ display:'flex', flex:1, minHeight:0 }}>
+          <div style={{ flex:1, overflowY:'auto', padding:'40px 60px', maxWidth:780, margin:'0 auto', width:'100%', boxSizing:'border-box' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:32 }}>
+              <div style={{ position:'relative' }}>
+                <div style={{ fontSize:40, cursor:'pointer', lineHeight:1 }}>{localEmoji}</div>
+                <select value={localEmoji} onChange={e=>setLocalEmoji(e.target.value)} style={{ position:'absolute', inset:0, opacity:0, cursor:'pointer', width:'100%' }}>
+                  {EMOJI_PRESETS.map(em=><option key={em} value={em}>{em}</option>)}
                 </select>
               </div>
-              <input value={localTitle} onChange={e => setLocalTitle(e.target.value)}
-                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 32, fontWeight: 800, color: '#111827', letterSpacing: '-.025em', fontFamily: 'Inter,sans-serif' }}
+              <input value={localTitle} onChange={e=>setLocalTitle(e.target.value)}
+                style={{ flex:1, background:'transparent', border:'none', outline:'none', fontSize:32, fontWeight:800, color:'#111827', letterSpacing:'-.025em', fontFamily:'Inter,sans-serif' }}
                 placeholder="Page title…"/>
             </div>
-
-            {/* Block editor hint */}
-            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 20, padding: '6px 10px', background: 'rgba(0,0,0,.03)', borderRadius: 7, display: 'inline-block' }}>
-              Type <code style={{ background: 'rgba(0,0,0,.06)', padding: '1px 5px', borderRadius: 3, fontFamily: 'monospace' }}>/h1</code> <code style={{ background: 'rgba(0,0,0,.06)', padding: '1px 5px', borderRadius: 3, fontFamily: 'monospace' }}>/bullet</code> <code style={{ background: 'rgba(0,0,0,.06)', padding: '1px 5px', borderRadius: 3, fontFamily: 'monospace' }}>/todo</code> <code style={{ background: 'rgba(0,0,0,.06)', padding: '1px 5px', borderRadius: 3, fontFamily: 'monospace' }}>/callout</code> <code style={{ background: 'rgba(0,0,0,.06)', padding: '1px 5px', borderRadius: 3, fontFamily: 'monospace' }}>/code</code> then Enter for block types
+            <div style={{ fontSize:11, color:'#9CA3AF', marginBottom:20, padding:'5px 10px', background:'rgba(0,0,0,.03)', borderRadius:7, display:'inline-block' }}>
+              Type <code style={{ background:'rgba(0,0,0,.06)', padding:'1px 5px', borderRadius:3 }}>/h1</code> <code style={{ background:'rgba(0,0,0,.06)', padding:'1px 5px', borderRadius:3 }}>/bullet</code> <code style={{ background:'rgba(0,0,0,.06)', padding:'1px 5px', borderRadius:3 }}>/todo</code> <code style={{ background:'rgba(0,0,0,.06)', padding:'1px 5px', borderRadius:3 }}>/callout</code> then Enter
             </div>
-
-            {/* Blocks */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, position: 'relative' }}>
+            <div style={{ display:'flex', flexDirection:'column', gap:2, position:'relative' }}>
               {blocks.map((block, idx) => renderBlock(block, idx))}
             </div>
-
-            {/* Add block button */}
-            <button onClick={() => insertBlock(blocks.length - 1)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0', color: '#9CA3AF', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, marginTop: 16 }}
-              onMouseEnter={e => e.currentTarget.style.color = '#6366F1'} onMouseLeave={e => e.currentTarget.style.color = '#9CA3AF'}>
-              <span style={{ width: 22, height: 22, borderRadius: '50%', border: '1.5px solid currentColor', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 300 }}>+</span>
+            <button onClick={()=>insertBlock(blocks.length-1)} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 0', color:'#9CA3AF', background:'none', border:'none', cursor:'pointer', fontSize:13, marginTop:16 }}
+              onMouseEnter={e=>e.currentTarget.style.color='#6366F1'} onMouseLeave={e=>e.currentTarget.style.color='#9CA3AF'}>
+              <span style={{ width:22, height:22, borderRadius:'50%', border:'1.5px solid currentColor', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:300 }}>+</span>
               Add block
             </button>
           </div>
 
-          {/* AI sidebar */}
+          {/* Per-page AI sidebar — also uses WikiAIPanel, stable component */}
           {showAI && (
-            <div style={{ width: 320, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,.07)', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
-              <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(0,0,0,.07)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z" fill="#A78BFA"/></svg>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Ask AI about this page</span>
-                <button onClick={() => setShowAI(false)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', fontSize: 18 }}>×</button>
+            <div style={{ width:320, flexShrink:0, borderLeft:'1px solid rgba(0,0,0,.07)', display:'flex', flexDirection:'column', background:'#fafafa', overflowY:'auto', padding:12 }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+                <span style={{ fontSize:13, fontWeight:700, color:'#374151' }}>✦ Ask AI</span>
+                <button onClick={()=>setShowAI(false)} style={{ background:'none', border:'none', color:'#9CA3AF', cursor:'pointer', fontSize:18 }}>×</button>
               </div>
-              <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {aiHistory.map((msg, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 7, flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
-                    {msg.role === 'assistant' && <span style={{ fontSize: 14, flexShrink: 0, marginTop: 2 }}>✦</span>}
-                    <div style={{ maxWidth: '88%', padding: '8px 11px', borderRadius: msg.role === 'user' ? '12px 12px 3px 12px' : '12px 12px 12px 3px', background: msg.role === 'user' ? '#6366F1' : '#fff', color: msg.role === 'user' ? '#fff' : '#374151', fontSize: 12, lineHeight: 1.6, border: msg.role === 'user' ? 'none' : '1px solid rgba(0,0,0,.08)', whiteSpace: 'pre-wrap' }}>{msg.text}</div>
-                  </div>
-                ))}
-                {aiLoading && <div style={{ display: 'flex', gap: 4, padding: '8px 10px', background: '#fff', borderRadius: '12px 12px 12px 3px', border: '1px solid rgba(0,0,0,.08)', width: 'fit-content' }}>{[0,1,2].map(i => <div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: '#818CF8', animation: `bounce .8s ease ${i*.15}s infinite` }}/>)}</div>}
-                <div ref={aiBottomRef}/>
-              </div>
-              {aiHistory.length === 0 && (
-                <div style={{ padding: '0 12px 10px', display: 'flex', flexDirection: 'column', gap: 5 }}>
-                  {['Summarize this page', 'What are the key steps?', 'What could be improved?', 'Turn this into action items'].map(q => (
-                    <button key={q} onClick={() => askWikiAI(q)} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(99,102,241,.2)', background: 'rgba(99,102,241,.04)', color: '#6366F1', cursor: 'pointer', fontSize: 11, textAlign: 'left' }}>{q}</button>
-                  ))}
-                </div>
-              )}
-              <div style={{ padding: '8px 12px', borderTop: '1px solid rgba(0,0,0,.07)', display: 'flex', gap: 6 }}>
-                <input value={aiQuery} onChange={e => setAiQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && askWikiAI(aiQuery)}
-                  placeholder="Ask about this page…"
-                  style={{ flex: 1, background: '#fff', border: '1px solid rgba(0,0,0,.1)', borderRadius: 8, padding: '7px 10px', fontSize: 12, outline: 'none', color: '#374151' }}/>
-                <button onClick={() => askWikiAI(aiQuery)} disabled={!aiQuery.trim() || aiLoading}
-                  style={{ width: 32, height: 32, borderRadius: 8, background: aiQuery.trim() ? '#6366F1' : 'transparent', border: aiQuery.trim() ? 'none' : '1px solid rgba(0,0,0,.1)', color: aiQuery.trim() ? '#fff' : '#9CA3AF', cursor: aiQuery.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>↑</button>
-              </div>
+              <WikiAIPanel projectId={selProject} projectName={curProject?.name} getProjectContext={getProjectContext}/>
             </div>
           )}
         </div>
@@ -3625,20 +3567,109 @@ Answer clearly and concisely. Reference specific page names or sections when rel
     );
   };
 
-  // ── Main render ───────────────────────────────────────────────────────────
+  const HomeView = () => (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:40, gap:20 }}>
+      <div style={{ fontSize:56 }}>📚</div>
+      <h2 style={{ fontSize:24, fontWeight:800, color:c.text, margin:0 }}>Project Wiki</h2>
+      <p style={{ color:c.mut, fontSize:14, textAlign:'center', maxWidth:380, lineHeight:1.7, margin:0 }}>SOPs, runbooks, decisions, onboarding docs — all in one place with AI search.</p>
+      <button onClick={()=>setView('newProject')} style={{ padding:'12px 28px', borderRadius:10, background:'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color:'#fff', border:'none', cursor:'pointer', fontSize:14, fontWeight:700 }}>+ Create your first project</button>
+    </div>
+  );
+
+  const NewProjectView = () => (
+    <div style={{ flex:1, overflowY:'auto', padding:40, display:'flex', justifyContent:'center' }}>
+      <div style={{ width:'100%', maxWidth:520 }}>
+        <button onClick={()=>setView(selProject?'overview':'home')} style={{ background:'none', border:'none', color:c.mut, cursor:'pointer', fontSize:13, marginBottom:24, padding:0 }}>← Back</button>
+        <h2 style={{ fontSize:20, fontWeight:800, color:c.text, marginBottom:6 }}>New project</h2>
+        <p style={{ color:c.mut, fontSize:13, marginBottom:28 }}>Projects group pages, SOPs, and docs together.</p>
+        <div style={{ display:'flex', gap:10, marginBottom:16 }}>
+          <div style={{ position:'relative' }}>
+            <div style={{ width:52, height:52, borderRadius:12, background:dark?'rgba(255,255,255,.06)':'rgba(99,102,241,.07)', border:`1.5px solid ${c.bord}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:28, cursor:'pointer' }}>{npEmoji}</div>
+            <select value={npEmoji} onChange={e=>setNpEmoji(e.target.value)} style={{ position:'absolute', inset:0, opacity:0, cursor:'pointer' }}>
+              {EMOJI_PRESETS.map(em=><option key={em} value={em}>{em}</option>)}
+            </select>
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:11, fontWeight:600, color:c.mut, textTransform:'uppercase', letterSpacing:'.07em', marginBottom:6 }}>Project name</div>
+            <input value={npName} onChange={e=>setNpName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&createProject()} placeholder="e.g. Mobile App, Q3 Sprint, Onboarding…" autoFocus
+              style={{ width:'100%', background:dark?'rgba(255,255,255,.06)':'rgba(255,255,255,.9)', border:`1.5px solid ${c.inpB}`, borderRadius:10, padding:'10px 14px', color:c.text, fontSize:14, outline:'none', boxSizing:'border-box' }}/>
+          </div>
+        </div>
+        <div style={{ marginBottom:16 }}>
+          <div style={{ fontSize:11, fontWeight:600, color:c.mut, textTransform:'uppercase', letterSpacing:'.07em', marginBottom:8 }}>Color</div>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            {COLOR_PRESETS.map(col=><button key={col} onClick={()=>setNpColor(col)} style={{ width:26, height:26, borderRadius:'50%', background:col, border:npColor===col?'3px solid #fff':'3px solid transparent', cursor:'pointer', boxShadow:npColor===col?`0 0 0 2px ${col}`:'none' }}/>)}
+          </div>
+        </div>
+        <div style={{ marginBottom:24 }}>
+          <div style={{ fontSize:11, fontWeight:600, color:c.mut, textTransform:'uppercase', letterSpacing:'.07em', marginBottom:6 }}>Description (optional)</div>
+          <textarea value={npDesc} onChange={e=>setNpDesc(e.target.value)} placeholder="What is this project about?" rows={3}
+            style={{ width:'100%', background:dark?'rgba(255,255,255,.06)':'rgba(255,255,255,.9)', border:`1.5px solid ${c.inpB}`, borderRadius:10, padding:'10px 14px', color:c.text, fontSize:13, outline:'none', boxSizing:'border-box', resize:'vertical', fontFamily:'inherit', lineHeight:1.6 }}/>
+        </div>
+        <button onClick={createProject} disabled={!npName.trim()} style={{ padding:'11px 28px', borderRadius:10, background:'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color:'#fff', border:'none', cursor:npName.trim()?'pointer':'not-allowed', fontSize:14, fontWeight:700, opacity:npName.trim()?1:.5 }}>Create project</button>
+      </div>
+    </div>
+  );
+
+  const NewPageView = () => (
+    <div style={{ flex:1, overflowY:'auto', padding:40, display:'flex', justifyContent:'center' }}>
+      <div style={{ width:'100%', maxWidth:480 }}>
+        <button onClick={()=>setView('overview')} style={{ background:'none', border:'none', color:c.mut, cursor:'pointer', fontSize:13, marginBottom:24, padding:0 }}>← Back</button>
+        <h2 style={{ fontSize:20, fontWeight:800, color:c.text, marginBottom:6 }}>New page</h2>
+        <p style={{ color:c.mut, fontSize:13, marginBottom:24 }}>in <strong>{curProject?.emoji} {curProject?.name}</strong></p>
+        <div style={{ display:'flex', gap:10, marginBottom:20 }}>
+          <div style={{ position:'relative' }}>
+            <div style={{ width:48, height:48, borderRadius:10, background:dark?'rgba(255,255,255,.06)':'rgba(99,102,241,.07)', border:`1.5px solid ${c.bord}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:26, cursor:'pointer' }}>{pgEmoji}</div>
+            <select value={pgEmoji} onChange={e=>setPgEmoji(e.target.value)} style={{ position:'absolute', inset:0, opacity:0, cursor:'pointer' }}>
+              {EMOJI_PRESETS.map(em=><option key={em} value={em}>{em}</option>)}
+            </select>
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:11, fontWeight:600, color:c.mut, textTransform:'uppercase', letterSpacing:'.07em', marginBottom:6 }}>Page title</div>
+            <input value={pgTitle} onChange={e=>setPgTitle(e.target.value)} onKeyDown={e=>e.key==='Enter'&&createPage()} placeholder="e.g. Deployment SOP, Onboarding Guide…" autoFocus
+              style={{ width:'100%', background:dark?'rgba(255,255,255,.06)':'rgba(255,255,255,.9)', border:`1.5px solid ${c.inpB}`, borderRadius:10, padding:'10px 14px', color:c.text, fontSize:14, outline:'none', boxSizing:'border-box' }}/>
+          </div>
+        </div>
+        <button onClick={createPage} disabled={!pgTitle.trim()} style={{ padding:'11px 24px', borderRadius:10, background:'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color:'#fff', border:'none', cursor:pgTitle.trim()?'pointer':'not-allowed', fontSize:14, fontWeight:700, opacity:pgTitle.trim()?1:.5 }}>Create page</button>
+      </div>
+    </div>
+  );
+
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 62px)', borderRadius: 14, overflow: 'hidden', border: `1px solid ${c.bord}`, background: dark ? c.bg : '#fff' }}>
+    <div style={{ display:'flex', height:'calc(100vh - 62px)', borderRadius:14, overflow:'hidden', border:`1px solid ${c.bord}`, background:dark?c.bg:'#fff' }}>
       <Sidebar/>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-        {view === 'home' && <HomeView/>}
-        {view === 'newProject' && <NewProjectView/>}
-        {view === 'newPage' && <NewPageView/>}
-        {view === 'overview' && curProject && <OverviewContent/>}
-        {view === 'page' && curPage && <PageEditor key={curPage.id} page={curPage}/>}
+      <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0, overflow:'hidden' }}>
+        {view==='home' && <HomeView/>}
+        {view==='newProject' && <NewProjectView/>}
+        {view==='newPage' && <NewPageView/>}
+        {view==='overview' && curProject && (
+          <WikiOverview
+            key={selProject}
+            curProject={curProject}
+            projPages={projPages}
+            pinnedPages={pinnedPages}
+            projectId={selProject}
+            projectFiles={projectFiles}
+            setProjectFiles={setProjectFiles}
+            saveWiki={saveWiki}
+            projects={projects}
+            pages={pages}
+            getProjectContext={getProjectContext}
+            onNewPage={() => setView('newPage')}
+            onDeleteProject={() => deleteProject(selProject)}
+            onOpenPage={(id) => { setSelPage(id); setView('page'); }}
+            onTogglePin={togglePin}
+            onDeletePage={deletePage}
+            dark={dark}
+            c={c}
+          />
+        )}
+        {view==='page' && curPage && <PageEditor key={curPage.id} page={curPage}/>}
       </div>
     </div>
   );
 }
+
 
 // ─── BRAINSTORM SPACE ─────────────────────────────────────────────────────────
 // Full Miro-like infinite canvas. Personal + Shared modes. Auto-saved.
