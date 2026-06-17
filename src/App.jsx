@@ -2294,6 +2294,7 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
     {id:'notes',   l:'Meeting notes', ic:'≡'},
     {id:'chat',    l:'Team chat',     ic:'◌'},
     {id:'cal',     l:'Calendar',      ic:'⊟'},
+    {id:'wiki',    l:'Project Wiki',  ic:'📚'},
     {id:'brain',   l:'Brainstorm',    ic:'⬡'},
     {id:'ai',      l:'AI assistant',  ic:'◉'},
   ];
@@ -2363,6 +2364,7 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
         {activeTab==='chat'&&<RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme}/>}
         {activeTab==='cal'&&<CalendarPanel team={null} session={session} members={members}/>}
         {activeTab==='brain'&&<BrainstormSpace team={null} session={session} members={members}/>}
+        {activeTab==='wiki'&&<ProjectWiki team={null} session={session} members={members}/>}
         {activeTab==='ai'&&<AIAssistant tasks={tasks} members={members} history={[]} session={session} myTasks={mine} teamName="Team"/>}
 
         {/* ── SELF TASKS (personal, not team) ── */}
@@ -2690,6 +2692,802 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
       )}
 
       {/* Edit designation modal */}
+    </div>
+  );
+}
+
+
+// ─── PROJECT WIKI ─────────────────────────────────────────────────────────────
+// Notion/Confluence-like per-project knowledge base.
+// Pages, SOPs, rich blocks, AI Q&A from content, project overview.
+// Fully localStorage-persisted, auto-saved, free (Gemini AI).
+
+// ── Block types ──────────────────────────────────────────────────────────────
+// heading1, heading2, heading3, paragraph, bullet, numbered, todo,
+// callout, code, divider, table, image-url, quote
+
+function ProjectWiki({ team, session, members = [] }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const teamId = team?.id || 'demo';
+  const WIKI_KEY = `ss-wiki-${teamId}`;
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  const [projects, setProjects] = useState([]);           // [{id,name,emoji,color,desc,createdAt}]
+  const [pages, setPages]       = useState([]);           // [{id,projectId,title,emoji,blocks,updatedAt,pinned}]
+  const [selProject, setSelProject] = useState(null);     // project id
+  const [selPage, setSelPage]   = useState(null);         // page id
+  const [view, setView]         = useState('home');       // home | overview | page | newProject | newPage
+  const [sideCollapsed, setSideCollapsed] = useState(false);
+
+  // AI
+  const [aiQuery, setAiQuery]   = useState('');
+  const [aiAnswer, setAiAnswer] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiHistory, setAiHistory] = useState([]);
+  const aiBottomRef = useRef();
+
+  // New project form
+  const [npName, setNpName]     = useState('');
+  const [npEmoji, setNpEmoji]   = useState('📁');
+  const [npColor, setNpColor]   = useState('#6366F1');
+  const [npDesc, setNpDesc]     = useState('');
+
+  // New page form
+  const [pgTitle, setPgTitle]   = useState('');
+  const [pgEmoji, setPgEmoji]   = useState('📄');
+
+  // Search
+  const [search, setSearch]     = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+
+  // Page overview stats
+  const [saving, setSaving]     = useState(false);
+
+  const EMOJI_PRESETS = ['📁','🚀','⚡','🎯','🔥','💡','🏗️','🎨','🔬','📱','📊','🔧','📋','🌟','🛡️','🤖','💬','📅','🔑','🌐'];
+  const COLOR_PRESETS = ['#6366F1','#34D399','#F87171','#FBBF24','#60A5FA','#F472B6','#A78BFA','#14B8A6','#F97316','#8B5CF6'];
+
+  // ── Load ──────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(WIKI_KEY);
+      if (raw) {
+        const d = JSON.parse(raw);
+        setProjects(d.projects || []);
+        setPages(d.pages || []);
+        if (d.projects?.length) setSelProject(d.projects[0].id);
+      } else {
+        // Seed demo
+        const demoProject = { id: 'p1', name: 'Getting Started', emoji: '🚀', color: '#6366F1', desc: 'Learn how to use StandSync Wiki', createdAt: Date.now() };
+        const demoPage = {
+          id: 'pg1', projectId: 'p1', title: 'Welcome to Project Wiki', emoji: '👋', pinned: true, updatedAt: Date.now(),
+          blocks: [
+            { id: 'b1', type: 'heading1', content: 'Welcome to Project Wiki 👋' },
+            { id: 'b2', type: 'callout', content: 'This is your team knowledge base. Create SOPs, docs, and notes — all searchable by AI.', calloutType: 'info' },
+            { id: 'b3', type: 'heading2', content: 'What you can do' },
+            { id: 'b4', type: 'bullet', content: 'Create projects for each product or workstream' },
+            { id: 'b5', type: 'bullet', content: 'Add pages for SOPs, onboarding docs, runbooks, decisions' },
+            { id: 'b6', type: 'bullet', content: 'Ask the AI anything about your project docs' },
+            { id: 'b7', type: 'bullet', content: 'Pin important pages to the top' },
+            { id: 'b8', type: 'heading2', content: 'Keyboard shortcuts' },
+            { id: 'b9', type: 'numbered', content: '/h1  /h2  /h3 — Headings' },
+            { id: 'b10', type: 'numbered', content: '/bullet  /num  /todo — Lists' },
+            { id: 'b11', type: 'numbered', content: '/code  /quote  /callout  /divider — Blocks' },
+            { id: 'b12', type: 'numbered', content: 'Enter — new block   Backspace on empty — delete block' },
+            { id: 'b13', type: 'divider', content: '' },
+            { id: 'b14', type: 'paragraph', content: 'Use the AI button (✦ Ask AI) to ask questions about anything in this project.' },
+          ]
+        };
+        const initP = [demoProject], initPg = [demoPage];
+        setProjects(initP); setPages(initPg); setSelProject('p1');
+        saveWiki(initP, initPg);
+      }
+    } catch(e) {}
+  }, [WIKI_KEY]);
+
+  // ── Save ──────────────────────────────────────────────────────────────────
+  const saveWiki = useCallback((p, pg) => {
+    try { localStorage.setItem(WIKI_KEY, JSON.stringify({ projects: p, pages: pg, savedAt: Date.now() })); }
+    catch(e) {}
+  }, [WIKI_KEY]);
+
+  const autoSave = useCallback((p, pg) => {
+    setSaving(true);
+    saveWiki(p, pg);
+    setTimeout(() => setSaving(false), 800);
+  }, [saveWiki]);
+
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const curProject = projects.find(p => p.id === selProject);
+  const projPages  = pages.filter(p => p.projectId === selProject);
+  const curPage    = pages.find(p => p.id === selPage);
+  const pinnedPages = projPages.filter(p => p.pinned);
+  const recentPages = [...projPages].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 5);
+
+  const searchResults = search.trim().length > 1
+    ? pages.filter(pg => {
+        const q = search.toLowerCase();
+        if (pg.title.toLowerCase().includes(q)) return true;
+        return pg.blocks?.some(b => b.content?.toLowerCase().includes(q));
+      }).slice(0, 8)
+    : [];
+
+  // ── All text from project pages (for AI context) ───────────────────────
+  const getProjectContext = useCallback((projectId) => {
+    const pgs = pages.filter(p => p.projectId === projectId);
+    return pgs.map(pg => {
+      const text = pg.blocks?.map(b => b.content || '').join('\n') || '';
+      return `## ${pg.emoji} ${pg.title}\n${text}`;
+    }).join('\n\n---\n\n');
+  }, [pages]);
+
+  // ── AI Ask ────────────────────────────────────────────────────────────────
+  const askWikiAI = async (query) => {
+    if (!query.trim() || aiLoading) return;
+    const userMsg = { role: 'user', text: query };
+    setAiHistory(h => [...h, userMsg]);
+    setAiQuery('');
+    setAiLoading(true);
+
+    try {
+      const ctx = getProjectContext(selProject);
+      const prompt = `You are a helpful project assistant for "${curProject?.name || 'this project'}".
+Below is the complete project documentation and SOPs:
+
+${ctx || 'No documentation added yet.'}
+
+---
+
+The user asks: "${query}"
+
+Answer clearly and concisely. Reference specific page names or sections when relevant. If the answer is not in the documentation, say so and offer general guidance. Format with bullet points when listing multiple items.`;
+
+      const reply = await askAI(prompt, { teamName: curProject?.name || 'Project' });
+      const assistantMsg = { role: 'assistant', text: reply };
+      setAiHistory(h => [...h, assistantMsg]);
+    } catch(e) {
+      setAiHistory(h => [...h, { role: 'assistant', text: 'Sorry, could not reach AI. Check your REACT_APP_GEMINI_KEY in Vercel.' }]);
+    }
+    setAiLoading(false);
+  };
+
+  useEffect(() => { aiBottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [aiHistory, aiLoading]);
+
+  // ── Project actions ───────────────────────────────────────────────────────
+  const createProject = () => {
+    if (!npName.trim()) return;
+    const p = { id: 'p' + Date.now(), name: npName.trim(), emoji: npEmoji, color: npColor, desc: npDesc.trim(), createdAt: Date.now() };
+    const np = [...projects, p];
+    setProjects(np); setSelProject(p.id); setView('overview');
+    setNpName(''); setNpDesc(''); setNpEmoji('📁'); setNpColor('#6366F1');
+    autoSave(np, pages);
+  };
+
+  const deleteProject = (id) => {
+    if (!window.confirm('Delete this project and all its pages?')) return;
+    const np = projects.filter(p => p.id !== id);
+    const npg = pages.filter(p => p.projectId !== id);
+    setProjects(np); setPages(npg);
+    setSelProject(np[0]?.id || null);
+    setView(np.length ? 'overview' : 'home');
+    autoSave(np, npg);
+  };
+
+  // ── Page actions ──────────────────────────────────────────────────────────
+  const createPage = () => {
+    if (!pgTitle.trim() || !selProject) return;
+    const pg = {
+      id: 'pg' + Date.now(), projectId: selProject,
+      title: pgTitle.trim(), emoji: pgEmoji, pinned: false,
+      updatedAt: Date.now(),
+      blocks: [{ id: 'b' + Date.now(), type: 'heading1', content: pgTitle.trim() }, { id: 'b' + (Date.now()+1), type: 'paragraph', content: '' }]
+    };
+    const npg = [...pages, pg];
+    setPages(npg); setSelPage(pg.id); setView('page');
+    setPgTitle(''); setPgEmoji('📄');
+    autoSave(projects, npg);
+  };
+
+  const deletePage = (id) => {
+    if (!window.confirm('Delete this page?')) return;
+    const npg = pages.filter(p => p.id !== id);
+    setPages(npg);
+    setSelPage(null); setView('overview');
+    autoSave(projects, npg);
+  };
+
+  const togglePin = (id) => {
+    const npg = pages.map(p => p.id === id ? { ...p, pinned: !p.pinned } : p);
+    setPages(npg); autoSave(projects, npg);
+  };
+
+  const updatePageBlocks = useCallback((pageId, blocks) => {
+    setPages(pgs => {
+      const npg = pgs.map(p => p.id === pageId ? { ...p, blocks, updatedAt: Date.now() } : p);
+      saveWiki(projects, npg);
+      return npg;
+    });
+  }, [projects, saveWiki]);
+
+  const updatePageMeta = (pageId, meta) => {
+    const npg = pages.map(p => p.id === pageId ? { ...p, ...meta, updatedAt: Date.now() } : p);
+    setPages(npg); autoSave(projects, npg);
+  };
+
+  // ── Sidebar ───────────────────────────────────────────────────────────────
+  const Sidebar = () => (
+    <div style={{ width: sideCollapsed ? 44 : 240, flexShrink: 0, background: dark ? 'rgba(8,6,22,.97)' : '#F8F8FC', borderRight: `1px solid ${c.bord}`, display: 'flex', flexDirection: 'column', transition: 'width .2s', overflow: 'hidden' }}>
+      {/* Collapse toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: sideCollapsed ? 'center' : 'space-between', padding: sideCollapsed ? '10px 0' : '10px 12px', borderBottom: `1px solid ${c.bord}`, flexShrink: 0 }}>
+        {!sideCollapsed && <span style={{ fontSize: 12, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.08em' }}>Projects</span>}
+        <button onClick={() => setSideCollapsed(s => !s)} style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${c.bord}`, background: 'transparent', color: c.mut, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>
+          {sideCollapsed ? '→' : '←'}
+        </button>
+      </div>
+
+      {!sideCollapsed && (
+        <>
+          {/* Search */}
+          <div style={{ padding: '8px 10px', borderBottom: `1px solid ${c.bord}`, flexShrink: 0 }}>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍  Search docs..." style={{ width: '100%', background: dark ? 'rgba(255,255,255,.06)' : 'rgba(99,102,241,.07)', border: `1px solid ${c.bord}`, borderRadius: 8, padding: '6px 10px', color: c.text, fontSize: 12, outline: 'none', boxSizing: 'border-box' }}/>
+            {search && searchResults.length > 0 && (
+              <div style={{ position: 'absolute', zIndex: 100, width: 220, background: dark ? '#12103A' : '#fff', border: `1px solid ${c.bord}`, borderRadius: 10, marginTop: 4, boxShadow: '0 8px 24px rgba(0,0,0,.2)', maxHeight: 240, overflowY: 'auto' }}>
+                {searchResults.map(pg => {
+                  const proj = projects.find(p => p.id === pg.projectId);
+                  return (
+                    <div key={pg.id} onClick={() => { setSelProject(pg.projectId); setSelPage(pg.id); setView('page'); setSearch(''); }} style={{ padding: '9px 12px', cursor: 'pointer', borderBottom: `1px solid ${c.bord}` }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,102,241,.08)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: c.text }}>{pg.emoji} {pg.title}</div>
+                      <div style={{ fontSize: 10, color: c.mut }}>{proj?.emoji} {proj?.name}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: '8px 6px' }}>
+            {/* Project list */}
+            {projects.map(proj => (
+              <div key={proj.id}>
+                <div onClick={() => { setSelProject(proj.id); setView('overview'); setSelPage(null); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 8px', borderRadius: 8, cursor: 'pointer', background: selProject === proj.id ? (dark ? 'rgba(99,102,241,.18)' : 'rgba(99,102,241,.12)') : 'transparent', marginBottom: 2, transition: 'background .12s' }}
+                  onMouseEnter={e => { if (selProject !== proj.id) e.currentTarget.style.background = dark ? 'rgba(255,255,255,.05)' : 'rgba(99,102,241,.06)'; }}
+                  onMouseLeave={e => { if (selProject !== proj.id) e.currentTarget.style.background = 'transparent'; }}>
+                  <span style={{ fontSize: 15, flexShrink: 0 }}>{proj.emoji}</span>
+                  <span style={{ fontSize: 13, fontWeight: selProject === proj.id ? 700 : 500, color: selProject === proj.id ? '#818CF8' : c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{proj.name}</span>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: proj.color, flexShrink: 0, opacity: 0.7 }}/>
+                </div>
+                {/* Pages under selected project */}
+                {selProject === proj.id && (
+                  <div style={{ paddingLeft: 16, marginBottom: 4 }}>
+                    {pages.filter(p => p.projectId === proj.id).map(pg => (
+                      <div key={pg.id} onClick={() => { setSelPage(pg.id); setView('page'); }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', borderRadius: 7, cursor: 'pointer', background: selPage === pg.id ? (dark ? 'rgba(99,102,241,.14)' : 'rgba(99,102,241,.09)') : 'transparent', marginBottom: 1, transition: 'background .1s' }}
+                        onMouseEnter={e => { if (selPage !== pg.id) e.currentTarget.style.background = dark ? 'rgba(255,255,255,.04)' : 'rgba(99,102,241,.05)'; }}
+                        onMouseLeave={e => { if (selPage !== pg.id) e.currentTarget.style.background = 'transparent'; }}>
+                        <span style={{ fontSize: 12 }}>{pg.pinned ? '📌' : pg.emoji}</span>
+                        <span style={{ fontSize: 12, color: selPage === pg.id ? '#818CF8' : c.sub, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: selPage === pg.id ? 600 : 400 }}>{pg.title}</span>
+                      </div>
+                    ))}
+                    {/* New page button */}
+                    <button onClick={() => setView('newPage')} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 8px', width: '100%', background: 'transparent', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 11, borderRadius: 6, marginTop: 2 }}
+                      onMouseEnter={e => e.currentTarget.style.background = dark ? 'rgba(255,255,255,.04)' : 'rgba(99,102,241,.06)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <span style={{ fontSize: 14, fontWeight: 700 }}>+</span> New page
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* New project button */}
+            <button onClick={() => setView('newProject')} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', width: '100%', background: 'transparent', border: `1px dashed ${c.bord}`, borderRadius: 9, color: c.mut, cursor: 'pointer', fontSize: 12, marginTop: 10 }}>
+              <span style={{ fontSize: 16, fontWeight: 700 }}>+</span> New project
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Collapsed: just project dots */}
+      {sideCollapsed && (
+        <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+          {projects.map(proj => (
+            <button key={proj.id} onClick={() => { setSelProject(proj.id); setView('overview'); setSideCollapsed(false); }} title={proj.name}
+              style={{ width: 32, height: 32, borderRadius: 8, background: selProject === proj.id ? 'rgba(99,102,241,.2)' : 'transparent', border: selProject === proj.id ? '1.5px solid #818CF8' : '1.5px solid transparent', cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {proj.emoji}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // ── Main content area ─────────────────────────────────────────────────────
+
+  // HOME (no project selected)
+  const HomeView = () => (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, gap: 20 }}>
+      <div style={{ fontSize: 56 }}>📚</div>
+      <h2 style={{ fontSize: 24, fontWeight: 800, color: c.text, margin: 0, letterSpacing: '-.02em' }}>Project Wiki</h2>
+      <p style={{ color: c.mut, fontSize: 14, textAlign: 'center', maxWidth: 380, lineHeight: 1.7, margin: 0 }}>Your team knowledge base. SOPs, runbooks, decisions, onboarding docs — all in one place with AI search.</p>
+      <button onClick={() => setView('newProject')} style={{ padding: '12px 28px', borderRadius: 10, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>+ Create your first project</button>
+    </div>
+  );
+
+  // NEW PROJECT
+  const NewProjectView = () => (
+    <div style={{ flex: 1, overflowY: 'auto', padding: 40, display: 'flex', justifyContent: 'center' }}>
+      <div style={{ width: '100%', maxWidth: 520 }}>
+        <button onClick={() => setView(selProject ? 'overview' : 'home')} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 13, marginBottom: 24, padding: 0 }}>← Back</button>
+        <h2 style={{ fontSize: 20, fontWeight: 800, color: c.text, marginBottom: 6 }}>New project</h2>
+        <p style={{ color: c.mut, fontSize: 13, marginBottom: 28 }}>Projects group related pages, SOPs, and docs together.</p>
+
+        {/* Emoji + Name */}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+          <div style={{ position: 'relative' }}>
+            <div style={{ width: 52, height: 52, borderRadius: 12, background: dark ? 'rgba(255,255,255,.06)' : 'rgba(99,102,241,.07)', border: `1.5px solid ${c.bord}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, cursor: 'pointer' }}
+              onClick={() => document.getElementById('npe').click()}>
+              {npEmoji}
+            </div>
+            <select id="npe" value={npEmoji} onChange={e => setNpEmoji(e.target.value)} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }}>
+              {EMOJI_PRESETS.map(em => <option key={em} value={em}>{em}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>Project name</div>
+            <input value={npName} onChange={e => setNpName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createProject()} placeholder="e.g. Mobile App, Q3 Sprint, Onboarding…" autoFocus
+              style={{ width: '100%', background: dark ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.9)', border: `1.5px solid ${c.inpB}`, borderRadius: 10, padding: '10px 14px', color: c.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}/>
+          </div>
+        </div>
+
+        {/* Color */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 8 }}>Color</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {COLOR_PRESETS.map(col => <button key={col} onClick={() => setNpColor(col)} style={{ width: 26, height: 26, borderRadius: '50%', background: col, border: npColor === col ? '3px solid #fff' : '3px solid transparent', cursor: 'pointer', boxShadow: npColor === col ? `0 0 0 2px ${col}` : 'none', transition: 'all .12s' }}/>)}
+          </div>
+        </div>
+
+        {/* Description */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>Description (optional)</div>
+          <textarea value={npDesc} onChange={e => setNpDesc(e.target.value)} placeholder="What is this project about?" rows={3}
+            style={{ width: '100%', background: dark ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.9)', border: `1.5px solid ${c.inpB}`, borderRadius: 10, padding: '10px 14px', color: c.text, fontSize: 13, outline: 'none', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }}/>
+        </div>
+
+        <button onClick={createProject} disabled={!npName.trim()} style={{ padding: '11px 28px', borderRadius: 10, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: npName.trim() ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: 700, opacity: npName.trim() ? 1 : 0.5 }}>Create project</button>
+      </div>
+    </div>
+  );
+
+  // NEW PAGE
+  const NewPageView = () => (
+    <div style={{ flex: 1, overflowY: 'auto', padding: 40, display: 'flex', justifyContent: 'center' }}>
+      <div style={{ width: '100%', maxWidth: 480 }}>
+        <button onClick={() => setView('overview')} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 13, marginBottom: 24, padding: 0 }}>← Back</button>
+        <h2 style={{ fontSize: 20, fontWeight: 800, color: c.text, marginBottom: 6 }}>New page</h2>
+        <p style={{ color: c.mut, fontSize: 13, marginBottom: 24 }}>in <strong>{curProject?.emoji} {curProject?.name}</strong></p>
+
+        <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+          <div style={{ position: 'relative' }}>
+            <div style={{ width: 48, height: 48, borderRadius: 10, background: dark ? 'rgba(255,255,255,.06)' : 'rgba(99,102,241,.07)', border: `1.5px solid ${c.bord}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, cursor: 'pointer' }}>
+              {pgEmoji}
+            </div>
+            <select value={pgEmoji} onChange={e => setPgEmoji(e.target.value)} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }}>
+              {EMOJI_PRESETS.map(em => <option key={em} value={em}>{em}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>Page title</div>
+            <input value={pgTitle} onChange={e => setPgTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && createPage()} placeholder="e.g. Deployment SOP, Onboarding Guide…" autoFocus
+              style={{ width: '100%', background: dark ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.9)', border: `1.5px solid ${c.inpB}`, borderRadius: 10, padding: '10px 14px', color: c.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}/>
+          </div>
+        </div>
+
+        <button onClick={createPage} disabled={!pgTitle.trim()} style={{ padding: '11px 24px', borderRadius: 10, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: pgTitle.trim() ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: 700, opacity: pgTitle.trim() ? 1 : 0.5 }}>Create page</button>
+      </div>
+    </div>
+  );
+
+  // PROJECT OVERVIEW
+  const OverviewContent = () => {
+    const totalPages = projPages.length;
+    const lastEdited = projPages.sort((a,b) => b.updatedAt - a.updatedAt)[0];
+    const wordCount = projPages.reduce((acc, pg) => acc + (pg.blocks?.map(b => b.content || '').join(' ').split(/\s+/).filter(Boolean).length || 0), 0);
+
+    return (
+      <div style={{ flex: 1, overflowY: 'auto', padding: '32px 40px', maxWidth: 860, margin: '0 auto', width: '100%' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 28 }}>
+          <div style={{ width: 56, height: 56, borderRadius: 14, background: curProject?.color + '22', border: `2px solid ${curProject?.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, flexShrink: 0 }}>{curProject?.emoji}</div>
+          <div style={{ flex: 1 }}>
+            <h1 style={{ fontSize: 26, fontWeight: 800, color: c.text, margin: 0, letterSpacing: '-.025em' }}>{curProject?.name}</h1>
+            {curProject?.desc && <p style={{ color: c.mut, fontSize: 14, marginTop: 5, marginBottom: 0, lineHeight: 1.6 }}>{curProject.desc}</p>}
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <button onClick={() => setView('newPage')} style={{ padding: '8px 16px', borderRadius: 9, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>+ New page</button>
+            <button onClick={() => deleteProject(selProject)} style={{ padding: '8px 14px', borderRadius: 9, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', color: '#F87171', cursor: 'pointer', fontSize: 13 }}>🗑</button>
+          </div>
+        </div>
+
+        {/* Stats row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 28 }}>
+          {[
+            { label: 'Pages', value: totalPages, icon: '📄' },
+            { label: 'Words documented', value: wordCount.toLocaleString(), icon: '📝' },
+            { label: 'Last edited', value: lastEdited ? new Date(lastEdited.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—', icon: '🕐' },
+          ].map(s => (
+            <div key={s.label} style={{ padding: '16px 18px', borderRadius: 12, background: dark ? 'rgba(255,255,255,.04)' : 'rgba(255,255,255,.8)', border: `1px solid ${c.bord}` }}>
+              <div style={{ fontSize: 22, marginBottom: 6 }}>{s.icon}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: c.text, letterSpacing: '-.02em' }}>{s.value}</div>
+              <div style={{ fontSize: 11, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginTop: 2 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* AI Q&A panel */}
+        <div style={{ marginBottom: 28, borderRadius: 14, border: `1px solid rgba(124,110,245,.25)`, background: dark ? 'rgba(99,102,241,.06)' : 'rgba(99,102,241,.04)', overflow: 'hidden' }}>
+          <div style={{ padding: '14px 18px', borderBottom: `1px solid rgba(124,110,245,.15)`, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z" fill="#A78BFA"/></svg>
+            <span style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Ask AI about this project</span>
+            <span style={{ fontSize: 11, color: '#818CF8', background: 'rgba(99,102,241,.1)', padding: '2px 8px', borderRadius: 20 }}>Powered by Gemini · Free</span>
+            {!process.env.REACT_APP_GEMINI_KEY && <span style={{ fontSize: 11, color: '#F87171', marginLeft: 'auto' }}>⚠️ Add REACT_APP_GEMINI_KEY to Vercel</span>}
+          </div>
+
+          {/* Chat messages */}
+          {aiHistory.length > 0 && (
+            <div style={{ maxHeight: 320, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {aiHistory.map((msg, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, flexDirection: msg.role === 'user' ? 'row-reverse' : 'row', alignItems: 'flex-start' }}>
+                  {msg.role === 'assistant' && (
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(124,110,245,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 14 }}>✦</div>
+                  )}
+                  <div style={{ maxWidth: '82%', padding: '9px 13px', borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px', background: msg.role === 'user' ? 'linear-gradient(135deg,#6B5FE4,#9B8AFB)' : (dark ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.9)'), color: msg.role === 'user' ? '#fff' : c.text, fontSize: 13, lineHeight: 1.6, border: msg.role === 'user' ? 'none' : `1px solid ${c.bord}`, whiteSpace: 'pre-wrap' }}>
+                    {msg.text}
+                  </div>
+                </div>
+              ))}
+              {aiLoading && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(124,110,245,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>✦</div>
+                  <div style={{ padding: '10px 14px', background: dark ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.9)', borderRadius: '14px 14px 14px 4px', border: `1px solid ${c.bord}`, display: 'flex', gap: 4 }}>
+                    {[0,1,2].map(i => <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#818CF8', animation: `bounce .8s ease ${i*.15}s infinite` }}/>)}
+                  </div>
+                </div>
+              )}
+              <div ref={aiBottomRef}/>
+            </div>
+          )}
+
+          {/* Input */}
+          <div style={{ padding: '10px 14px', display: 'flex', gap: 8, borderTop: aiHistory.length ? `1px solid rgba(124,110,245,.1)` : 'none' }}>
+            <input value={aiQuery} onChange={e => setAiQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && askWikiAI(aiQuery)}
+              placeholder="Ask anything about this project… e.g. 'What is the deployment process?'"
+              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: c.text, fontSize: 13, lineHeight: 1.5 }}/>
+            <button onClick={() => askWikiAI(aiQuery)} disabled={!aiQuery.trim() || aiLoading}
+              style={{ padding: '7px 16px', borderRadius: 9, background: aiQuery.trim() ? 'linear-gradient(135deg,#6B5FE4,#9B8AFB)' : 'transparent', border: aiQuery.trim() ? 'none' : `1px solid ${c.bord}`, color: aiQuery.trim() ? '#fff' : c.mut, cursor: aiQuery.trim() ? 'pointer' : 'default', fontSize: 13, fontWeight: 600, flexShrink: 0, transition: 'all .15s' }}>
+              {aiLoading ? '…' : '✦ Ask'}
+            </button>
+          </div>
+
+          {/* Quick prompts */}
+          {aiHistory.length === 0 && (
+            <div style={{ padding: '0 14px 12px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[
+                'Summarize this project',
+                'What SOPs are documented?',
+                'What are the key processes?',
+                'What is missing from the docs?',
+              ].map(q => (
+                <button key={q} onClick={() => askWikiAI(q)} style={{ fontSize: 11, padding: '4px 11px', borderRadius: 20, border: `1px solid rgba(124,110,245,.25)`, background: 'rgba(99,102,241,.07)', color: '#818CF8', cursor: 'pointer', transition: 'all .12s' }}>{q}</button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Pinned pages */}
+        {pinnedPages.length > 0 && (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>📌 Pinned</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px,1fr))', gap: 10 }}>
+              {pinnedPages.map(pg => (
+                <div key={pg.id} onClick={() => { setSelPage(pg.id); setView('page'); }} style={{ padding: '14px 16px', borderRadius: 12, background: dark ? 'rgba(255,255,255,.05)' : 'rgba(255,255,255,.8)', border: `1px solid ${c.bord}`, cursor: 'pointer', transition: 'all .15s' }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = '#818CF8'} onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
+                  <div style={{ fontSize: 22, marginBottom: 6 }}>{pg.emoji}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 4 }}>{pg.title}</div>
+                  <div style={{ fontSize: 11, color: c.mut }}>{new Date(pg.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* All pages */}
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>All pages ({projPages.length})</div>
+          {projPages.length === 0 ? (
+            <div style={{ padding: '32px', textAlign: 'center', borderRadius: 12, border: `1.5px dashed ${c.bord}` }}>
+              <div style={{ fontSize: 36, marginBottom: 10 }}>📄</div>
+              <div style={{ color: c.mut, fontSize: 14, marginBottom: 14 }}>No pages yet</div>
+              <button onClick={() => setView('newPage')} style={{ padding: '9px 20px', borderRadius: 9, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>+ Create first page</button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {projPages.map(pg => (
+                <div key={pg.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', transition: 'background .12s', border: '1px solid transparent' }}
+                  onClick={() => { setSelPage(pg.id); setView('page'); }}
+                  onMouseEnter={e => { e.currentTarget.style.background = dark ? 'rgba(255,255,255,.04)' : 'rgba(99,102,241,.05)'; e.currentTarget.style.borderColor = c.bord; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; }}>
+                  <span style={{ fontSize: 18, flexShrink: 0 }}>{pg.emoji}</span>
+                  <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: c.text }}>{pg.title}</span>
+                  <span style={{ fontSize: 11, color: c.mut }}>{new Date(pg.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                  <span style={{ fontSize: 11, color: pg.pinned ? '#FBBF24' : c.mut, cursor: 'pointer' }} onClick={e => { e.stopPropagation(); togglePin(pg.id); }} title={pg.pinned ? 'Unpin' : 'Pin'}>{pg.pinned ? '📌' : '📍'}</span>
+                  <span style={{ fontSize: 11, color: '#F87171', cursor: 'pointer', opacity: 0.6 }} onClick={e => { e.stopPropagation(); deletePage(pg.id); }} title="Delete">🗑</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ── Page editor ───────────────────────────────────────────────────────────
+  const PageEditor = ({ page }) => {
+    const [blocks, setBlocks] = useState(() => page.blocks || []);
+    const [localTitle, setLocalTitle] = useState(page.title);
+    const [localEmoji, setLocalEmoji] = useState(page.emoji);
+    const [showAI, setShowAI] = useState(false);
+    const blockRefs = useRef({});
+    const nextBlockId = useRef(Date.now());
+
+    // Sync blocks up on change (debounced)
+    useEffect(() => {
+      const t = setTimeout(() => {
+        updatePageBlocks(page.id, blocks);
+        if (localTitle !== page.title || localEmoji !== page.emoji) {
+          updatePageMeta(page.id, { title: localTitle, emoji: localEmoji });
+        }
+      }, 600);
+      return () => clearTimeout(t);
+    }, [blocks, localTitle, localEmoji]);
+
+    const insertBlock = (afterIdx, type = 'paragraph', content = '') => {
+      const id = 'b' + (nextBlockId.current++);
+      const nb = { id, type, content };
+      const newBlocks = [...blocks.slice(0, afterIdx + 1), nb, ...blocks.slice(afterIdx + 1)];
+      setBlocks(newBlocks);
+      setTimeout(() => blockRefs.current[id]?.focus(), 30);
+    };
+
+    const deleteBlock = (idx) => {
+      if (blocks.length <= 1) return;
+      const prev = blocks[idx - 1];
+      setBlocks(b => b.filter((_, i) => i !== idx));
+      setTimeout(() => { if (prev) blockRefs.current[prev.id]?.focus(); }, 30);
+    };
+
+    const updateBlock = (id, props) => {
+      setBlocks(bs => bs.map(b => b.id === id ? { ...b, ...props } : b));
+    };
+
+    const handleBlockKey = (e, block, idx) => {
+      const val = e.currentTarget.value || e.currentTarget.textContent || '';
+
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        // Check for slash commands
+        if (val.startsWith('/')) {
+          const cmd = val.toLowerCase().trim();
+          const typeMap = { '/h1': 'heading1', '/h2': 'heading2', '/h3': 'heading3', '/bullet': 'bullet', '/num': 'numbered', '/todo': 'todo', '/code': 'code', '/quote': 'quote', '/callout': 'callout', '/divider': 'divider' };
+          if (typeMap[cmd]) { updateBlock(block.id, { type: typeMap[cmd], content: '' }); return; }
+        }
+        insertBlock(idx);
+        return;
+      }
+      if (e.key === 'Backspace' && !val) {
+        e.preventDefault();
+        deleteBlock(idx);
+        return;
+      }
+      // Navigate up/down
+      if (e.key === 'ArrowUp' && idx > 0) { blockRefs.current[blocks[idx-1]?.id]?.focus(); e.preventDefault(); }
+      if (e.key === 'ArrowDown' && idx < blocks.length - 1) { blockRefs.current[blocks[idx+1]?.id]?.focus(); e.preventDefault(); }
+    };
+
+    const blockStyle = (type) => {
+      const base = { width: '100%', background: 'transparent', border: 'none', outline: 'none', fontFamily: 'Inter,sans-serif', color: dark ? '#1a1a1a' : '#1a1a1a', resize: 'none', lineHeight: 1.7, display: 'block', boxSizing: 'border-box' };
+      if (type === 'heading1') return { ...base, fontSize: 28, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.3 };
+      if (type === 'heading2') return { ...base, fontSize: 22, fontWeight: 700, letterSpacing: '-.015em' };
+      if (type === 'heading3') return { ...base, fontSize: 17, fontWeight: 700 };
+      if (type === 'code')     return { ...base, fontFamily: 'monospace', fontSize: 13, background: 'rgba(0,0,0,.05)', padding: '12px 14px', borderRadius: 8, color: '#c7254e' };
+      if (type === 'quote')    return { ...base, fontSize: 15, fontStyle: 'italic', borderLeft: '4px solid #818CF8', paddingLeft: 16, color: '#374151' };
+      return { ...base, fontSize: 14 };
+    };
+
+    const renderBlock = (block, idx) => {
+      const isDiv = block.type === 'divider';
+      if (isDiv) return (
+        <div key={block.id} style={{ position: 'relative', padding: '8px 0' }} onMouseEnter={e => e.currentTarget.querySelector('.block-del')?.style && (e.currentTarget.querySelector('.block-del').style.opacity = '1')} onMouseLeave={e => e.currentTarget.querySelector('.block-del')?.style && (e.currentTarget.querySelector('.block-del').style.opacity = '0')}>
+          <hr style={{ border: 'none', borderTop: `2px solid ${c.bord}`, margin: '8px 0' }}/>
+          <button className="block-del" onClick={() => deleteBlock(idx)} style={{ position: 'absolute', right: -28, top: '50%', transform: 'translateY(-50%)', width: 22, height: 22, borderRadius: '50%', background: 'rgba(239,68,68,.1)', border: 'none', color: '#F87171', cursor: 'pointer', fontSize: 12, opacity: 0, transition: 'opacity .15s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+        </div>
+      );
+
+      if (block.type === 'callout') {
+        const types = { info: { bg: 'rgba(99,102,241,.08)', border: 'rgba(99,102,241,.25)', icon: 'ℹ️' }, warning: { bg: 'rgba(245,158,11,.08)', border: 'rgba(245,158,11,.25)', icon: '⚠️' }, success: { bg: 'rgba(52,211,153,.08)', border: 'rgba(52,211,153,.25)', icon: '✅' }, danger: { bg: 'rgba(239,68,68,.08)', border: 'rgba(239,68,68,.25)', icon: '🚨' } };
+        const t = types[block.calloutType || 'info'];
+        return (
+          <div key={block.id} style={{ display: 'flex', gap: 12, padding: '12px 16px', background: t.bg, border: `1px solid ${t.border}`, borderRadius: 10, margin: '4px 0', position: 'relative' }}
+            onMouseEnter={e => e.currentTarget.querySelector('.block-del')?.style && (e.currentTarget.querySelector('.block-del').style.opacity = '1')}
+            onMouseLeave={e => e.currentTarget.querySelector('.block-del')?.style && (e.currentTarget.querySelector('.block-del').style.opacity = '0')}>
+            <span style={{ fontSize: 18, flexShrink: 0, marginTop: 2 }}>{t.icon}</span>
+            <textarea ref={el => blockRefs.current[block.id] = el} value={block.content} rows={Math.max(1, (block.content || '').split('\n').length)}
+              onChange={e => updateBlock(block.id, { content: e.target.value })}
+              onKeyDown={e => handleBlockKey(e, block, idx)}
+              style={{ ...blockStyle('paragraph'), lineHeight: 1.6, flex: 1, height: 'auto', minHeight: 24, fontSize: 14 }}
+              placeholder="Callout text…"/>
+            <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+              {Object.keys(types).map(tp => <button key={tp} onClick={() => updateBlock(block.id, { calloutType: tp })} style={{ width: 20, height: 20, borderRadius: '50%', border: 'none', background: types[tp].bg, cursor: 'pointer', fontSize: 10 }}>{types[tp].icon}</button>)}
+            </div>
+            <button className="block-del" onClick={() => deleteBlock(idx)} style={{ position: 'absolute', right: -28, top: 10, width: 22, height: 22, borderRadius: '50%', background: 'rgba(239,68,68,.1)', border: 'none', color: '#F87171', cursor: 'pointer', fontSize: 12, opacity: 0, transition: 'opacity .15s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+          </div>
+        );
+      }
+
+      if (block.type === 'todo') {
+        return (
+          <div key={block.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '3px 0', position: 'relative' }}
+            onMouseEnter={e => e.currentTarget.querySelector('.block-del')?.style && (e.currentTarget.querySelector('.block-del').style.opacity = '1')}
+            onMouseLeave={e => e.currentTarget.querySelector('.block-del')?.style && (e.currentTarget.querySelector('.block-del').style.opacity = '0')}>
+            <button onClick={() => updateBlock(block.id, { checked: !block.checked })} style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${block.checked ? '#34D399' : '#94A3B8'}`, background: block.checked ? '#34D399' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 4 }}>
+              {block.checked && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+            </button>
+            <textarea ref={el => blockRefs.current[block.id] = el} value={block.content} rows={1}
+              onChange={e => updateBlock(block.id, { content: e.target.value })}
+              onKeyDown={e => handleBlockKey(e, block, idx)}
+              style={{ ...blockStyle('paragraph'), textDecoration: block.checked ? 'line-through' : 'none', opacity: block.checked ? 0.55 : 1, flex: 1, height: 'auto', minHeight: 28 }}
+              placeholder="To-do item…"/>
+            <button className="block-del" onClick={() => deleteBlock(idx)} style={{ position: 'absolute', right: -28, top: 4, width: 22, height: 22, borderRadius: '50%', background: 'rgba(239,68,68,.1)', border: 'none', color: '#F87171', cursor: 'pointer', fontSize: 12, opacity: 0, transition: 'opacity .15s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+          </div>
+        );
+      }
+
+      const prefix = block.type === 'bullet' ? '•' : block.type === 'numbered' ? `${idx + 1}.` : null;
+
+      return (
+        <div key={block.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '2px 0', position: 'relative' }}
+          onMouseEnter={e => e.currentTarget.querySelector('.block-del')?.style && (e.currentTarget.querySelector('.block-del').style.opacity = '1')}
+          onMouseLeave={e => e.currentTarget.querySelector('.block-del')?.style && (e.currentTarget.querySelector('.block-del').style.opacity = '0')}>
+          {prefix && <span style={{ fontSize: 14, color: '#64748B', flexShrink: 0, marginTop: 4, minWidth: 20, fontWeight: 600 }}>{prefix}</span>}
+          <textarea
+            ref={el => blockRefs.current[block.id] = el}
+            value={block.content}
+            rows={Math.max(1, Math.ceil((block.content || '').length / 80))}
+            onChange={e => {
+              updateBlock(block.id, { content: e.target.value });
+              e.target.style.height = 'auto';
+              e.target.style.height = e.target.scrollHeight + 'px';
+            }}
+            onKeyDown={e => handleBlockKey(e, block, idx)}
+            placeholder={
+              block.type === 'heading1' ? 'Heading 1' :
+              block.type === 'heading2' ? 'Heading 2' :
+              block.type === 'heading3' ? 'Heading 3' :
+              block.type === 'code'     ? 'Code…' :
+              block.type === 'quote'    ? 'Quote…' :
+              block.type === 'bullet'   ? 'Bullet point…' :
+              block.type === 'numbered' ? 'Numbered item…' :
+              'Type something, or / for commands…'
+            }
+            style={{ ...blockStyle(block.type), flex: 1, height: 'auto', minHeight: block.type.startsWith('heading') ? 36 : 28 }}
+          />
+          <button className="block-del" onClick={() => deleteBlock(idx)} style={{ position: 'absolute', right: -28, top: 4, width: 22, height: 22, borderRadius: '50%', background: 'rgba(239,68,68,.1)', border: 'none', color: '#F87171', cursor: 'pointer', fontSize: 12, opacity: 0, transition: 'opacity .15s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+        </div>
+      );
+    };
+
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff', overflowY: 'auto' }}>
+        {/* Page toolbar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px 10px 24px', borderBottom: '1px solid rgba(0,0,0,.07)', flexShrink: 0, background: '#fafafa', flexWrap: 'wrap' }}>
+          <button onClick={() => { setSelPage(null); setView('overview'); }} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: 13, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+            ← {curProject?.emoji} {curProject?.name}
+          </button>
+          <span style={{ color: '#CBD5E1', fontSize: 13 }}>/</span>
+          <span style={{ fontSize: 13, color: '#374151', fontWeight: 600 }}>{page.emoji} {page.title}</span>
+          <div style={{ flex: 1 }}/>
+          {saving && <span style={{ fontSize: 11, color: '#94A3B8' }}>Saving…</span>}
+          {!saving && <span style={{ fontSize: 11, color: '#94A3B8' }}>Auto-saved</span>}
+          <button onClick={() => togglePin(page.id)} title={page.pinned ? 'Unpin' : 'Pin'} style={{ padding: '4px 10px', borderRadius: 7, background: page.pinned ? 'rgba(251,191,36,.12)' : 'transparent', border: `1px solid ${page.pinned ? 'rgba(251,191,36,.3)' : 'rgba(0,0,0,.1)'}`, color: page.pinned ? '#D97706' : '#94A3B8', cursor: 'pointer', fontSize: 12 }}>{page.pinned ? '📌 Pinned' : '📍 Pin'}</button>
+          <button onClick={() => setShowAI(s => !s)} style={{ padding: '4px 12px', borderRadius: 7, background: showAI ? 'rgba(99,102,241,.12)' : 'transparent', border: `1px solid ${showAI ? 'rgba(99,102,241,.3)' : 'rgba(0,0,0,.1)'}`, color: showAI ? '#6366F1' : '#94A3B8', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>✦ Ask AI</button>
+          <button onClick={() => deletePage(page.id)} style={{ padding: '4px 10px', borderRadius: 7, background: 'rgba(239,68,68,.06)', border: '1px solid rgba(239,68,68,.15)', color: '#EF4444', cursor: 'pointer', fontSize: 12 }}>🗑 Delete</button>
+        </div>
+
+        <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+          {/* Editor */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '40px 60px', maxWidth: 780, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+            {/* Title row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 32 }}>
+              <div style={{ position: 'relative' }}>
+                <div style={{ fontSize: 40, cursor: 'pointer', lineHeight: 1 }}>{localEmoji}</div>
+                <select value={localEmoji} onChange={e => setLocalEmoji(e.target.value)} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }}>
+                  {EMOJI_PRESETS.map(em => <option key={em} value={em}>{em}</option>)}
+                </select>
+              </div>
+              <input value={localTitle} onChange={e => setLocalTitle(e.target.value)}
+                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 32, fontWeight: 800, color: '#111827', letterSpacing: '-.025em', fontFamily: 'Inter,sans-serif' }}
+                placeholder="Page title…"/>
+            </div>
+
+            {/* Block editor hint */}
+            <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 20, padding: '6px 10px', background: 'rgba(0,0,0,.03)', borderRadius: 7, display: 'inline-block' }}>
+              Type <code style={{ background: 'rgba(0,0,0,.06)', padding: '1px 5px', borderRadius: 3, fontFamily: 'monospace' }}>/h1</code> <code style={{ background: 'rgba(0,0,0,.06)', padding: '1px 5px', borderRadius: 3, fontFamily: 'monospace' }}>/bullet</code> <code style={{ background: 'rgba(0,0,0,.06)', padding: '1px 5px', borderRadius: 3, fontFamily: 'monospace' }}>/todo</code> <code style={{ background: 'rgba(0,0,0,.06)', padding: '1px 5px', borderRadius: 3, fontFamily: 'monospace' }}>/callout</code> <code style={{ background: 'rgba(0,0,0,.06)', padding: '1px 5px', borderRadius: 3, fontFamily: 'monospace' }}>/code</code> then Enter for block types
+            </div>
+
+            {/* Blocks */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, position: 'relative' }}>
+              {blocks.map((block, idx) => renderBlock(block, idx))}
+            </div>
+
+            {/* Add block button */}
+            <button onClick={() => insertBlock(blocks.length - 1)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0', color: '#9CA3AF', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, marginTop: 16 }}
+              onMouseEnter={e => e.currentTarget.style.color = '#6366F1'} onMouseLeave={e => e.currentTarget.style.color = '#9CA3AF'}>
+              <span style={{ width: 22, height: 22, borderRadius: '50%', border: '1.5px solid currentColor', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 300 }}>+</span>
+              Add block
+            </button>
+          </div>
+
+          {/* AI sidebar */}
+          {showAI && (
+            <div style={{ width: 320, flexShrink: 0, borderLeft: '1px solid rgba(0,0,0,.07)', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(0,0,0,.07)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z" fill="#A78BFA"/></svg>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Ask AI about this page</span>
+                <button onClick={() => setShowAI(false)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', fontSize: 18 }}>×</button>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {aiHistory.map((msg, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 7, flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
+                    {msg.role === 'assistant' && <span style={{ fontSize: 14, flexShrink: 0, marginTop: 2 }}>✦</span>}
+                    <div style={{ maxWidth: '88%', padding: '8px 11px', borderRadius: msg.role === 'user' ? '12px 12px 3px 12px' : '12px 12px 12px 3px', background: msg.role === 'user' ? '#6366F1' : '#fff', color: msg.role === 'user' ? '#fff' : '#374151', fontSize: 12, lineHeight: 1.6, border: msg.role === 'user' ? 'none' : '1px solid rgba(0,0,0,.08)', whiteSpace: 'pre-wrap' }}>{msg.text}</div>
+                  </div>
+                ))}
+                {aiLoading && <div style={{ display: 'flex', gap: 4, padding: '8px 10px', background: '#fff', borderRadius: '12px 12px 12px 3px', border: '1px solid rgba(0,0,0,.08)', width: 'fit-content' }}>{[0,1,2].map(i => <div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: '#818CF8', animation: `bounce .8s ease ${i*.15}s infinite` }}/>)}</div>}
+                <div ref={aiBottomRef}/>
+              </div>
+              {aiHistory.length === 0 && (
+                <div style={{ padding: '0 12px 10px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {['Summarize this page', 'What are the key steps?', 'What could be improved?', 'Turn this into action items'].map(q => (
+                    <button key={q} onClick={() => askWikiAI(q)} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(99,102,241,.2)', background: 'rgba(99,102,241,.04)', color: '#6366F1', cursor: 'pointer', fontSize: 11, textAlign: 'left' }}>{q}</button>
+                  ))}
+                </div>
+              )}
+              <div style={{ padding: '8px 12px', borderTop: '1px solid rgba(0,0,0,.07)', display: 'flex', gap: 6 }}>
+                <input value={aiQuery} onChange={e => setAiQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && askWikiAI(aiQuery)}
+                  placeholder="Ask about this page…"
+                  style={{ flex: 1, background: '#fff', border: '1px solid rgba(0,0,0,.1)', borderRadius: 8, padding: '7px 10px', fontSize: 12, outline: 'none', color: '#374151' }}/>
+                <button onClick={() => askWikiAI(aiQuery)} disabled={!aiQuery.trim() || aiLoading}
+                  style={{ width: 32, height: 32, borderRadius: 8, background: aiQuery.trim() ? '#6366F1' : 'transparent', border: aiQuery.trim() ? 'none' : '1px solid rgba(0,0,0,.1)', color: aiQuery.trim() ? '#fff' : '#9CA3AF', cursor: aiQuery.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>↑</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ── Main render ───────────────────────────────────────────────────────────
+  return (
+    <div style={{ display: 'flex', height: 'calc(100vh - 62px)', borderRadius: 14, overflow: 'hidden', border: `1px solid ${c.bord}`, background: dark ? c.bg : '#fff' }}>
+      <Sidebar/>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+        {view === 'home' && <HomeView/>}
+        {view === 'newProject' && <NewProjectView/>}
+        {view === 'newPage' && <NewPageView/>}
+        {view === 'overview' && curProject && <OverviewContent/>}
+        {view === 'page' && curPage && <PageEditor key={curPage.id} page={curPage}/>}
+      </div>
     </div>
   );
 }
@@ -3557,7 +4355,7 @@ function ManagerView({
 // Icons and tabs - inline object literals (not const, so no Terser TDZ)
 var STANDSYNC_ICONS_MAP = {live:'◉',team:'⚇',perf:'↗',analysis:'▤',ai:'✦',chat:'◌',cal:'⊟',notes:'≡',remind:'◔',hist:'↺',tset:'⚙',pip:'⧉'};
 var I = STANDSYNC_ICONS_MAP;
-var STANDSYNC_MGR_TABS = [{id:'live',l:'Live board',ic:'◉'},{id:'team',l:'Team',ic:'⚇'},{id:'perf',l:'Performance',ic:'↗'},{id:'analysis',l:'Analysis',ic:'▤'},{id:'ai',l:'AI',ic:'✦'},{id:'chat',l:'Chat',ic:'◌'},{id:'cal',l:'Calendar',ic:'⊟'},{id:'notes',l:'Notes',ic:'≡'},{id:'brain',l:'Brainstorm',ic:'⬡'},{id:'remind',l:'Reminders',ic:'◔'},{id:'hist',l:'History',ic:'↺'},{id:'tset',l:'Settings',ic:'⚙'}];
+var STANDSYNC_MGR_TABS = [{id:'live',l:'Live board',ic:'◉'},{id:'team',l:'Team',ic:'⚇'},{id:'perf',l:'Performance',ic:'↗'},{id:'analysis',l:'Analysis',ic:'▤'},{id:'ai',l:'AI',ic:'✦'},{id:'chat',l:'Chat',ic:'◌'},{id:'cal',l:'Calendar',ic:'⊟'},{id:'notes',l:'Notes',ic:'≡'},{id:'wiki',l:'Project Wiki',ic:'📚'},{id:'brain',l:'Brainstorm',ic:'⬡'},{id:'remind',l:'Reminders',ic:'◔'},{id:'hist',l:'History',ic:'↺'},{id:'tset',l:'Settings',ic:'⚙'}];
 
   const c=useC(); const [tab,setTab]=useState('live');
   const [unreadChat,setUnreadChat]=useState(0);
@@ -3617,6 +4415,7 @@ var STANDSYNC_MGR_TABS = [{id:'live',l:'Live board',ic:'◉'},{id:'team',l:'Team
         {tab==='cal'&&<CalendarPanel team={team} members={members} session={session}/>}
         {tab==='notes'&&<ManagerNotesTab session={session} team={team}/>}
         {tab==='brain'&&<BrainstormSpace team={team} session={session} members={members}/>}
+        {tab==='wiki'&&<ProjectWiki team={team} session={session} members={members}/>}
         {tab==='analysis'&&<TeamAnalysisTab tasks={tasks} members={members}/>}
         {tab==='remind'&&<RemindersPanel team={team} members={members} session={session}/>}
         {tab==='hist'&&<HistTab history={history} members={members}/>}
