@@ -955,7 +955,7 @@ var EMOJI_GROUPS = {
 };
 
 // ─── SPACE SETTINGS MODAL ────────────────────────────────────────────────────
-function SpaceSettingsModal({ spaceId, customSpaces, members, isManager, onClose, updateSpaceSettings, addMemberToSpace, removeMemberFromSpace, setCustomSpaces }) {
+function SpaceSettingsModal({ spaceId, customSpaces, members, isManager, onClose, updateSpaceSettings, addMemberToSpace, removeMemberFromSpace, setCustomSpaces, getSpaceSettings }) {
   const c = useC();
   const [ssTab, setSsTab] = useState('members');
   const [memberSearch, setMemberSearch] = useState('');
@@ -963,7 +963,7 @@ function SpaceSettingsModal({ spaceId, customSpaces, members, isManager, onClose
   const DEFAULT_SPACES = [{id:'general',label:'general'},{id:'announcements',label:'announcements'},{id:'random',label:'random'}];
   const sp = customSpaces.find(s=>s.id===spaceId) || DEFAULT_SPACES.find(s=>s.id===spaceId) || {name:spaceId};
   const isCustom = !!customSpaces.find(s=>s.id===spaceId);
-  const cfg = sp?.settings || {access:'organisation',allowRequests:true,whoManages:'members',canModify:'owners',canHistory:'managers',canAtAll:'members',canManageApps:'managers',canManageWebhooks:'managers',members:[]};
+  const cfg = getSpaceSettings ? getSpaceSettings(spaceId) : (sp?.settings || {access:'organisation',allowRequests:true,whoManages:'members',canModify:'owners',canHistory:'managers',canAtAll:'members',canManageApps:'managers',canManageWebhooks:'managers',members:[]});
   const spMembers = cfg.members || [];
 
   return (
@@ -1115,7 +1115,20 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
   const [showSpaceSettings,setShowSpaceSettings]=useState(null); // space id
   const [showAddDM,setShowAddDM]=useState(false);
   const [dmSearch,setDmSearch]=useState('');
+  const DEFAULT_SPACE_DEFS=[
+    {id:'general',name:'general',label:'general',type:'collaboration'},
+    {id:'announcements',name:'announcements',label:'announcements',type:'announcements'},
+    {id:'random',name:'random',label:'random',type:'collaboration'},
+  ];
   const [customSpaces,setCustomSpaces]=useState(()=>{ try{return JSON.parse(localStorage.getItem('ss-spaces')||'[]');}catch{return[];} });
+  // Settings for ALL spaces including defaults - stored separately
+  const [spaceSettings,setSpaceSettings]=useState(()=>{
+    try{return JSON.parse(localStorage.getItem('ss-spacesettings')||'{}');}catch{return {};}
+  });
+  const saveSpaceSettings=(newSettings)=>{
+    setSpaceSettings(newSettings);
+    try{localStorage.setItem('ss-spacesettings',JSON.stringify(newSettings));}catch{}
+  };
   const [pinnedMsgs,setPinnedMsgs]=useState([]);
   const [showPinned,setShowPinned]=useState(false);
   const [showFiles,setShowFiles]=useState(false);
@@ -1229,27 +1242,34 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
     setActiveSpace(id); setShowNewSpace(false); setNewSpaceName(''); setNewSpaceType('collaboration');
   };
   const updateSpaceSettings=(spaceId, newSettings)=>{
-    const updated=customSpaces.map(s=>s.id===spaceId?{...s,settings:{...s.settings,...newSettings}}:s);
-    setCustomSpaces(updated);
-    try{localStorage.setItem('ss-spaces',JSON.stringify(updated));}catch{}
+    // Update in unified spaceSettings store (works for both default and custom spaces)
+    const newAll={...spaceSettings,[spaceId]:{...getSpaceSettings(spaceId),...newSettings}};
+    saveSpaceSettings(newAll);
+    // Also update customSpaces if it's a custom space
+    if(customSpaces.find(s=>s.id===spaceId)){
+      const updated=customSpaces.map(s=>s.id===spaceId?{...s,settings:{...s.settings,...newSettings}}:s);
+      setCustomSpaces(updated);
+      try{localStorage.setItem('ss-spaces',JSON.stringify(updated));}catch{}
+    }
+  };
+  const getSpaceSettings=(spaceId)=>{
+    const defaultCfg={access:'organisation',allowRequests:true,whoManages:'members',
+      canModify:'owners',canHistory:'managers',canAtAll:'members',
+      canManageApps:'managers',canManageWebhooks:'managers',members:[]};
+    const fromCustom=customSpaces.find(s=>s.id===spaceId)?.settings||{};
+    const fromStore=spaceSettings[spaceId]||{};
+    return {...defaultCfg,...fromCustom,...fromStore};
   };
   const addMemberToSpace=(spaceId, member)=>{
-    const updated=customSpaces.map(s=>{
-      if(s.id!==spaceId)return s;
-      const existing=s.settings?.members||[];
-      if(existing.find(m=>m.email===member.email))return s;
-      return{...s,settings:{...s.settings,members:[...existing,{email:member.email,name:member.name||member.email,role:'member'}]}};
-    });
-    setCustomSpaces(updated);
-    try{localStorage.setItem('ss-spaces',JSON.stringify(updated));}catch{}
+    const cur=getSpaceSettings(spaceId);
+    const existing=cur.members||[];
+    if(existing.find(m=>m.email===member.email))return;
+    const newMembers=[...existing,{email:member.email,name:member.name||member.email,role:'member'}];
+    updateSpaceSettings(spaceId,{members:newMembers});
   };
   const removeMemberFromSpace=(spaceId, email)=>{
-    const updated=customSpaces.map(s=>{
-      if(s.id!==spaceId)return s;
-      return{...s,settings:{...s.settings,members:(s.settings?.members||[]).filter(m=>m.email!==email)}};
-    });
-    setCustomSpaces(updated);
-    try{localStorage.setItem('ss-spaces',JSON.stringify(updated));}catch{}
+    const cur=getSpaceSettings(spaceId);
+    updateSpaceSettings(spaceId,{members:(cur.members||[]).filter(m=>m.email!==email)});
   };
 
   const deleteCustomSpace=(id)=>{
@@ -1286,7 +1306,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
     acc[acc.length-1].msgs.push(m); return acc;
   },[]);
 
-  const DEFAULT_SPACES=[{id:'general',label:'general',icon:'#'},{id:'announcements',label:'announcements',icon:'#'},{id:'random',label:'random',icon:'#'}];
+  const DEFAULT_SPACES=[{id:'general',label:'general',icon:'#'},{id:'announcements',label:'announcements',icon:'#'},{id:'random',label:'random',icon:'#'}]; // kept for chat sidebar
   const dmMembers=members.filter(m=>m.email!==myEmail);
   const activeLabel=activeSpace.startsWith('dm-')
     ? (members.find(m=>m.email===activeSpace.slice(3))?.name||activeSpace.slice(3)).split(' ')[0]
@@ -1528,7 +1548,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
           )}
         </div>
 
-        {showSpaceSettings&&<SpaceSettingsModal spaceId={showSpaceSettings} customSpaces={customSpaces} members={members} isManager={isManager} onClose={()=>setShowSpaceSettings(null)} updateSpaceSettings={updateSpaceSettings} addMemberToSpace={addMemberToSpace} removeMemberFromSpace={removeMemberFromSpace} setCustomSpaces={setCustomSpaces}/>}
+        {showSpaceSettings&&<SpaceSettingsModal spaceId={showSpaceSettings} customSpaces={customSpaces} members={members} isManager={isManager} onClose={()=>setShowSpaceSettings(null)} updateSpaceSettings={updateSpaceSettings} addMemberToSpace={addMemberToSpace} removeMemberFromSpace={removeMemberFromSpace} setCustomSpaces={setCustomSpaces} getSpaceSettings={getSpaceSettings}/>}
       {/* Context menu */}
         {contextMenu&&(
           <div style={{ position:'fixed',left:contextMenu.x,top:contextMenu.y,zIndex:9999,background:c.dark?'rgba(18,15,50,.98)':'#fff',border:`1px solid ${c.bord}`,borderRadius:12,padding:6,boxShadow:'0 8px 30px rgba(0,0,0,.25)',minWidth:180 }} onClick={e=>e.stopPropagation()}>
