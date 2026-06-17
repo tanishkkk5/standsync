@@ -133,6 +133,25 @@ function StatCard({ label, value, color='#818CF8', sub, icon }) {
   return <Card style={{ padding:'16px 20px' }}><div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start' }}><div><div style={{ fontSize:10,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6 }}>{label}</div><div style={{ fontSize:28,fontWeight:800,color,letterSpacing:'-.02em',lineHeight:1 }}>{value}</div>{sub&&<div style={{ fontSize:11,color:c.mut,marginTop:4 }}>{sub}</div>}</div>{icon&&<span style={{ fontSize:22,opacity:.45 }}>{icon}</span>}</div></Card>;
 }
 function Lbl({ children, style={} }) { const c=useC(); return <div style={{ fontSize:10,fontWeight:700,letterSpacing:'.1em',color:c.mut,textTransform:'uppercase',marginBottom:8,...style }}>{children}</div>; }
+// Reusable empty state: icon/illustration, title, explanation, primary + secondary actions, optional preview.
+function EmptyState({ icon='✨', title, desc, primary, secondary, preview, children }) {
+  const c=useC();
+  return(
+    <div style={{ maxWidth:560,margin:'0 auto',padding:'32px 0',textAlign:'center' }}>
+      <div style={{ width:64,height:64,borderRadius:18,margin:'0 auto 18px',background:c.surf,border:`1px solid ${c.bord}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:30 }}>{icon}</div>
+      {title&&<h2 style={{ fontSize:20,fontWeight:700,color:c.text,marginBottom:8,letterSpacing:'-.02em' }}>{title}</h2>}
+      {desc&&<p style={{ fontSize:14,color:c.sub,lineHeight:1.6,marginBottom:22,maxWidth:420,marginLeft:'auto',marginRight:'auto' }}>{desc}</p>}
+      {(primary||secondary)&&(
+        <div style={{ display:'flex',gap:10,justifyContent:'center',marginBottom:preview?28:0,flexWrap:'wrap' }}>
+          {primary&&<Btn onClick={primary.onClick} style={{ padding:'10px 22px',fontSize:14 }}>{primary.label}</Btn>}
+          {secondary&&<Btn v="ghost" onClick={secondary.onClick} style={{ padding:'10px 22px',fontSize:14 }}>{secondary.label}</Btn>}
+        </div>
+      )}
+      {preview&&<div style={{ marginTop:8,textAlign:'left' }}>{preview}</div>}
+      {children}
+    </div>
+  );
+}
 function BgEl() {
   const { dark }=useTheme();
   // Premium SaaS: solid base, no glowing orbs, no gaming aesthetics.
@@ -1910,15 +1929,54 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
 
   // ── NOT CONNECTED ──────────────────────────────────────────────────────────
   if(status==='idle'||status==='error') return(
-    <div style={{ maxWidth:560,margin:'0 auto',padding:'20px 0' }}>
-      <div style={{ textAlign:'center',marginBottom:28 }}>
-        <div style={{ fontSize:52,marginBottom:14 }}>📅</div>
-        <h2 style={{ fontSize:20,fontWeight:700,color:c.text,marginBottom:8 }}>Google Calendar</h2>
-        <p style={{ fontSize:13,color:c.mut,lineHeight:1.7 }}>Connect your Google Calendar to see meetings, dates, and import attendees as team members.</p>
+    <div style={{ maxWidth:640,margin:'0 auto',padding:'24px 0' }}>
+      <EmptyState
+        icon="📅"
+        title="Connect your calendar"
+        desc="See your meetings and standups inline, auto-detect recurring standups, and import attendees as team members — all in one view."
+        primary={CLIENT_ID?{label:'Connect Google Calendar',onClick:connect}:undefined}
+        secondary={CLIENT_ID?{label:'Why connect?',onClick:()=>{}}:undefined}
+      />
+      {error&&<div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:10,padding:'12px 16px',fontSize:13,color:'#F87171',marginBottom:20,maxWidth:560,marginLeft:'auto',marginRight:'auto' }}>{error}</div>}
+
+      {/* Benefits */}
+      <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,maxWidth:560,margin:'0 auto 24px' }}>
+        {[
+          ['🗓️','Meetings inline','See today\u2019s events beside your tasks'],
+          ['◉','Auto standups','Detect recurring standups automatically'],
+          ['⚇','Import people','Pull attendees in as team members'],
+        ].map(([ic,t,d])=>(
+          <Card key={t} style={{ padding:'16px 14px',textAlign:'center' }}>
+            <div style={{ fontSize:22,marginBottom:8 }}>{ic}</div>
+            <div style={{ fontSize:13,fontWeight:700,color:c.text,marginBottom:4 }}>{t}</div>
+            <div style={{ fontSize:11,color:c.mut,lineHeight:1.5 }}>{d}</div>
+          </Card>
+        ))}
       </div>
-      {error&&<div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:10,padding:'12px 16px',fontSize:13,color:'#F87171',marginBottom:16 }}>{error}</div>}
-      {!CLIENT_ID?(
-        <div style={{ background:'rgba(245,158,11,.06)',border:'1px solid rgba(245,158,11,.2)',borderRadius:14,padding:'20px 22px',marginBottom:20 }}>
+
+      {/* Preview UI — placeholder upcoming events so the empty state feels valuable */}
+      <Card style={{ padding:0,maxWidth:560,margin:'0 auto 20px',overflow:'hidden',opacity:.85 }}>
+        <div style={{ padding:'12px 18px',borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',justifyContent:'space-between' }}>
+          <span style={{ fontSize:13,fontWeight:700,color:c.text }}>Preview · upcoming</span>
+          <span style={{ fontSize:11,color:c.mut }}>Sample data</span>
+        </div>
+        {[
+          ['09:30','Daily standup','#34D399'],
+          ['11:00','Sprint planning','#818CF8'],
+          ['15:30','1:1 with manager','#FBBF24'],
+        ].map(([time,title,col])=>(
+          <div key={title} style={{ display:'flex',alignItems:'center',gap:14,padding:'12px 18px',borderBottom:`1px solid ${c.bord}` }}>
+            <span style={{ fontSize:12,color:c.mut,fontVariantNumeric:'tabular-nums',width:46 }}>{time}</span>
+            <span style={{ width:3,height:28,borderRadius:2,background:col,flexShrink:0 }}/>
+            <span style={{ fontSize:13,color:c.sub,flex:1 }}>{title}</span>
+          </div>
+        ))}
+        <div style={{ padding:'10px 18px',fontSize:11,color:c.mut,textAlign:'center' }}>Your real events appear here once connected</div>
+      </Card>
+
+      {/* Setup instructions only when no client id, collapsed-feel card */}
+      {!CLIENT_ID&&(
+        <div style={{ background:'rgba(245,158,11,.06)',border:'1px solid rgba(245,158,11,.2)',borderRadius:14,padding:'20px 22px',maxWidth:560,margin:'0 auto' }}>
           <div style={{ fontSize:14,fontWeight:700,color:'#FCD34D',marginBottom:14 }}>One-time setup needed (5 min)</div>
           {[
             ['1','Go to console.cloud.google.com → Create/select a project'],
@@ -1938,19 +1996,6 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
           <div style={{ marginTop:14,padding:'10px 14px',background:'rgba(99,102,241,.08)',borderRadius:8,fontSize:12,color:'#818CF8' }}>
             After completing these steps, add REACT_APP_GOOGLE_CLIENT_ID to Vercel and redeploy. The Connect button will then work.
           </div>
-        </div>
-      ):(
-        <div style={{ textAlign:'center' }}>
-          <Btn onClick={connect} style={{ padding:'13px 32px',fontSize:15,margin:'0 auto' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" style={{ flexShrink:0 }}>
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-            </svg>
-            Connect Google Calendar
-          </Btn>
-          <p style={{ fontSize:12,color:c.mut,marginTop:10 }}>Opens Google sign-in to grant calendar access</p>
         </div>
       )}
     </div>
