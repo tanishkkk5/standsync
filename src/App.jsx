@@ -40,7 +40,8 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
 @keyframes popIn{0%{opacity:0;transform:scale(.92) translateY(8px)}100%{opacity:1;transform:scale(1) translateY(0)}}
 .ss-tip{position:relative;display:inline-flex}
-.ss-tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%) scale(.85);background:rgba(18,15,50,.97);color:#F0ECFF;font-size:11px;font-weight:500;padding:4px 9px;border-radius:7px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s,transform .15s;border:1px solid rgba(255,255,255,.1);letter-spacing:-.01em;z-index:9999}
+.ss-tip{position:relative!important}
+.ss-tip::after{content:attr(data-tip);position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%) scale(.88);transform-origin:top center;background:rgba(12,10,35,.97);color:#F0ECFF;font-size:11px;font-weight:600;padding:5px 11px;border-radius:8px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s,transform .15s;border:1px solid rgba(124,110,245,.3);box-shadow:0 4px 16px rgba(0,0,0,.5);letter-spacing:-.01em;z-index:99999}
 .ss-tip:hover::after{opacity:1;transform:translateX(-50%) scale(1)}
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
@@ -361,7 +362,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
   if(view==='list') return(
     <div style={{ minHeight:'100vh',position:'relative',zIndex:1,animation:'fadeIn .3s ease' }}>
       {/* Nav */}
-      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100 }}>
+      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100,overflow:'visible' }}>
         <div style={{ maxWidth:960,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:12 }}>
           <Logo size={28}/><div style={{ flex:1 }}/><ThemeToggle/><ProfileMenu session={session} onSettings={onSettings} onLogout={onLogout}/>
         </div>
@@ -430,7 +431,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
     }).sort((a,b)=>new Date(a.start?.dateTime||a.start?.date)-new Date(b.start?.dateTime||b.start?.date));
     return(
       <div style={{ minHeight:'100vh',position:'relative',zIndex:1,animation:'fadeIn .3s ease' }}>
-        <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100 }}>
+        <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100,overflow:'visible' }}>
           <div style={{ maxWidth:760,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:12 }}>
             <button onClick={()=>setView('list')} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:13,padding:0 }}>← Back</button>
             <Logo size={26}/>
@@ -494,7 +495,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
   // ── TEAM ENTRY: select project / team ────────────────────────────────────
   if(view==='team-entry') return(
     <div style={{ minHeight:'100vh',position:'relative',zIndex:1,animation:'fadeIn .3s ease' }}>
-      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100 }}>
+      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100,overflow:'visible' }}>
         <div style={{ maxWidth:920,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:12 }}>
           <button onClick={()=>setView('list')} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:13,padding:0 }}>← Back</button>
           <Logo size={26}/>
@@ -534,7 +535,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
   // ── SELECT TEAM FOR STANDUP ──────────────────────────────────────────────
   if(view==='standup-select-team') return(
     <div style={{ minHeight:'100vh',position:'relative',zIndex:1,animation:'fadeIn .3s ease' }}>
-      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100 }}>
+      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100,overflow:'visible' }}>
         <div style={{ maxWidth:760,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:12 }}>
           <button onClick={()=>setView('standup-entry')} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:13,padding:0 }}>← Back</button>
           <Logo size={26}/><div style={{ flex:1 }}/><ThemeToggle/><ProfileMenu session={session} onSettings={onSettings} onLogout={onLogout}/>
@@ -960,6 +961,10 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
   const [showGif,setShowGif]=useState(false);
   const [gifSearch,setGifSearch]=useState(''); const [gifs,setGifs]=useState([]); const [gifLoading,setGifLoading]=useState(false);
   const [showNewSpace,setShowNewSpace]=useState(false); const [newSpaceName,setNewSpaceName]=useState('');
+  const [newSpaceType,setNewSpaceType]=useState('collaboration'); // collaboration | announcements
+  const [showSpaceSettings,setShowSpaceSettings]=useState(null); // space id
+  const [showAddDM,setShowAddDM]=useState(false);
+  const [dmSearch,setDmSearch]=useState('');
   const [customSpaces,setCustomSpaces]=useState(()=>{ try{return JSON.parse(localStorage.getItem('ss-spaces')||'[]');}catch{return[];} });
   const [pinnedMsgs,setPinnedMsgs]=useState([]);
   const [showPinned,setShowPinned]=useState(false);
@@ -1020,17 +1025,30 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
   const spaceMessages=messages.filter(m=>{
     if(activeSpace.startsWith('dm-')){
       const dmEmail=activeSpace.slice(3);
-      return (m.dm_to===myEmail&&m.sender_email===dmEmail)||(m.dm_to===dmEmail&&m.sender_email===myEmail);
+      // Match DMs in both directions
+      return m.dm_to && (
+        (m.dm_to===myEmail && m.sender_email===dmEmail) ||
+        (m.dm_to===dmEmail && m.sender_email===myEmail) ||
+        (m.dm_to===dmEmail && m.sender_email===myEmail)
+      );
     }
-    return (m.space||'general')===activeSpace && !m.dm_to;
+    // Space messages: must have matching space AND no dm_to
+    return !m.dm_to && (m.space||'general')===activeSpace;
   });
 
   const sendMsg=(text,type='text',url='',filename='',filesize=0)=>{
     if(type==='text'&&!text.trim())return;
     const isDM=activeSpace.startsWith('dm-');
-    onSend({id:'m'+Date.now(),text:type==='text'?text.trim():'',type,url,filename,filesize,
-      sender_email:myEmail,sender_name:myName,created_at:new Date().toISOString(),
-      space:activeSpace,dm_to:isDM?activeSpace.slice(3):undefined,
+    const dmTo=isDM?activeSpace.slice(3):null;
+    onSend({
+      id:'m'+Date.now(),
+      text:type==='text'?text.trim():'',
+      type,url,filename,filesize,
+      sender_email:myEmail,
+      sender_name:myName,
+      created_at:new Date().toISOString(),
+      space: dmTo ? 'dm' : activeSpace,
+      dm_to: dmTo || undefined,
       reply_to:replyTo?{id:replyTo.id,text:replyTo.text||'[attachment]',name:replyTo.sender_name}:undefined,
     });
     setMsg(''); setShowEmoji(false); setShowGif(false); setReplyTo(null);
@@ -1050,10 +1068,10 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
   const addCustomSpace=()=>{
     if(!newSpaceName.trim())return;
     const id='space-'+newSpaceName.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
-    const updated=[...customSpaces,{id,name:newSpaceName.trim()}];
+    const updated=[...customSpaces,{id,name:newSpaceName.trim(),type:newSpaceType||'collaboration'}];
     setCustomSpaces(updated);
     try{localStorage.setItem('ss-spaces',JSON.stringify(updated));}catch{}
-    setActiveSpace(id); setShowNewSpace(false); setNewSpaceName('');
+    setActiveSpace(id); setShowNewSpace(false); setNewSpaceName(''); setNewSpaceType('collaboration');
   };
 
   const deleteCustomSpace=(id)=>{
@@ -1116,11 +1134,22 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
             {isManager&&<button onClick={()=>setShowNewSpace(!showNewSpace)} style={{ width:20,height:20,borderRadius:5,background:'transparent',border:'none',color:c.mut,cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700 }} title="Create space">+</button>}
           </div>
           {showNewSpace&&isManager&&(
-            <div style={{ margin:'4px 6px 8px',padding:'10px',background:c.surf,borderRadius:10,border:`1px solid ${c.bord}` }}>
-              <input value={newSpaceName} onChange={e=>setNewSpaceName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')addCustomSpace();if(e.key==='Escape')setShowNewSpace(false);}} placeholder="Space name..." autoFocus style={{ width:'100%',background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:7,padding:'6px 10px',color:c.text,fontSize:12,outline:'none',boxSizing:'border-box',marginBottom:7 }}/>
-              <div style={{ display:'flex',gap:5 }}>
-                <button onClick={addCustomSpace} disabled={!newSpaceName.trim()} style={{ flex:1,padding:'5px',borderRadius:7,background:'#6366F1',border:'none',color:'#fff',cursor:'pointer',fontSize:12,fontWeight:600 }}>Create</button>
-                <button onClick={()=>setShowNewSpace(false)} style={{ padding:'5px 8px',borderRadius:7,background:'transparent',border:`1px solid ${c.bord}`,color:c.mut,cursor:'pointer',fontSize:12 }}>✕</button>
+            <div style={{ margin:'4px 6px 8px',padding:'12px',background:c.surf,borderRadius:12,border:`1px solid ${c.bord}` }}>
+              <div style={{ fontSize:12,fontWeight:700,color:c.text,marginBottom:8 }}>Create a space</div>
+              <input value={newSpaceName} onChange={e=>setNewSpaceName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')addCustomSpace();if(e.key==='Escape')setShowNewSpace(false);}} placeholder="Space name..." autoFocus style={{ width:'100%',background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:7,padding:'6px 10px',color:c.text,fontSize:12,outline:'none',boxSizing:'border-box',marginBottom:8 }}/>
+              <div style={{ fontSize:11,fontWeight:600,color:c.mut,marginBottom:5 }}>What is this space for?</div>
+              {[{v:'collaboration',l:'Collaboration',d:'Share files, assign tasks and organise conversations'},{v:'announcements',l:'Announcements',d:'Broadcast and share updates with your group'}].map(t=>(
+                <div key={t.v} onClick={()=>setNewSpaceType(t.v)} style={{ display:'flex',alignItems:'flex-start',gap:8,padding:'7px 8px',borderRadius:8,cursor:'pointer',background:newSpaceType===t.v?'rgba(99,102,241,.1)':'transparent',marginBottom:4,border:newSpaceType===t.v?`1px solid rgba(99,102,241,.3)`:`1px solid transparent` }}>
+                  <div style={{ width:14,height:14,borderRadius:'50%',border:`2px solid ${newSpaceType===t.v?'#818CF8':'rgba(128,128,128,.4)'}`,background:newSpaceType===t.v?'#818CF8':'transparent',marginTop:1,flexShrink:0 }}/>
+                  <div>
+                    <div style={{ fontSize:12,fontWeight:600,color:c.text }}>{t.l}</div>
+                    <div style={{ fontSize:10,color:c.mut }}>{t.d}</div>
+                  </div>
+                </div>
+              ))}
+              <div style={{ display:'flex',gap:5,marginTop:8 }}>
+                <button onClick={addCustomSpace} disabled={!newSpaceName.trim()} style={{ flex:1,padding:'6px',borderRadius:7,background:'#6366F1',border:'none',color:'#fff',cursor:'pointer',fontSize:12,fontWeight:600 }}>Create</button>
+                <button onClick={()=>setShowNewSpace(false)} style={{ padding:'6px 10px',borderRadius:7,background:'transparent',border:`1px solid ${c.bord}`,color:c.mut,cursor:'pointer',fontSize:12 }}>Cancel</button>
               </div>
             </div>
           )}
@@ -1135,10 +1164,23 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
           ))}
 
           {/* Direct Messages */}
-          <div style={{ padding:'10px 10px 4px',marginTop:8 }}>
+          <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 10px 4px',marginTop:8 }}>
             <span style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em' }}>Direct messages</span>
+            <button onClick={()=>setShowAddDM(!showAddDM)} style={{ width:18,height:18,borderRadius:5,background:'transparent',border:'none',color:c.mut,cursor:'pointer',fontSize:15,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700 }} title="New direct message">+</button>
           </div>
-          {dmMembers.length===0&&<div style={{ fontSize:12,color:c.mut,padding:'6px 10px' }}>No other members yet</div>}
+          {showAddDM&&(
+            <div style={{ margin:'2px 6px 6px',padding:'8px',background:c.surf,borderRadius:10,border:`1px solid ${c.bord}` }}>
+              <input value={dmSearch} onChange={e=>setDmSearch(e.target.value)} placeholder="Search members..." autoFocus style={{ width:'100%',background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:7,padding:'5px 8px',color:c.text,fontSize:11,outline:'none',boxSizing:'border-box',marginBottom:5 }}/>
+              {members.filter(m=>m.email!==myEmail&&(!dmSearch||m.name?.toLowerCase().includes(dmSearch.toLowerCase())||m.email?.toLowerCase().includes(dmSearch.toLowerCase()))).map(m=>(
+                <div key={m.email} onClick={()=>{setActiveSpace('dm-'+m.email);setShowAddDM(false);setDmSearch('');}} style={{ display:'flex',alignItems:'center',gap:7,padding:'5px 6px',borderRadius:7,cursor:'pointer',fontSize:12,color:c.text }} onMouseEnter={e=>e.currentTarget.style.background='rgba(99,102,241,.1)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                  <Av member={m} size={20} url={m.avatar_url}/>
+                  <span>{m.name||m.email}</span>
+                </div>
+              ))}
+              {members.filter(m=>m.email!==myEmail).length===0&&<div style={{ fontSize:11,color:c.mut }}>No other members in team</div>}
+            </div>
+          )}
+          {dmMembers.length===0&&!showAddDM&&<div style={{ fontSize:12,color:c.mut,padding:'6px 10px' }}>No other members yet</div>}
           {dmMembers.map(m=>{
             const dmKey='dm-'+m.email;
             const isActive=activeSpace===dmKey;
@@ -1954,7 +1996,7 @@ function SettingsPage({ session, onBack, onSaved }) {
   const [soundEnabled,setSoundEnabled]=useState(false);
   return (
     <div style={{ position:'relative',zIndex:1,minHeight:'100vh' }}>
-      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100 }}>
+      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100,overflow:'visible' }}>
         <div style={{ maxWidth:900,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:12 }}>
           <Logo size={28} onClick={onBack}/><div style={{ flex:1 }}/><ThemeToggle/><Btn v="ghost" onClick={onBack} style={{ padding:'6px 14px',fontSize:13 }}>← Back</Btn>
         </div>
@@ -2059,10 +2101,10 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
   useEffect(()=>{ try{const n=localStorage.getItem('ss-notes-'+(user.email||'')); if(n)setMeetingNotes(n);}catch{}; },[]);
   return (
     <div style={{ position:'relative',zIndex:1,minHeight:'100vh' }}>
-      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100 }}>
+      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100,overflow:'visible' }}>
         <div style={{ maxWidth:800,margin:'0 auto',padding:'0 20px',height:56,display:'flex',alignItems:'center',gap:12 }}>
           <Logo size={26} onClick={onBack}/>
-          <div style={{ display:'flex',gap:2,flex:1,overflowX:'auto' }}>
+          <div style={{ display:'flex',gap:2,flex:1,overflowX:'auto',overflowY:'visible' }}>
             {TABS.map(t=>{
               const isA=activeTab===t.id;
               return(
@@ -2487,10 +2529,10 @@ var STANDSYNC_MGR_TABS = [{id:'live',l:'Live board',ic:'◉'},{id:'team',l:'Team
   const myTasks=tasks.filter(t=>t.assignee_email===session?.user?.email);
   return(
     <div style={{ position:'relative',zIndex:1,minHeight:'100vh' }}>
-      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100 }}>
+      <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100,overflow:'visible' }}>
         <div style={{ maxWidth:1200,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:10 }}>
           <Logo size={26} onClick={onBack}/>
-          <nav style={{ display:'flex',gap:1,flex:1,overflowX:'auto' }}>
+          <nav style={{ display:'flex',gap:1,flex:1,overflowX:'auto',overflowY:'visible' }}>
             <button onClick={()=>openPip&&openPip()} title="Open PiP — stays visible when you switch tabs" style={{ padding:'5px 10px',borderRadius:10,border:`1px solid ${pipOpen?'rgba(124,110,245,.5)':c.bord}`,background:pipOpen?'rgba(124,110,245,.18)':'rgba(124,110,245,.08)',color:'#A78BFA',cursor:'pointer',fontSize:11,fontWeight:600,flexShrink:0,display:'flex',alignItems:'center',gap:6 }}><span style={{ width:14,height:14,display:'flex',alignItems:'center',justifyContent:'center' }}>{I.pip}</span>{pipOpen?'PiP ●':'PiP'}</button>
         {STANDSYNC_MGR_TABS.map(t=>{
               const isA=tab===t.id;
