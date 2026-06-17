@@ -183,7 +183,10 @@ function ProfileMenu({ session, onSettings, onLogout }) {
 
 // ─── AUTH PAGE ────────────────────────────────────────────────────────────────
 function AuthPage({ onLogin, inviteToken }) {
-  const c=useC(); const [mode,setMode]=useState(inviteToken?'signup':'login');
+  const c=useC();
+  // If coming via invite link always start on signup. Otherwise detect: if no session exists anywhere, default to signup.
+  const hasExistingAccount=()=>{ try{ const raw=localStorage.getItem('ss-auth'); return !!(raw&&JSON.parse(raw)?.currentSession); }catch{return false;} };
+  const [mode,setMode]=useState(inviteToken?'signup':hasExistingAccount()?'login':'signup');
   const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); const [name,setName]=useState('');
   const [loading,setLoading]=useState(false); const [gLoading,setGLoading]=useState(false);
   const [error,setError]=useState(''); const [info,setInfo]=useState(''); const [gError,setGError]=useState('');
@@ -592,7 +595,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
           <p style={{ fontSize:13,color:c.mut }}>Get the Room ID and password from your manager</p>
         </div>
         <Inp label="Room ID" value={roomId} onChange={e=>setRoomId(e.target.value.toUpperCase())} placeholder="e.g. AB3K9M" style={{ marginBottom:14,letterSpacing:'.12em',textTransform:'uppercase',fontSize:18,textAlign:'center',fontWeight:700 }} autoFocus/>
-        <Inp label="Room password" type="password" value={roomPass} onChange={e=>setRoomPass(e.target.value.toUpperCase())} placeholder="4-digit PIN" style={{ marginBottom:18,textAlign:'center',fontSize:18,letterSpacing:'.15em' }} onKeyDown={e=>e.key==='Enter'&&joinTeam()}/>
+        <Inp label="Room password" value={roomPass} onChange={e=>setRoomPass(e.target.value.toUpperCase())} placeholder="e.g. MXR-4KP" style={{ marginBottom:18,textAlign:'center',fontSize:18,letterSpacing:'.15em',fontFamily:'monospace' }} onKeyDown={e=>e.key==='Enter'&&joinTeam()}/>
         {joinError&&<div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#F87171',marginBottom:14 }}>{joinError}</div>}
         <Btn onClick={joinTeam} loading={joinLoading} disabled={!roomId.trim()||!roomPass.trim()} style={{ width:'100%',justifyContent:'center',padding:'12px',fontSize:15 }}>Join team →</Btn>
         <div style={{ marginTop:16,fontSize:12,color:c.mut,textAlign:'center' }}>Don't have a Room ID? Ask your manager to share it from Team Settings</div>
@@ -2054,6 +2057,19 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
             {weekDays.map((day,i)=>{
               const dayEvts=getEventsForDay(day);
               const isToday=day.toDateString()===today.toDateString();
+              // Split all-day vs timed, assign overlap columns
+              const timedEvts=dayEvts.filter(ev=>ev.start?.dateTime);
+              const allDayEvts=dayEvts.filter(ev=>!ev.start?.dateTime);
+              const cols=[];
+              const evCols=timedEvts.map(ev=>{
+                const s=new Date(ev.start.dateTime).getTime();
+                const e=new Date(ev.end?.dateTime||ev.start.dateTime).getTime();
+                let col=0;
+                while(cols[col]&&cols[col]>s) col++;
+                cols[col]=e;
+                return col;
+              });
+              const maxCol=evCols.length?Math.max(...evCols)+1:1;
               return(
                 <div key={i} style={{ borderLeft:`1px solid ${c.bord}`,position:'relative',background:isToday?'rgba(99,102,241,.02)':'transparent' }}>
                   {/* Hour lines */}
@@ -2066,26 +2082,25 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
                     const top=(now.getHours()*60+now.getMinutes())/60*48;
                     return <div style={{ position:'absolute',left:0,right:0,top:top,height:2,background:'#EF4444',zIndex:10 }}><div style={{ width:8,height:8,borderRadius:'50%',background:'#EF4444',position:'absolute',left:-4,top:-3 }}/></div>;
                   })()}
-                  {/* Events */}
-                  {dayEvts.map(ev=>{
-                    if(!ev.start?.dateTime){
-                      // All-day event — show at top
-                      return(
-                        <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ position:'absolute',top:2,left:2,right:2,padding:'2px 5px',borderRadius:4,background:eventColor(ev)+'33',border:`1px solid ${eventColor(ev)}66`,color:eventColor(ev),fontSize:10,fontWeight:600,cursor:'pointer',zIndex:5,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>
-                          {ev.summary}
-                        </div>
-                      );
-                    }
+                  {/* All-day events stacked at top */}
+                  {allDayEvts.map((ev,ai)=>(
+                    <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ position:'absolute',top:2+ai*18,left:2,right:2,padding:'2px 5px',borderRadius:4,background:eventColor(ev)+'33',border:`1px solid ${eventColor(ev)}66`,color:eventColor(ev),fontSize:10,fontWeight:600,cursor:'pointer',zIndex:5,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>
+                      {ev.summary}
+                    </div>
+                  ))}
+                  {/* Timed events with column layout to avoid overlap */}
+                  {timedEvts.map((ev,ei)=>{
                     const start=new Date(ev.start.dateTime);
                     const end=new Date(ev.end?.dateTime||ev.start.dateTime);
                     const startMin=start.getHours()*60+start.getMinutes();
                     const duration=Math.max(30,(end-start)/60000);
                     const top=startMin/60*48;
                     const height=Math.max(20,duration/60*48-2);
+                    const col=evCols[ei], colW=100/maxCol;
                     return(
-                      <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ position:'absolute',left:2,right:2,top:top,height:height,padding:'2px 5px',borderRadius:5,background:eventColor(ev)+'33',borderLeft:`3px solid ${eventColor(ev)}`,color:eventColor(ev),fontSize:10,fontWeight:600,cursor:'pointer',zIndex:5,overflow:'hidden',boxSizing:'border-box' }}>
-                        <div style={{ fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{ev.summary}</div>
-                        {height>28&&<div style={{ opacity:.7 }}>{fmtTime(ev.start.dateTime)}</div>}
+                      <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ position:'absolute',left:`calc(${col*colW}% + 2px)`,width:`calc(${colW}% - 4px)`,top,height,padding:'2px 4px',borderRadius:5,background:eventColor(ev)+'33',borderLeft:`3px solid ${eventColor(ev)}`,color:eventColor(ev),fontSize:10,fontWeight:600,cursor:'pointer',zIndex:5,overflow:'hidden',boxSizing:'border-box' }}>
+                        <div style={{ fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:9 }}>{ev.summary}</div>
+                        {height>28&&<div style={{ opacity:.7,fontSize:9 }}>{fmtTime(ev.start.dateTime)}</div>}
                       </div>
                     );
                   })}
@@ -2276,7 +2291,7 @@ function MemberTaskCard({ task, user, onStatus, onBlocker }) {
 }
 
 // ─── MEMBER VIEW ──────────────────────────────────────────────────────────────
-function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack, onSettings, session, members, messages, onSendMessage, chatTheme, onChangeTheme }) {
+function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack, onSettings, session, members, messages, onSendMessage, chatTheme, onChangeTheme, history=[], team }) {
   const c=useC();
   const mine=tasks.filter(t=>t.assignee_email===user.email);
   const done=mine.filter(t=>t.status==='done').length; const pct=mine.length?Math.round(done/mine.length*100):0;
@@ -2294,6 +2309,9 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
     {id:'notes',   l:'Meeting notes', ic:'≡'},
     {id:'chat',    l:'Team chat',     ic:'◌'},
     {id:'cal',     l:'Calendar',      ic:'⊟'},
+    {id:'perf',    l:'Performance',   ic:'↗'},
+    {id:'hist',    l:'History',       ic:'↺'},
+    {id:'remind',  l:'Reminders',     ic:'◔'},
     {id:'ai',      l:'AI assistant',  ic:'◉'},
   ];
   // meetingNotes moved to NotesTab component
@@ -2362,6 +2380,9 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
         {activeTab==='chat'&&<RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme}/>}
         {activeTab==='cal'&&<CalendarPanel team={null} session={session} members={members}/>}
         {activeTab==='ai'&&<AIAssistant tasks={tasks} members={members} history={[]} session={session} myTasks={mine} teamName="Team"/>}
+        {activeTab==='perf'&&<PerfTab tasks={tasks} history={[]} members={members}/>}
+        {activeTab==='hist'&&<HistTab history={[]} members={members}/>}
+        {activeTab==='remind'&&<RemindersPanel/>}
 
         {/* ── SELF TASKS (personal, not team) ── */}
         {activeTab==='self'&&(
@@ -2440,7 +2461,7 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
         })()}
 
         {/* ── MEETING NOTES ── */}
-        {activeTab==='notes'&&<NotesTab session={session} team={{id:user?.team_id||'t1'}} role={'member-'+user?.email}/>}
+        {activeTab==='notes'&&<NotesTab session={session} team={team||{id:user?.team_id||'t1'}} role={'member-'+user?.email}/>}
       </div>
     </div>
   );
@@ -2597,13 +2618,18 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
     try{
       if(SB.IS_LIVE){
         const myName=session?.user?.user_metadata?.name||session?.user?.email;
-        const {link}=await SB.inviteMember(team.id,team.name,invEmail.trim(),myName);
-        setLastInviteLink(link); // Always show link so manager can share manually
-        try{ await Promise.race([Email.sendInvite(invEmail.trim(),myName,team.name,link),new Promise(r=>setTimeout(r,5000))]); }catch(e){}
+        const {link,error:invErr}=await SB.inviteMember(team.id,team.name,invEmail.trim(),myName);
+        if(invErr){ console.error('inviteMember error:',invErr); }
+        if(link) setLastInviteLink(link);
+        if(link&&process.env.REACT_APP_RESEND_KEY){
+          try{
+            await Promise.race([Email.sendInvite(invEmail.trim(),myName,team.name,link),new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),6000))]);
+          }catch(e){ console.warn('Email send failed (will show copy link):',e.message); }
+        }
       }
-    }catch(e){ console.error('invite error:',e); }
-    setSent(true);setSending(false);
-    setTimeout(()=>{setSent(false);},3000);
+    }catch(e){ console.error('sendInv error:',e); }
+    setSent(true); setSending(false);
+    setTimeout(()=>setSent(false),3000);
   };
 
   const addRoom=async()=>{
@@ -3088,17 +3114,19 @@ export default function App() {
   const handleDigest=useCallback(async()=>{
     setEmailBusy(true);
     if(!process.env.REACT_APP_RESEND_KEY){ showToast('⚠️ Add REACT_APP_RESEND_KEY to Vercel to send emails','error'); setEmailBusy(false); return; }
-    let sent=0;
+    let sent=0, failed=0;
     const nonManagers=members.filter(x=>x.role!=='manager');
     if(nonManagers.length===0){ showToast('No team members to send digest to — invite members first','error'); setEmailBusy(false); return; }
     for(const m of nonManagers){
-      const mt=tasks.filter(t=>t.assignee_email===m.email);
-      // Send digest even if no tasks — member should know standup started
-      await Email.sendMorningDigest(m,mt,team?.name||'Team');
-      sent++;
+      try{
+        const mt=tasks.filter(t=>t.assignee_email===m.email);
+        await Email.sendMorningDigest(m,mt,team?.name||'Team');
+        sent++;
+      }catch(e){ console.error('Digest failed for',m.email,e); failed++; }
     }
     setEmailBusy(false);
-    showToast('📧 Digest sent to '+sent+' member'+(sent!==1?'s':''));
+    if(failed>0) showToast(`📧 Sent ${sent}, failed ${failed} — check console for details`,'error');
+    else showToast('📧 Digest sent to '+sent+' member'+(sent!==1?'s':''));
   },[tasks,members,team,showToast]);
   const handleEOD=useCallback(async()=>{ setEmailBusy(true); try{ for(const m of members.filter(x=>x.role!=='manager')){const p=tasks.filter(t=>t.assignee_email===m.email&&t.status!=='done');if(p.length>0)await Email.sendEODBacklog(m,p,team?.name||'Team');} const mg=members.find(m=>m.role==='manager'); if(mg)await Email.sendManagerSummary(mg.email,tasks,members,team?.name||'Team'); showToast('🕕 EOD summary sent'); }catch(e){showToast('Failed to send EOD','error');} setEmailBusy(false); },[tasks,members,team,showToast]);
   const handleLogin=useCallback(async(sess)=>{ setSession(sess); if(inviteToken&&SB.IS_LIVE){const r=await SB.acceptInvite(inviteToken,sess.user.id,sess.user.email,sess.user.user_metadata?.name||sess.user.email);if(r.teamId)showToast(`✅ Joined: ${r.teamName}`);window.history.replaceState({},'',window.location.pathname);setInviteToken(null);} setView('home'); },[inviteToken,showToast]);
@@ -3163,7 +3191,7 @@ export default function App() {
       {(session||!SB.IS_LIVE)&&view==='settings'&&<SettingsPage session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onBack={()=>setView(team?'standup':'home')} onSaved={d=>showToast('Profile saved')}/>}
       {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
       {/* PiP is a real popup window — no DOM element needed */}
-      {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<MemberView user={userForView} myMember={myMember} tasks={tasks} onAdd={handleAddTask} onStatus={handleStatus} onBlocker={handleBlocker} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} members={members} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme}/>}
+      {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<MemberView user={userForView} myMember={myMember} tasks={tasks} onAdd={handleAddTask} onStatus={handleStatus} onBlocker={handleBlocker} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} members={members} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} history={history} team={team}/>}
       {/* FIX 1: draggable AI bubble — shown for both manager and member in standup view */}
       {(session||!SB.IS_LIVE)&&view==='standup'&&(
         <AIBubble
