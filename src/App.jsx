@@ -3661,7 +3661,6 @@ function BrainstormSpace({ team, session, members=[] }) {
   const c = useC();
   const { dark } = useTheme();
   const canvasRef = useRef();
-  const svgRef = useRef();
   const nextId = useRef(1);
 
   const userId = session?.user?.id || 'anon';
@@ -3669,7 +3668,7 @@ function BrainstormSpace({ team, session, members=[] }) {
   const [mode, setMode] = useState('personal');
   const BOARD_KEY = `ss-bs-${mode === 'personal' ? userId : 'shared-' + teamId}`;
 
-  const [pan, setPan]   = useState({ x: 120, y: 80 });
+  const [pan, setPan]   = useState({ x: 80, y: 60 });
   const [zoom, setZoom] = useState(1);
   const [nodes, setNodes]             = useState([]);
   const [connections, setConnections] = useState([]);
@@ -3678,39 +3677,83 @@ function BrainstormSpace({ team, session, members=[] }) {
   const [tool, setTool]               = useState('select');
   const [editingId, setEditingId]     = useState(null);
 
-  // draw
-  const [drawColor, setDrawColor] = useState('#000000');
-  const [drawWidth, setDrawWidth] = useState(3);
-  const [currentPath, setCurrentPath] = useState(null);
-  const isDrawing = useRef(false);
+  // ── Draw — use refs so window mousemove always has fresh data ──
+  const [drawColor, setDrawColor]   = useState('#000000');
+  const [drawWidth, setDrawWidth]   = useState(3);
+  const [livePathPts, setLivePathPts] = useState(null); // [{x,y},...] or null
+  const livePathRef   = useRef(null); // always fresh copy
+  const drawColorRef  = useRef('#000000');
+  const drawWidthRef  = useRef(3);
+  const isDrawingRef  = useRef(false);
+
+  // sync refs when state changes
+  useEffect(() => { drawColorRef.current = drawColor; }, [drawColor]);
+  useEffect(() => { drawWidthRef.current = drawWidth; }, [drawWidth]);
 
   // sticky / shape
-  const [stickyColor, setStickyColor] = useState('#FDE68A');
-  const [shapeType, setShapeType]     = useState('rect');
+  const [stickyColor, setStickyColor]     = useState('#FDE68A');
+  const [shapeType, setShapeType]         = useState('rect');
   const [shapeColorIdx, setShapeColorIdx] = useState(0);
 
   // connector
-  const [connType, setConnType]       = useState('curve');
-  const [connColor, setConnColor]     = useState('#000000');
-  const [connectFrom, setConnectFrom] = useState(null); // nodeId
-  const [connPreview, setConnPreview] = useState(null); // {x,y} in canvas space
+  const [connType, setConnType]     = useState('curve');
+  const [connColor, setConnColor]   = useState('#000000');
+  const [connectFrom, setConnectFrom] = useState(null);
+  const connectFromRef = useRef(null);
+  useEffect(() => { connectFromRef.current = connectFrom; }, [connectFrom]);
+
+  // live preview line when using connect tool
+  const [connPreviewPt, setConnPreviewPt] = useState(null);
+  const connPreviewRef = useRef(null);
+  useEffect(() => { connPreviewRef.current = connPreviewPt; }, [connPreviewPt]);
+
+  // port drag
+  const [portDrag, setPortDrag]   = useState(null);
+  const portDragRef = useRef(null);
+  useEffect(() => { portDragRef.current = portDrag; }, [portDrag]);
 
   // drag / resize
   const [dragging, setDragging]   = useState(null);
-  const [resizing, setResizing]   = useState(null);
-  const [selBox, setSelBox]       = useState(null);
+  const draggingRef = useRef(null);
+  useEffect(() => { draggingRef.current = dragging; }, [dragging]);
 
-  // port drag (for connect-by-dragging port dot)
-  const [portDrag, setPortDrag]   = useState(null); // {fromId, preview}
+  const [resizing, setResizing]   = useState(null);
+  const resizingRef = useRef(null);
+  useEffect(() => { resizingRef.current = resizing; }, [resizing]);
+
+  const [selBox, setSelBox]   = useState(null);
+  const selBoxRef = useRef(null);
+  useEffect(() => { selBoxRef.current = selBox; }, [selBox]);
 
   const [isPanning, setIsPanning] = useState(false);
+  const isPanningRef = useRef(false);
   const panRef = useRef({ x: 0, y: 0 });
+  const panStateRef = useRef({ x: 80, y: 60 });
+  useEffect(() => { panStateRef.current = pan; }, [pan]);
 
   const [clipboard, setClipboard] = useState(null);
   const [ctxMenu, setCtxMenu]     = useState(null);
+  const nodesRef = useRef([]);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  const connectionsRef = useRef([]);
+  useEffect(() => { connectionsRef.current = connections; }, [connections]);
+  const drawPathsRef = useRef([]);
+  useEffect(() => { drawPathsRef.current = drawPaths; }, [drawPaths]);
+  const selectedRef = useRef(new Set());
+  useEffect(() => { selectedRef.current = selected; }, [selected]);
+  const toolRef = useRef('select');
+  useEffect(() => { toolRef.current = tool; }, [tool]);
+  const zoomRef = useRef(1);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+  const connTypeRef = useRef('curve');
+  useEffect(() => { connTypeRef.current = connType; }, [connType]);
+  const connColorRef = useRef('#000000');
+  useEffect(() => { connColorRef.current = connColor; }, [connColor]);
 
   const [bsHist, setBsHist] = useState([]);
   const [bsIdx, setBsIdx]   = useState(-1);
+  const bsIdxRef = useRef(-1);
+  useEffect(() => { bsIdxRef.current = bsIdx; }, [bsIdx]);
 
   // ── Load ──
   useEffect(() => {
@@ -3718,14 +3761,14 @@ function BrainstormSpace({ team, session, members=[] }) {
       const raw = localStorage.getItem(BOARD_KEY);
       if (raw) {
         const d = JSON.parse(raw);
-        if (d.nodes)       { setNodes(d.nodes); if (d.nodes.length) nextId.current = Math.max(...d.nodes.map(n => n.id), 0) + 1; }
-        if (d.connections) setConnections(d.connections);
-        if (d.drawPaths)   setDrawPaths(d.drawPaths);
+        if (d.nodes)       { setNodes(d.nodes); nodesRef.current = d.nodes; if (d.nodes.length) nextId.current = Math.max(...d.nodes.map(n => n.id), 0) + 1; }
+        if (d.connections) { setConnections(d.connections); connectionsRef.current = d.connections; }
+        if (d.drawPaths)   { setDrawPaths(d.drawPaths); drawPathsRef.current = d.drawPaths; }
       } else {
-        const welcome = { id: 1, type: 'sticky', x: 60, y: 40, w: 180, h: 150,
-          text: '👋 Welcome!\nDouble-click to edit\nDrag to move\nS = sticky  T = text\nD = draw  C = connect', color: '#FDE68A',
+        const welcome = { id: 1, type: 'sticky', x: 60, y: 40, w: 200, h: 160,
+          text: '👋 Welcome!\nDouble-click to edit\nDrag to move\nS=sticky T=text D=draw C=connect', color: '#FDE68A',
           fontSize: 12, fontWeight: 400, fontStyle: 'normal', textAlign: 'left' };
-        setNodes([welcome]); nextId.current = 2;
+        setNodes([welcome]); nodesRef.current = [welcome]; nextId.current = 2;
       }
     } catch(e) {}
   }, [BOARD_KEY]);
@@ -3735,30 +3778,46 @@ function BrainstormSpace({ team, session, members=[] }) {
   }, [BOARD_KEY]);
 
   const pushHist = useCallback((n, co, dp) => {
-    setBsHist(h => [...h.slice(0, bsIdx + 1), { nodes: JSON.parse(JSON.stringify(n)), connections: JSON.parse(JSON.stringify(co)), drawPaths: JSON.parse(JSON.stringify(dp)) }]);
+    const idx = bsIdxRef.current;
+    setBsHist(h => [...h.slice(0, idx + 1), { nodes: JSON.parse(JSON.stringify(n)), connections: JSON.parse(JSON.stringify(co)), drawPaths: JSON.parse(JSON.stringify(dp)) }]);
     setBsIdx(i => i + 1);
     saveToStorage(n, co, dp);
-  }, [bsIdx, saveToStorage]);
+  }, [saveToStorage]);
 
   const undo = useCallback(() => {
-    if (bsIdx < 1) return;
-    const s = bsHist[bsIdx - 1];
-    setNodes(s.nodes); setConnections(s.connections); setDrawPaths(s.drawPaths);
-    setBsIdx(i => i - 1); saveToStorage(s.nodes, s.connections, s.drawPaths);
-  }, [bsHist, bsIdx, saveToStorage]);
+    setBsHist(h => {
+      const idx = bsIdxRef.current;
+      if (idx < 1) return h;
+      const s = h[idx - 1];
+      setNodes(s.nodes); nodesRef.current = s.nodes;
+      setConnections(s.connections); connectionsRef.current = s.connections;
+      setDrawPaths(s.drawPaths); drawPathsRef.current = s.drawPaths;
+      setBsIdx(i => i - 1);
+      saveToStorage(s.nodes, s.connections, s.drawPaths);
+      return h;
+    });
+  }, [saveToStorage]);
 
   const redo = useCallback(() => {
-    if (bsIdx >= bsHist.length - 1) return;
-    const s = bsHist[bsIdx + 1];
-    setNodes(s.nodes); setConnections(s.connections); setDrawPaths(s.drawPaths);
-    setBsIdx(i => i + 1); saveToStorage(s.nodes, s.connections, s.drawPaths);
-  }, [bsHist, bsIdx, saveToStorage]);
+    setBsHist(h => {
+      const idx = bsIdxRef.current;
+      if (idx >= h.length - 1) return h;
+      const s = h[idx + 1];
+      setNodes(s.nodes); nodesRef.current = s.nodes;
+      setConnections(s.connections); connectionsRef.current = s.connections;
+      setDrawPaths(s.drawPaths); drawPathsRef.current = s.drawPaths;
+      setBsIdx(i => i + 1);
+      saveToStorage(s.nodes, s.connections, s.drawPaths);
+      return h;
+    });
+  }, [saveToStorage]);
 
-  // ── toCanvas: client coords → canvas coords ──
+  // ── Coordinate transform ──
   const toCanvas = useCallback((cx, cy) => {
     const rect = canvasRef.current?.getBoundingClientRect() || { left: 0, top: 0 };
-    return { x: (cx - rect.left - pan.x) / zoom, y: (cy - rect.top - pan.y) / zoom };
-  }, [pan, zoom]);
+    const z = zoomRef.current, p = panStateRef.current;
+    return { x: (cx - rect.left - p.x) / z, y: (cy - rect.top - p.y) / z };
+  }, []);
 
   // ── Wheel zoom ──
   useEffect(() => {
@@ -3771,16 +3830,128 @@ function BrainstormSpace({ team, session, members=[] }) {
         const factor = e.deltaY < 0 ? 1.1 : 0.91;
         setZoom(z => {
           const nz = Math.min(4, Math.max(0.1, z * factor));
-          setPan(p => ({ x: mx - (mx - p.x) * (nz / z), y: my - (my - p.y) * (nz / z) }));
+          setPan(p => { const np = { x: mx - (mx - p.x) * (nz / z), y: my - (my - p.y) * (nz / z) }; panStateRef.current = np; return np; });
+          zoomRef.current = nz;
           return nz;
         });
       } else {
-        setPan(p => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }));
+        setPan(p => { const np = { x: p.x - e.deltaX, y: p.y - e.deltaY }; panStateRef.current = np; return np; });
       }
     };
     el.addEventListener('wheel', handler, { passive: false });
     return () => el.removeEventListener('wheel', handler);
   }, []);
+
+  // ══ WINDOW-LEVEL MOUSE MOVE + UP ══
+  // This is the critical fix: attach to window so events fire even when mouse
+  // is over node divs or SVG elements, which would otherwise swallow events.
+  useEffect(() => {
+    const onMove = (e) => {
+      const pt = toCanvas(e.clientX, e.clientY);
+
+      // PAN
+      if (isPanningRef.current) {
+        const np = { x: e.clientX - panRef.current.x, y: e.clientY - panRef.current.y };
+        setPan(np); panStateRef.current = np;
+        return;
+      }
+
+      // DRAW — always track if drawing
+      if (isDrawingRef.current && livePathRef.current) {
+        const updated = [...livePathRef.current, [pt.x, pt.y]];
+        livePathRef.current = updated;
+        setLivePathPts([...updated]);
+        return;
+      }
+
+      // DRAG nodes
+      const drag = draggingRef.current;
+      if (drag) {
+        const dx = pt.x - drag.startPt.x, dy = pt.y - drag.startPt.y;
+        setNodes(ns => ns.map(n => drag.nodeIds.includes(n.id) ? { ...n, x: drag.origPositions[n.id].x + dx, y: drag.origPositions[n.id].y + dy } : n));
+        return;
+      }
+
+      // RESIZE
+      const res = resizingRef.current;
+      if (res) {
+        setNodes(ns => ns.map(n => n.id === res.id ? { ...n, w: Math.max(80, res.origW + (pt.x - res.startPt.x)), h: Math.max(36, res.origH + (pt.y - res.startPt.y)) } : n));
+        return;
+      }
+
+      // PORT DRAG preview
+      const pd = portDragRef.current;
+      if (pd) {
+        setPortDrag(p => ({ ...p, preview: pt }));
+        portDragRef.current = { ...pd, preview: pt };
+        return;
+      }
+
+      // CONNECT tool preview
+      if (connectFromRef.current) {
+        setConnPreviewPt(pt);
+        connPreviewRef.current = pt;
+      }
+
+      // SELECTION BOX
+      const sb = selBoxRef.current;
+      if (sb) {
+        const nsb = { ...sb, x2: pt.x, y2: pt.y };
+        setSelBox(nsb); selBoxRef.current = nsb;
+        const x1 = Math.min(nsb.x1, nsb.x2), x2 = Math.max(nsb.x1, nsb.x2);
+        const y1 = Math.min(nsb.y1, nsb.y2), y2 = Math.max(nsb.y1, nsb.y2);
+        const ns = nodesRef.current;
+        setSelected(new Set(ns.filter(n => n.x + n.w > x1 && n.x < x2 && n.y + n.h > y1 && n.y < y2).map(n => n.id)));
+      }
+    };
+
+    const onUp = (e) => {
+      isPanningRef.current = false;
+      setIsPanning(false);
+
+      // Commit draw
+      if (isDrawingRef.current) {
+        isDrawingRef.current = false;
+        const pts = livePathRef.current;
+        if (pts && pts.length > 1) {
+          const id = nextId.current++;
+          const newPath = { id, color: drawColorRef.current, width: drawWidthRef.current, pts };
+          const np = [...drawPathsRef.current, newPath];
+          setDrawPaths(np); drawPathsRef.current = np;
+          pushHist(nodesRef.current, connectionsRef.current, np);
+        }
+        livePathRef.current = null;
+        setLivePathPts(null);
+        return;
+      }
+
+      // Commit drag
+      if (draggingRef.current) {
+        pushHist(nodesRef.current, connectionsRef.current, drawPathsRef.current);
+        setDragging(null); draggingRef.current = null;
+      }
+      // Commit resize
+      if (resizingRef.current) {
+        pushHist(nodesRef.current, connectionsRef.current, drawPathsRef.current);
+        setResizing(null); resizingRef.current = null;
+      }
+      // Cancel port drag if not dropped on a node
+      if (portDragRef.current) {
+        setPortDrag(null); portDragRef.current = null;
+        setConnectFrom(null); connectFromRef.current = null;
+        setConnPreviewPt(null);
+      }
+
+      setSelBox(null); selBoxRef.current = null;
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [toCanvas, pushHist]);
 
   // ── Keyboard ──
   useEffect(() => {
@@ -3791,34 +3962,37 @@ function BrainstormSpace({ team, session, members=[] }) {
       if ((e.metaKey||e.ctrlKey) && e.key==='z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
       if ((e.metaKey||e.ctrlKey) && (e.key==='y'||(e.key==='z'&&e.shiftKey))) { e.preventDefault(); redo(); return; }
       if ((e.metaKey||e.ctrlKey) && e.key==='c') {
-        const sn = nodes.filter(n => selected.has(n.id));
-        if (sn.length) setClipboard({ nodes: sn, connections: connections.filter(c => selected.has(c.from) && selected.has(c.to)) });
+        const sn = nodesRef.current.filter(n => selectedRef.current.has(n.id));
+        if (sn.length) setClipboard({ nodes: sn, connections: connectionsRef.current.filter(c => selectedRef.current.has(c.from) && selectedRef.current.has(c.to)) });
         return;
       }
       if ((e.metaKey||e.ctrlKey) && e.key==='v') {
-        if (!clipboard) return;
+        const cb = clipboard; if (!cb) return;
         const idMap = {};
-        const nn2 = clipboard.nodes.map(n => { const nid = nextId.current++; idMap[n.id]=nid; return {...n,id:nid,x:n.x+20,y:n.y+20}; });
-        const nc2 = (clipboard.connections||[]).map(c => ({...c,id:nextId.current++,from:idMap[c.from],to:idMap[c.to]}));
-        const nn=[...nodes,...nn2], nc=[...connections,...nc2];
-        setNodes(nn); setConnections(nc); setSelected(new Set(nn2.map(n=>n.id)));
-        setClipboard({nodes:nn2,connections:nc2}); pushHist(nn,nc,drawPaths); return;
+        const nn2 = cb.nodes.map(n => { const nid = nextId.current++; idMap[n.id]=nid; return {...n,id:nid,x:n.x+20,y:n.y+20}; });
+        const nc2 = (cb.connections||[]).map(c => ({...c,id:nextId.current++,from:idMap[c.from],to:idMap[c.to]}));
+        const nn=[...nodesRef.current,...nn2], nc=[...connectionsRef.current,...nc2];
+        setNodes(nn); nodesRef.current = nn; setConnections(nc); connectionsRef.current = nc;
+        setSelected(new Set(nn2.map(n=>n.id)));
+        setClipboard({nodes:nn2,connections:nc2}); pushHist(nn,nc,drawPathsRef.current); return;
       }
       if ((e.metaKey||e.ctrlKey) && e.key==='d') {
-        e.preventDefault(); if (!selected.size) return;
-        const sn=nodes.filter(n=>selected.has(n.id));
-        const nn2=sn.map(n=>({...n,id:nextId.current++,x:n.x+20,y:n.y+20}));
-        const nn=[...nodes,...nn2]; setNodes(nn); setSelected(new Set(nn2.map(n=>n.id))); pushHist(nn,connections,drawPaths); return;
+        e.preventDefault();
+        const sn = nodesRef.current.filter(n => selectedRef.current.has(n.id)); if (!sn.length) return;
+        const nn2 = sn.map(n=>({...n,id:nextId.current++,x:n.x+20,y:n.y+20}));
+        const nn=[...nodesRef.current,...nn2]; setNodes(nn); nodesRef.current = nn;
+        setSelected(new Set(nn2.map(n=>n.id))); pushHist(nn,connectionsRef.current,drawPathsRef.current); return;
       }
-      if ((e.metaKey||e.ctrlKey) && e.key==='a') { e.preventDefault(); setSelected(new Set(nodes.map(n=>n.id))); return; }
+      if ((e.metaKey||e.ctrlKey) && e.key==='a') { e.preventDefault(); setSelected(new Set(nodesRef.current.map(n=>n.id))); return; }
       if (e.key==='Delete'||e.key==='Backspace') {
-        if (!selected.size) return;
-        const nn=nodes.filter(n=>!selected.has(n.id));
-        const nc=connections.filter(c=>!selected.has(c.id)&&!selected.has(c.from)&&!selected.has(c.to));
-        const np=drawPaths.filter(p=>!selected.has(p.id));
-        setNodes(nn); setConnections(nc); setDrawPaths(np); setSelected(new Set()); pushHist(nn,nc,np); return;
+        if (!selectedRef.current.size) return;
+        const nn=nodesRef.current.filter(n=>!selectedRef.current.has(n.id));
+        const nc=connectionsRef.current.filter(c=>!selectedRef.current.has(c.id)&&!selectedRef.current.has(c.from)&&!selectedRef.current.has(c.to));
+        const np=drawPathsRef.current.filter(p=>!selectedRef.current.has(p.id));
+        setNodes(nn); nodesRef.current=nn; setConnections(nc); connectionsRef.current=nc; setDrawPaths(np); drawPathsRef.current=np;
+        setSelected(new Set()); pushHist(nn,nc,np); return;
       }
-      if (e.key==='Escape') { setSelected(new Set()); setConnectFrom(null); setPortDrag(null); setCtxMenu(null); }
+      if (e.key==='Escape') { setSelected(new Set()); setConnectFrom(null); connectFromRef.current=null; setConnPreviewPt(null); setCtxMenu(null); }
       if (!e.metaKey&&!e.ctrlKey) {
         if (e.key==='v') setTool('select');
         if (e.key==='s') setTool('sticky');
@@ -3830,7 +4004,7 @@ function BrainstormSpace({ team, session, members=[] }) {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [editingId, nodes, connections, drawPaths, selected, clipboard, undo, redo, pushHist]);
+  }, [editingId, clipboard, undo, redo, pushHist]);
 
   // ── addNode ──
   const addNode = useCallback((type, x, y, extra={}) => {
@@ -3839,8 +4013,8 @@ function BrainstormSpace({ team, session, members=[] }) {
       id, x, y,
       type: type==='pill'?'shape':type,
       shapeType: type==='pill'?'pill':(type==='shape'?shapeType:undefined),
-      w: type==='sticky'?180:type==='text'?220:type==='shape'||type==='pill'?140:180,
-      h: type==='sticky'?160:type==='text'?56:type==='shape'?90:type==='pill'?52:160,
+      w: type==='sticky'?180:type==='text'?220:140,
+      h: type==='sticky'?160:type==='text'?56:type==='pill'?52:90,
       text: type==='sticky'?'':(type==='text'?'Type here...':(type==='shape'||type==='pill'?'Label':'')),
       color: type==='sticky'?stickyColor:undefined,
       fill: (type==='shape'||type==='pill')?(BS_SHAPE_COLORS[shapeColorIdx]?.fill||'rgba(99,102,241,.15)'):undefined,
@@ -3849,60 +4023,51 @@ function BrainstormSpace({ team, session, members=[] }) {
       fontStyle:'normal', textAlign:(type==='shape'||type==='pill')?'center':'left',
       ...extra
     };
-    const nn=[...nodes, node];
-    setNodes(nn); setSelected(new Set([id])); pushHist(nn,connections,drawPaths);
+    const nn=[...nodesRef.current, node];
+    setNodes(nn); nodesRef.current = nn;
+    setSelected(new Set([id]));
+    pushHist(nn, connectionsRef.current, drawPathsRef.current);
     return id;
-  }, [nodes,connections,drawPaths,stickyColor,shapeColorIdx,shapeType,pushHist]);
+  }, [stickyColor, shapeColorIdx, shapeType, pushHist]);
 
   const updateNode = useCallback((id,props) => setNodes(ns=>ns.map(n=>n.id===id?{...n,...props}:n)), []);
   const updateNodeSave = useCallback((id,props) => {
-    setNodes(ns=>{const nn=ns.map(n=>n.id===id?{...n,...props}:n); saveToStorage(nn,connections,drawPaths); return nn;});
-  }, [connections,drawPaths,saveToStorage]);
+    setNodes(ns=>{const nn=ns.map(n=>n.id===id?{...n,...props}:n); nodesRef.current=nn; saveToStorage(nn,connectionsRef.current,drawPathsRef.current); return nn;});
+  }, [saveToStorage]);
   const commitEdit = useCallback(() => {
     if (!editingId) return;
-    setEditingId(null); saveToStorage(nodes,connections,drawPaths); pushHist(nodes,connections,drawPaths);
-  }, [editingId,nodes,connections,drawPaths,saveToStorage,pushHist]);
+    setEditingId(null); saveToStorage(nodesRef.current,connectionsRef.current,drawPathsRef.current);
+    pushHist(nodesRef.current,connectionsRef.current,drawPathsRef.current);
+  }, [editingId, saveToStorage, pushHist]);
 
-  // ── geometry ──
+  // ── Geometry ──
   const getCenter = useCallback((id) => {
-    const n=nodes.find(x=>x.id===id); if(!n) return {x:0,y:0};
+    const n = nodesRef.current.find(x=>x.id===id); if(!n) return null;
     return {x:n.x+n.w/2, y:n.y+n.h/2};
-  }, [nodes]);
+  }, []);
 
-  const connPath = useCallback((x1,y1,x2,y2,type) => {
+  const connPath = (x1,y1,x2,y2,type) => {
     if (type==='straight') return `M${x1},${y1} L${x2},${y2}`;
     if (type==='elbow') { const mx=(x1+x2)/2; return `M${x1},${y1} L${mx},${y1} L${mx},${y2} L${x2},${y2}`; }
     const dx=Math.abs(x2-x1)*0.5;
     return `M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`;
-  }, []);
+  };
 
-  // BUG FIX: path must be relative to SVG origin (0,0), not offset origin
-  const pathStr = (pts) => pts.length<2?'':'M'+pts.map(p=>`${p[0]},${p[1]}`).join(' L');
+  const pathStr = (pts) => pts && pts.length>1 ? 'M'+pts.map(p=>`${p[0]},${p[1]}`).join(' L') : '';
 
-  // ── getPortPoint: returns canvas-space coords of a port on a node ──
-  const getPortPoint = useCallback((node, side) => {
-    const cx=node.x, cy=node.y, w=node.w, h=node.h;
-    if (side==='top')    return {x:cx+w/2, y:cy};
-    if (side==='bottom') return {x:cx+w/2, y:cy+h};
-    if (side==='left')   return {x:cx,     y:cy+h/2};
-    if (side==='right')  return {x:cx+w,   y:cy+h/2};
-    return {x:cx+w/2, y:cy+h/2};
-  }, []);
-
-  const PORT_SIDES = ['top','right','bottom','left'];
-
-  // ── FIT VIEW ──
   const fitView = useCallback(() => {
-    if (!nodes.length) { setPan({x:120,y:80}); setZoom(1); return; }
+    const ns = nodesRef.current;
+    if (!ns.length) { setPan({x:80,y:60}); panStateRef.current={x:80,y:60}; setZoom(1); return; }
     const pad=60;
-    const minX=Math.min(...nodes.map(n=>n.x))-pad, minY=Math.min(...nodes.map(n=>n.y))-pad;
-    const maxX=Math.max(...nodes.map(n=>n.x+n.w))+pad, maxY=Math.max(...nodes.map(n=>n.y+n.h))+pad;
+    const minX=Math.min(...ns.map(n=>n.x))-pad, minY=Math.min(...ns.map(n=>n.y))-pad;
+    const maxX=Math.max(...ns.map(n=>n.x+n.w))+pad, maxY=Math.max(...ns.map(n=>n.y+n.h))+pad;
     const rect=canvasRef.current?.getBoundingClientRect()||{width:1100,height:650};
     const z=Math.min(1.5,Math.min(rect.width/(maxX-minX),rect.height/(maxY-minY))*0.9);
-    setZoom(z); setPan({x:(-minX*z)+(rect.width-(maxX-minX)*z)/2, y:(-minY*z)+(rect.height-(maxY-minY)*z)/2});
-  }, [nodes]);
+    zoomRef.current=z; setZoom(z);
+    const np={x:(-minX*z)+(rect.width-(maxX-minX)*z)/2, y:(-minY*z)+(rect.height-(maxY-minY)*z)/2};
+    setPan(np); panStateRef.current=np;
+  }, []);
 
-  // ── Shape SVG ──
   const renderShapeSvg = (node) => {
     const {w,h,shapeType:st,fill,stroke}=node;
     const f=fill||'rgba(99,102,241,.15)', s=stroke||'#6366F1';
@@ -3912,10 +4077,12 @@ function BrainstormSpace({ team, session, members=[] }) {
     return <rect x={1} y={1} width={w-2} height={h-2} rx={10} fill={f} stroke={s} strokeWidth={2}/>;
   };
 
-  // ── CANVAS mouse handlers ──────────────────────────────────────────────────
-  const onCanvasMouseDown = useCallback((e) => {
+  // ── Canvas mousedown — start operations ──
+  const onCanvasMouseDown = (e) => {
     if (e.button===1||(e.button===0&&e.altKey)) {
-      setIsPanning(true); panRef.current={x:e.clientX-pan.x,y:e.clientY-pan.y}; return;
+      isPanningRef.current=true; setIsPanning(true);
+      panRef.current={x:e.clientX-panStateRef.current.x,y:e.clientY-panStateRef.current.y};
+      return;
     }
     if (e.button!==0) return;
     setCtxMenu(null);
@@ -3925,137 +4092,83 @@ function BrainstormSpace({ team, session, members=[] }) {
     if (tool==='text')   { const id=addNode('text',pt.x-110,pt.y-28); setTimeout(()=>setEditingId(id),50); setTool('select'); return; }
     if (tool==='shape')  { addNode('shape',pt.x-70,pt.y-45); setTool('select'); return; }
     if (tool==='draw') {
-      isDrawing.current=true;
-      setCurrentPath({id:nextId.current++, color:drawColor, width:drawWidth, pts:[[pt.x,pt.y]]});
+      isDrawingRef.current=true;
+      livePathRef.current=[[pt.x,pt.y]];
+      setLivePathPts([[pt.x,pt.y]]);
       return;
     }
-    if (tool==='select'||tool==='connect') {
-      if (!e.shiftKey) setSelected(new Set());
-      setSelBox({x1:pt.x,y1:pt.y,x2:pt.x,y2:pt.y,shift:e.shiftKey});
-    }
-  }, [tool,pan,toCanvas,addNode,drawColor,drawWidth]);
+    // select/connect — start rubber band
+    if (!e.shiftKey) setSelected(new Set());
+    const sb={x1:pt.x,y1:pt.y,x2:pt.x,y2:pt.y};
+    setSelBox(sb); selBoxRef.current=sb;
+  };
 
-  const onCanvasMouseMove = useCallback((e) => {
-    if (isPanning) { setPan({x:e.clientX-panRef.current.x,y:e.clientY-panRef.current.y}); return; }
-    const pt=toCanvas(e.clientX,e.clientY);
-
-    // FIX: draw tracking must always work while isDrawing is true
-    if (isDrawing.current && currentPath) {
-      setCurrentPath(p=>({...p, pts:[...p.pts,[pt.x,pt.y]]})); return;
-    }
-    if (dragging) {
-      const dx=pt.x-dragging.startPt.x, dy=pt.y-dragging.startPt.y;
-      setNodes(ns=>ns.map(n=>dragging.nodeIds.includes(n.id)?{...n,x:dragging.origPositions[n.id].x+dx,y:dragging.origPositions[n.id].y+dy}:n));
-      return;
-    }
-    if (resizing) {
-      setNodes(ns=>ns.map(n=>n.id===resizing.id?{...n,w:Math.max(80,resizing.origW+(pt.x-resizing.startPt.x)),h:Math.max(36,resizing.origH+(pt.y-resizing.startPt.y))}:n));
-      return;
-    }
-    if (portDrag) { setPortDrag(p=>({...p,preview:pt})); return; }
-    if (selBox) {
-      const sb={...selBox,x2:pt.x,y2:pt.y}; setSelBox(sb);
-      const x1=Math.min(sb.x1,sb.x2),x2=Math.max(sb.x1,sb.x2),y1=Math.min(sb.y1,sb.y2),y2=Math.max(sb.y1,sb.y2);
-      setSelected(new Set(nodes.filter(n=>n.x+n.w>x1&&n.x<x2&&n.y+n.h>y1&&n.y<y2).map(n=>n.id)));
-    }
-    if (connectFrom) setConnPreview(pt);
-  }, [isPanning,currentPath,dragging,resizing,portDrag,selBox,connectFrom,toCanvas,nodes]);
-
-  const onCanvasMouseUp = useCallback((e) => {
-    setIsPanning(false);
-    // FIX: commit draw path
-    if (isDrawing.current) {
-      isDrawing.current=false;
-      if (currentPath && currentPath.pts.length>1) {
-        const np=[...drawPaths,currentPath];
-        setDrawPaths(np); pushHist(nodes,connections,np);
-      }
-      setCurrentPath(null);
-      return;
-    }
-    if (dragging) { pushHist(nodes,connections,drawPaths); }
-    if (resizing) { pushHist(nodes,connections,drawPaths); }
-    // portDrag completed on a node's onMouseUp
-    if (portDrag && !portDrag.targetId) { setPortDrag(null); }
-    setDragging(null); setResizing(null); setSelBox(null);
-  }, [currentPath,drawPaths,dragging,resizing,portDrag,nodes,connections,pushHist]);
-
-  // ── NODE mouse handlers ──────────────────────────────────────────────────
-  const onNodeMouseDown = useCallback((e, node) => {
+  // ── Node mousedown ──
+  const onNodeMouseDown = (e, node) => {
     e.stopPropagation();
     if (e.button!==0) return;
     setCtxMenu(null);
 
-    // FIX: connect tool — click node to set from, click another to connect
     if (tool==='connect') {
-      if (!connectFrom) {
-        setConnectFrom(node.id); setSelected(new Set([node.id]));
-      } else if (connectFrom!==node.id) {
+      if (!connectFromRef.current) {
+        setConnectFrom(node.id); connectFromRef.current=node.id;
+        setSelected(new Set([node.id]));
+      } else if (connectFromRef.current !== node.id) {
+        // Complete connection
         const id=nextId.current++;
-        const nc=[...connections,{id,from:connectFrom,to:node.id,type:connType,color:connColor,strokeWidth:2}];
-        setConnections(nc); pushHist(nodes,nc,drawPaths);
-        setConnectFrom(null); setConnPreview(null);
+        const nc=[...connectionsRef.current,{id,from:connectFromRef.current,to:node.id,type:connTypeRef.current,color:connColorRef.current,strokeWidth:2}];
+        setConnections(nc); connectionsRef.current=nc;
+        pushHist(nodesRef.current,nc,drawPathsRef.current);
+        setConnectFrom(null); connectFromRef.current=null;
+        setConnPreviewPt(null);
       }
       return;
     }
 
-    // Normal select + drag
-    const newSel=e.shiftKey?new Set([...selected,node.id]):(selected.has(node.id)?selected:new Set([node.id]));
+    const newSel=e.shiftKey?new Set([...selectedRef.current,node.id]):(selectedRef.current.has(node.id)?selectedRef.current:new Set([node.id]));
     setSelected(newSel);
     const pt=toCanvas(e.clientX,e.clientY);
     const ids=[...newSel];
     const origPositions={};
-    nodes.forEach(n=>{if(ids.includes(n.id))origPositions[n.id]={x:n.x,y:n.y};});
-    setDragging({nodeIds:ids,startPt:pt,origPositions});
-  }, [tool,connectFrom,connections,nodes,drawPaths,selected,toCanvas,connType,connColor,pushHist]);
+    nodesRef.current.forEach(n=>{if(ids.includes(n.id))origPositions[n.id]={x:n.x,y:n.y};});
+    const drag={nodeIds:ids,startPt:pt,origPositions};
+    setDragging(drag); draggingRef.current=drag;
+  };
 
-  const onNodeMouseUp = useCallback((e, node) => {
-    // FIX: portDrag completion — drop on a node to create connection
-    if (portDrag && portDrag.fromId && portDrag.fromId!==node.id) {
+  const onNodeMouseUp = (e, node) => {
+    const pd = portDragRef.current;
+    if (pd && pd.fromId && pd.fromId!==node.id) {
       e.stopPropagation();
       const id=nextId.current++;
-      const nc=[...connections,{id,from:portDrag.fromId,to:node.id,type:connType,color:connColor,strokeWidth:2}];
-      setConnections(nc); pushHist(nodes,nc,drawPaths);
-      setPortDrag(null);
+      const nc=[...connectionsRef.current,{id,from:pd.fromId,to:node.id,type:connTypeRef.current,color:connColorRef.current,strokeWidth:2}];
+      setConnections(nc); connectionsRef.current=nc;
+      pushHist(nodesRef.current,nc,drawPathsRef.current);
+      setPortDrag(null); portDragRef.current=null;
+      setConnectFrom(null); connectFromRef.current=null;
+      setConnPreviewPt(null);
     }
-  }, [portDrag,connections,nodes,drawPaths,connType,connColor,pushHist]);
+  };
 
-  // ── PORT drag initiate ──
-  const onPortMouseDown = useCallback((e, node, side) => {
-    e.stopPropagation();
-    e.preventDefault();
+  const onPortMouseDown = (e, node, side) => {
+    e.stopPropagation(); e.preventDefault();
     const pt=toCanvas(e.clientX,e.clientY);
-    setPortDrag({fromId:node.id,side,preview:pt});
+    const pd={fromId:node.id,side,preview:pt};
+    setPortDrag(pd); portDragRef.current=pd;
+    setConnectFrom(node.id); connectFromRef.current=node.id;
     setSelected(new Set([node.id]));
-    // also set connectFrom so the line shows
-    setConnectFrom(node.id);
-  }, [toCanvas]);
+  };
 
-  const onResizeMouseDown = useCallback((e, node) => {
+  const onResizeMouseDown = (e, node) => {
     e.stopPropagation();
     const pt=toCanvas(e.clientX,e.clientY);
-    setResizing({id:node.id,startPt:pt,origW:node.w,origH:node.h});
-  }, [toCanvas]);
+    const res={id:node.id,startPt:pt,origW:node.w,origH:node.h};
+    setResizing(res); resizingRef.current=res;
+  };
 
-  const onNodeDblClick = useCallback((e, node) => {
-    e.stopPropagation(); setEditingId(node.id); setSelected(new Set([node.id]));
-  }, []);
+  const onNodeDblClick = (e, node) => { e.stopPropagation(); setEditingId(node.id); setSelected(new Set([node.id])); };
+  const onNodeContextMenu = (e, node) => { e.preventDefault(); e.stopPropagation(); setSelected(new Set([node.id])); setCtxMenu({x:e.clientX,y:e.clientY,nodeId:node.id}); };
 
-  const onNodeContextMenu = useCallback((e, node) => {
-    e.preventDefault(); e.stopPropagation();
-    setSelected(new Set([node.id])); setCtxMenu({x:e.clientX,y:e.clientY,nodeId:node.id});
-  }, []);
-
-  // ── Cancel port drag on window mouseup ──
-  useEffect(() => {
-    const handler=(e)=>{
-      if (portDrag) { setPortDrag(null); setConnectFrom(null); setConnPreview(null); }
-    };
-    window.addEventListener('mouseup',handler);
-    return ()=>window.removeEventListener('mouseup',handler);
-  }, [portDrag]);
-
-  // ── derived ──
+  const PORT_SIDES = ['top','right','bottom','left'];
   const selNode = nodes.find(n=>selected.size===1&&selected.has(n.id));
   const selConn = connections.find(c=>selected.size===1&&selected.has(c.id));
 
@@ -4068,16 +4181,12 @@ function BrainstormSpace({ team, session, members=[] }) {
     {id:'connect',label:'Connect  C', ico:'⤳'},
   ];
 
-  // ── SVG arrow marker IDs ──
-  const allConnColors=[...new Set([...BS_DRAW_COLORS,'#000000',connColor,...connections.map(c=>c.color||'#000')])];
-
   return (
     <div style={{display:'flex',flexDirection:'column',height:'calc(100vh - 62px)',borderRadius:14,overflow:'hidden',border:`1px solid ${c.bord}`,userSelect:'none',position:'relative'}}>
 
       {/* ══ TOOLBAR ══ */}
       <div style={{display:'flex',alignItems:'center',gap:6,padding:'6px 10px',background:dark?'rgba(10,8,28,.98)':'rgba(255,255,255,.98)',borderBottom:`1px solid ${c.bord}`,flexShrink:0,zIndex:30,flexWrap:'wrap',backdropFilter:'blur(20px)'}}>
 
-        {/* Mode toggle */}
         <div style={{display:'flex',borderRadius:8,overflow:'hidden',border:`1px solid ${c.bord}`,flexShrink:0}}>
           {['personal','shared'].map(m=>(
             <button key={m} onClick={()=>setMode(m)} style={{padding:'5px 12px',fontSize:11,fontWeight:600,border:'none',cursor:'pointer',background:mode===m?'#6366F1':'transparent',color:mode===m?'#fff':c.mut,transition:'all .15s'}}>
@@ -4088,17 +4197,15 @@ function BrainstormSpace({ team, session, members=[] }) {
 
         <div style={{width:1,height:24,background:c.bord,flexShrink:0}}/>
 
-        {/* Tools */}
         <div style={{display:'flex',gap:2,background:dark?'rgba(255,255,255,.04)':'rgba(99,102,241,.05)',borderRadius:10,padding:3,border:`1px solid ${c.bord}`}}>
           {TOOLS.map(t=>(
-            <button key={t.id} onClick={()=>{setTool(t.id);if(t.id!=='connect'){setConnectFrom(null);setConnPreview(null);}}} title={t.label}
+            <button key={t.id} onClick={()=>{setTool(t.id);toolRef.current=t.id;if(t.id!=='connect'){setConnectFrom(null);connectFromRef.current=null;setConnPreviewPt(null);}}} title={t.label}
               style={{width:34,height:32,borderRadius:7,border:'none',background:tool===t.id?(dark?'rgba(99,102,241,.28)':'rgba(99,102,241,.18)'):'transparent',color:tool===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:t.id==='text'?13:17,fontWeight:tool===t.id?700:400,transition:'all .12s',display:'flex',alignItems:'center',justifyContent:'center'}}>
               {t.ico}
             </button>
           ))}
         </div>
 
-        {/* Shape sub-type */}
         {tool==='shape'&&(
           <div style={{display:'flex',gap:2,background:dark?'rgba(255,255,255,.04)':'rgba(99,102,241,.05)',borderRadius:10,padding:3,border:`1px solid ${c.bord}`}}>
             {[['rect','▭'],['circle','○'],['diamond','◇'],['pill','⬭']].map(([st,ic])=>(
@@ -4107,7 +4214,6 @@ function BrainstormSpace({ team, session, members=[] }) {
           </div>
         )}
 
-        {/* Sticky colors */}
         {tool==='sticky'&&(
           <div style={{display:'flex',gap:3,alignItems:'center'}}>
             {BS_STICKY_COLORS.map(col=>(
@@ -4116,41 +4222,40 @@ function BrainstormSpace({ team, session, members=[] }) {
           </div>
         )}
 
-        {/* Draw options — default black */}
         {tool==='draw'&&(
           <div style={{display:'flex',gap:6,alignItems:'center'}}>
             <div style={{display:'flex',gap:3}}>
-              {['#000000',...BS_DRAW_COLORS].map(col=>(
-                <button key={col} onClick={()=>setDrawColor(col)} style={{width:20,height:20,borderRadius:'50%',background:col,border:drawColor===col?'2.5px solid #818CF8':`1.5px solid ${c.bord}`,cursor:'pointer',flexShrink:0}}/>
+              {['#000000','#333333','#818CF8','#34D399','#F87171','#FBBF24','#60A5FA','#F472B6','#A78BFA'].map(col=>(
+                <button key={col} onClick={()=>{setDrawColor(col);drawColorRef.current=col;}}
+                  style={{width:22,height:22,borderRadius:'50%',background:col,border:drawColor===col?'3px solid #818CF8':`2px solid rgba(0,0,0,.2)`,cursor:'pointer',flexShrink:0,boxShadow:drawColor===col?'0 0 0 1px #fff inset':''}}/>
               ))}
             </div>
             <div style={{width:1,height:22,background:c.bord}}/>
             {[1,3,6,12].map(w=>(
-              <button key={w} onClick={()=>setDrawWidth(w)} title={`${w}px`}
+              <button key={w} onClick={()=>{setDrawWidth(w);drawWidthRef.current=w;}}
                 style={{width:32,height:32,borderRadius:7,background:drawWidth===w?'rgba(99,102,241,.2)':'transparent',border:`1px solid ${c.bord}`,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                <div style={{width:Math.min(w*2,20),height:Math.min(w,10),borderRadius:w,background:drawColor}}/>
+                <div style={{width:Math.min(w*2,20),height:Math.min(w,10),borderRadius:w,background:drawColor,maxWidth:20}}/>
               </button>
             ))}
           </div>
         )}
 
-        {/* Connector options — default black */}
         {tool==='connect'&&(
           <div style={{display:'flex',gap:6,alignItems:'center'}}>
             <div style={{display:'flex',gap:2,background:dark?'rgba(255,255,255,.04)':'rgba(99,102,241,.05)',borderRadius:10,padding:3,border:`1px solid ${c.bord}`}}>
               {[['curve','⌒ Curve'],['straight','→ Straight'],['elbow','⌐ Elbow']].map(([ct,lbl])=>(
-                <button key={ct} onClick={()=>setConnType(ct)} style={{padding:'4px 10px',borderRadius:7,border:'none',background:connType===ct?'rgba(99,102,241,.22)':'transparent',color:connType===ct?'#818CF8':c.mut,cursor:'pointer',fontSize:11,fontWeight:connType===ct?700:400}}>{lbl}</button>
+                <button key={ct} onClick={()=>{setConnType(ct);connTypeRef.current=ct;}} style={{padding:'4px 10px',borderRadius:7,border:'none',background:connType===ct?'rgba(99,102,241,.22)':'transparent',color:connType===ct?'#818CF8':c.mut,cursor:'pointer',fontSize:11,fontWeight:connType===ct?700:400}}>{lbl}</button>
               ))}
             </div>
             <div style={{display:'flex',gap:3}}>
-              {['#000000',...BS_DRAW_COLORS.slice(0,6)].map(col=>(
-                <button key={col} onClick={()=>setConnColor(col)} style={{width:18,height:18,borderRadius:'50%',background:col,border:connColor===col?'2.5px solid #818CF8':`1.5px solid ${c.bord}`,cursor:'pointer'}}/>
+              {['#000000','#333333','#818CF8','#34D399','#F87171','#FBBF24','#60A5FA'].map(col=>(
+                <button key={col} onClick={()=>{setConnColor(col);connColorRef.current=col;}}
+                  style={{width:20,height:20,borderRadius:'50%',background:col,border:connColor===col?'2.5px solid #818CF8':`1.5px solid ${c.bord}`,cursor:'pointer'}}/>
               ))}
             </div>
           </div>
         )}
 
-        {/* Node formatting */}
         {selNode&&tool==='select'&&(
           <div style={{display:'flex',gap:4,alignItems:'center',borderLeft:`1px solid ${c.bord}`,paddingLeft:8,flexWrap:'wrap'}}>
             {[10,12,14,16,20,24].map(fs=>(
@@ -4162,13 +4267,6 @@ function BrainstormSpace({ team, session, members=[] }) {
               style={{width:28,height:28,borderRadius:6,border:`1px solid ${c.bord}`,background:selNode.fontWeight>=700?'rgba(99,102,241,.2)':'transparent',color:c.text,cursor:'pointer',fontWeight:700,fontSize:13}}>B</button>
             <button onClick={()=>updateNodeSave(selNode.id,{fontStyle:selNode.fontStyle==='italic'?'normal':'italic'})}
               style={{width:28,height:28,borderRadius:6,border:`1px solid ${c.bord}`,background:selNode.fontStyle==='italic'?'rgba(99,102,241,.2)':'transparent',color:c.text,cursor:'pointer',fontStyle:'italic',fontSize:13}}>I</button>
-            {['left','center','right'].map(a=>(
-              <button key={a} onClick={()=>updateNodeSave(selNode.id,{textAlign:a})}
-                style={{width:28,height:28,borderRadius:6,border:`1px solid ${c.bord}`,background:selNode.textAlign===a?'rgba(99,102,241,.2)':'transparent',color:c.text,cursor:'pointer',fontSize:12}}>
-                {a==='left'?'≡':a==='center'?'☰':'≣'}
-              </button>
-            ))}
-            <div style={{width:1,height:20,background:c.bord}}/>
             {selNode.type==='sticky'&&BS_STICKY_COLORS.map(col=>(
               <button key={col} onClick={()=>updateNodeSave(selNode.id,{color:col})}
                 style={{width:18,height:18,borderRadius:'50%',background:col,border:selNode.color===col?'2.5px solid #818CF8':`1px solid ${c.bord}`,cursor:'pointer',flexShrink:0}}/>
@@ -4179,42 +4277,40 @@ function BrainstormSpace({ team, session, members=[] }) {
             ))}
             <div style={{width:1,height:20,background:c.bord}}/>
             <button onClick={()=>{
-              const nn=nodes.filter(n=>!selected.has(n.id));
-              const nc=connections.filter(c2=>!selected.has(c2.from)&&!selected.has(c2.to));
-              setNodes(nn);setConnections(nc);setSelected(new Set());pushHist(nn,nc,drawPaths);
+              const nn=nodesRef.current.filter(n=>!selectedRef.current.has(n.id));
+              const nc=connectionsRef.current.filter(c2=>!selectedRef.current.has(c2.from)&&!selectedRef.current.has(c2.to));
+              setNodes(nn);nodesRef.current=nn;setConnections(nc);connectionsRef.current=nc;setSelected(new Set());pushHist(nn,nc,drawPathsRef.current);
             }} style={{padding:'3px 10px',borderRadius:6,background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.22)',color:'#F87171',cursor:'pointer',fontSize:11}}>🗑 Delete</button>
           </div>
         )}
 
-        {/* Connector selection formatting */}
         {selConn&&tool==='select'&&(
           <div style={{display:'flex',gap:4,alignItems:'center',borderLeft:`1px solid ${c.bord}`,paddingLeft:8}}>
             {[['curve','⌒'],['straight','→'],['elbow','⌐']].map(([ct,ic])=>(
-              <button key={ct} onClick={()=>{setConnections(cs=>cs.map(cc=>cc.id===selConn.id?{...cc,type:ct}:cc));saveToStorage(nodes,connections,drawPaths);}}
+              <button key={ct} onClick={()=>{const nc=connectionsRef.current.map(cc=>cc.id===selConn.id?{...cc,type:ct}:cc);setConnections(nc);connectionsRef.current=nc;saveToStorage(nodesRef.current,nc,drawPathsRef.current);}}
                 style={{width:28,height:28,borderRadius:6,border:`1px solid ${c.bord}`,background:selConn.type===ct?'rgba(99,102,241,.2)':'transparent',color:c.text,cursor:'pointer',fontSize:13}}>{ic}</button>
             ))}
-            {['#000000',...BS_DRAW_COLORS.slice(0,5)].map(col=>(
-              <button key={col} onClick={()=>{setConnections(cs=>cs.map(cc=>cc.id===selConn.id?{...cc,color:col}:cc));saveToStorage(nodes,connections,drawPaths);}}
+            {['#000000','#818CF8','#34D399','#F87171','#FBBF24'].map(col=>(
+              <button key={col} onClick={()=>{const nc=connectionsRef.current.map(cc=>cc.id===selConn.id?{...cc,color:col}:cc);setConnections(nc);connectionsRef.current=nc;saveToStorage(nodesRef.current,nc,drawPathsRef.current);}}
                 style={{width:18,height:18,borderRadius:'50%',background:col,border:selConn.color===col?'2.5px solid #818CF8':`1px solid ${c.bord}`,cursor:'pointer'}}/>
             ))}
-            <button onClick={()=>{const nc=connections.filter(c2=>c2.id!==selConn.id);setConnections(nc);setSelected(new Set());pushHist(nodes,nc,drawPaths);}}
+            <button onClick={()=>{const nc=connectionsRef.current.filter(c2=>c2.id!==selConn.id);setConnections(nc);connectionsRef.current=nc;setSelected(new Set());pushHist(nodesRef.current,nc,drawPathsRef.current);}}
               style={{padding:'3px 10px',borderRadius:6,background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.22)',color:'#F87171',cursor:'pointer',fontSize:11}}>🗑</button>
           </div>
         )}
 
-        {connectFrom&&<span style={{fontSize:11,color:'#34D399',background:'rgba(52,211,153,.1)',padding:'4px 10px',borderRadius:8,border:'1px solid rgba(52,211,153,.2)',flexShrink:0}}>Click a node to connect · Esc to cancel</span>}
+        {connectFrom&&<span style={{fontSize:11,color:'#34D399',background:'rgba(52,211,153,.1)',padding:'4px 10px',borderRadius:8,border:'1px solid rgba(52,211,153,.2)',flexShrink:0}}>✓ Now click another node · Esc to cancel</span>}
 
         <div style={{flex:1}}/>
-
         <div style={{display:'flex',gap:3,alignItems:'center',flexShrink:0}}>
           <button onClick={undo} title="Undo Ctrl+Z" style={{width:28,height:28,borderRadius:7,border:`1px solid ${c.bord}`,background:'transparent',color:c.mut,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>↩</button>
           <button onClick={redo} title="Redo Ctrl+Y" style={{width:28,height:28,borderRadius:7,border:`1px solid ${c.bord}`,background:'transparent',color:c.mut,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>↪</button>
           <div style={{width:1,height:20,background:c.bord}}/>
-          <button onClick={()=>setZoom(z=>Math.max(0.1,z/1.2))} style={{width:26,height:26,borderRadius:6,border:`1px solid ${c.bord}`,background:'transparent',color:c.text,cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
-          <button onClick={()=>setZoom(1)} style={{fontSize:11,color:c.mut,width:46,textAlign:'center',background:'transparent',border:`1px solid ${c.bord}`,borderRadius:6,height:26,cursor:'pointer',fontWeight:600}}>{Math.round(zoom*100)}%</button>
-          <button onClick={()=>setZoom(z=>Math.min(4,z*1.2))} style={{width:26,height:26,borderRadius:6,border:`1px solid ${c.bord}`,background:'transparent',color:c.text,cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
+          <button onClick={()=>{const nz=Math.max(0.1,zoomRef.current/1.2);setZoom(nz);zoomRef.current=nz;}} style={{width:26,height:26,borderRadius:6,border:`1px solid ${c.bord}`,background:'transparent',color:c.text,cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
+          <button onClick={()=>{setZoom(1);zoomRef.current=1;}} style={{fontSize:11,color:c.mut,width:46,textAlign:'center',background:'transparent',border:`1px solid ${c.bord}`,borderRadius:6,height:26,cursor:'pointer',fontWeight:600}}>{Math.round(zoom*100)}%</button>
+          <button onClick={()=>{const nz=Math.min(4,zoomRef.current*1.2);setZoom(nz);zoomRef.current=nz;}} style={{width:26,height:26,borderRadius:6,border:`1px solid ${c.bord}`,background:'transparent',color:c.text,cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
           <button onClick={fitView} style={{padding:'4px 8px',borderRadius:6,border:`1px solid ${c.bord}`,background:'transparent',color:c.mut,cursor:'pointer',fontSize:11}}>Fit</button>
-          <button onClick={()=>{if(window.confirm('Clear entire board?')){setNodes([]);setConnections([]);setDrawPaths([]);setSelected(new Set());pushHist([],[],[]);}}}
+          <button onClick={()=>{if(window.confirm('Clear entire board?')){setNodes([]);nodesRef.current=[];setConnections([]);connectionsRef.current=[];setDrawPaths([]);drawPathsRef.current=[];setSelected(new Set());pushHist([],[],[]);}}}
             style={{padding:'4px 8px',borderRadius:6,border:'1px solid rgba(239,68,68,.2)',background:'rgba(239,68,68,.05)',color:'#F87171',cursor:'pointer',fontSize:11}}>Clear</button>
         </div>
       </div>
@@ -4223,15 +4319,12 @@ function BrainstormSpace({ team, session, members=[] }) {
       <div
         ref={canvasRef}
         onMouseDown={onCanvasMouseDown}
-        onMouseMove={onCanvasMouseMove}
-        onMouseUp={onCanvasMouseUp}
-        onMouseLeave={onCanvasMouseUp}
         style={{flex:1,position:'relative',overflow:'hidden',
           cursor:isPanning?'grabbing':tool==='draw'?'crosshair':['sticky','text','shape'].includes(tool)?'cell':tool==='connect'?'crosshair':'default',
           background:'#F5F4F0'}}
         onClick={()=>setCtxMenu(null)}
       >
-        {/* Dot grid — always #F5F4F0 off-white */}
+        {/* Dot grid */}
         <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none'}}>
           <defs>
             <pattern id="bsgrid" x={pan.x%(20*zoom)} y={pan.y%(20*zoom)} width={20*zoom} height={20*zoom} patternUnits="userSpaceOnUse">
@@ -4242,81 +4335,70 @@ function BrainstormSpace({ team, session, members=[] }) {
           <rect width="100%" height="100%" fill="url(#bsgrid)"/>
         </svg>
 
-        {/* ── Transform layer ── */}
+        {/* Transform layer */}
         <div style={{position:'absolute',left:pan.x,top:pan.y,transform:`scale(${zoom})`,transformOrigin:'0 0',width:0,height:0}}>
 
-          {/* ═══ FIX: SVG origin at 0,0 so draw paths align correctly ═══ */}
-          <svg ref={svgRef} style={{position:'absolute',left:0,top:0,width:0,height:0,overflow:'visible',pointerEvents:'none'}}>
+          {/* SVG: connections + draw paths — at 0,0 origin */}
+          <svg style={{position:'absolute',left:0,top:0,width:0,height:0,overflow:'visible',pointerEvents:'none'}}>
             <defs>
-              {/* Arrow markers for each color */}
-              <marker id="bsarr-default" markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto">
-                <path d="M0,0 L0,8 L10,4 z" fill="#000000"/>
-              </marker>
-              <marker id="bsarr-preview" markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto">
-                <path d="M0,0 L0,8 L10,4 z" fill="#34D399"/>
-              </marker>
-              {allConnColors.map(col=>(
-                <marker key={col} id={`bsarr-${col.replace(/[#.]/g,'')}`} markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto">
-                  <path d="M0,0 L0,8 L10,4 z" fill={col}/>
-                </marker>
-              ))}
+              <marker id="bsarr-black"   markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto"><path d="M0,0 L0,8 L10,4 z" fill="#000"/></marker>
+              <marker id="bsarr-indigo"  markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto"><path d="M0,0 L0,8 L10,4 z" fill="#818CF8"/></marker>
+              <marker id="bsarr-green"   markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto"><path d="M0,0 L0,8 L10,4 z" fill="#34D399"/></marker>
+              <marker id="bsarr-red"     markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto"><path d="M0,0 L0,8 L10,4 z" fill="#F87171"/></marker>
+              <marker id="bsarr-yellow"  markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto"><path d="M0,0 L0,8 L10,4 z" fill="#FBBF24"/></marker>
+              <marker id="bsarr-blue"    markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto"><path d="M0,0 L0,8 L10,4 z" fill="#60A5FA"/></marker>
+              <marker id="bsarr-preview" markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto"><path d="M0,0 L0,8 L10,4 z" fill="#34D399"/></marker>
             </defs>
 
-            {/* ── Connections ── */}
+            {/* Rendered connections */}
             {connections.map(conn=>{
               const f=getCenter(conn.from), t=getCenter(conn.to);
               if (!f||!t) return null;
               const isSel=selected.has(conn.id);
               const col=conn.color||'#000000';
-              const mid=`bsarr-${col.replace(/[#.]/g,'')}`;
+              const markId=col==='#818CF8'?'bsarr-indigo':col==='#34D399'?'bsarr-green':col==='#F87171'?'bsarr-red':col==='#FBBF24'?'bsarr-yellow':col==='#60A5FA'?'bsarr-blue':'bsarr-black';
               return(
                 <g key={conn.id} style={{pointerEvents:'all'}}>
                   <path d={connPath(f.x,f.y,t.x,t.y,conn.type||'curve')} fill="none" stroke="transparent" strokeWidth={14} style={{cursor:'pointer'}}
                     onClick={e=>{e.stopPropagation();setSelected(new Set([conn.id]));}}/>
                   <path d={connPath(f.x,f.y,t.x,t.y,conn.type||'curve')} fill="none"
-                    stroke={isSel?'#A78BFA':col}
-                    strokeWidth={isSel?(conn.strokeWidth||2)+1:conn.strokeWidth||2}
-                    markerEnd={`url(#${isSel?'bsarr-preview':mid})`}/>
-                  {conn.label&&<text x={(f.x+t.x)/2} y={(f.y+t.y)/2-8} textAnchor="middle" fontSize={11} fontFamily="Inter" fill="#555">{conn.label}</text>}
+                    stroke={isSel?'#A78BFA':col} strokeWidth={isSel?3:2}
+                    markerEnd={`url(#${isSel?'bsarr-indigo':markId})`}/>
                 </g>
               );
             })}
 
-            {/* ── Connect preview (while dragging port or using connect tool) ── */}
-            {(connectFrom||portDrag)&&(connPreview||portDrag?.preview)&&(()=>{
+            {/* Connect preview line */}
+            {(connectFrom||portDrag)&&connPreviewPt&&(()=>{
               const fromId=portDrag?.fromId||connectFrom;
               const f=getCenter(fromId);
-              const preview=portDrag?.preview||connPreview;
-              if (!f||!preview) return null;
-              return <path d={connPath(f.x,f.y,preview.x,preview.y,connType)} fill="none" stroke="#34D399" strokeWidth={2} strokeDasharray="7,4" markerEnd="url(#bsarr-preview)"/>;
+              if(!f) return null;
+              return <path d={connPath(f.x,f.y,connPreviewPt.x,connPreviewPt.y,connType)} fill="none" stroke="#34D399" strokeWidth={2} strokeDasharray="7,4" markerEnd="url(#bsarr-preview)"/>;
             })()}
 
-            {/* ── Draw paths ── */}
+            {/* Saved draw paths */}
             {drawPaths.map(p=>(
-              <path key={p.id} d={pathStr(p.pts)} fill="none" stroke={p.color||'#000'} strokeWidth={p.width} strokeLinecap="round" strokeLinejoin="round"
-                style={{pointerEvents:'all',cursor:'pointer',opacity:selected.has(p.id)?0.55:1}}
+              <path key={p.id} d={pathStr(p.pts)} fill="none"
+                stroke={p.color||'#000000'} strokeWidth={p.width||3}
+                strokeLinecap="round" strokeLinejoin="round"
+                style={{pointerEvents:'all',cursor:'pointer',opacity:selected.has(p.id)?0.5:1}}
                 onClick={e=>{e.stopPropagation();setSelected(new Set([p.id]));}}/>
             ))}
 
-            {/* ── Live draw path ── */}
-            {currentPath&&currentPath.pts.length>1&&(
-              <path d={pathStr(currentPath.pts)} fill="none" stroke={currentPath.color||'#000'} strokeWidth={currentPath.width} strokeLinecap="round" strokeLinejoin="round"/>
+            {/* Live path while drawing */}
+            {livePathPts&&livePathPts.length>1&&(
+              <path d={pathStr(livePathPts)} fill="none"
+                stroke={drawColor||'#000000'} strokeWidth={drawWidth||3}
+                strokeLinecap="round" strokeLinejoin="round"
+                style={{pointerEvents:'none'}}/>
             )}
           </svg>
 
-          {/* ══ Nodes ══ */}
+          {/* Nodes */}
           {nodes.map(node=>{
             const isSel=selected.has(node.id);
             const isEdit=editingId===node.id;
-            const showPorts=isSel; // always show ports on selected nodes
-
-            const textStyle={
-              width:'100%',height:'100%',background:'transparent',border:'none',outline:'none',
-              resize:'none',fontFamily:'Inter,sans-serif',fontSize:node.fontSize||13,
-              fontWeight:node.fontWeight||400,fontStyle:node.fontStyle||'normal',
-              color:'rgba(0,0,0,.82)',lineHeight:1.55,textAlign:node.textAlign||'left',
-              boxSizing:'border-box',
-            };
+            const textBase={width:'100%',height:'100%',background:'transparent',border:'none',outline:'none',resize:'none',fontFamily:'Inter,sans-serif',fontSize:node.fontSize||13,fontWeight:node.fontWeight||400,fontStyle:node.fontStyle||'normal',color:'rgba(0,0,0,.82)',lineHeight:1.55,textAlign:node.textAlign||'left',boxSizing:'border-box'};
 
             return(
               <div key={node.id}
@@ -4325,23 +4407,21 @@ function BrainstormSpace({ team, session, members=[] }) {
                 onDoubleClick={e=>onNodeDblClick(e,node)}
                 onContextMenu={e=>onNodeContextMenu(e,node)}
                 style={{position:'absolute',left:node.x,top:node.y,width:node.w,height:node.h,zIndex:isSel?20:1,
-                  cursor:tool==='connect'?'pointer':dragging?'grabbing':'grab'}}
+                  cursor:tool==='connect'?'pointer':isPanning?'grabbing':'grab'}}
               >
                 {/* STICKY */}
                 {node.type==='sticky'&&(
                   <div style={{width:'100%',height:'100%',background:node.color||'#FDE68A',borderRadius:3,display:'flex',flexDirection:'column',overflow:'hidden',
-                    boxShadow:isSel?'0 0 0 2.5px #6366F1, 0 10px 32px rgba(0,0,0,.22)':'2px 3px 10px rgba(0,0,0,.13), 1px 1px 0 rgba(0,0,0,.06)'}}>
+                    boxShadow:isSel?'0 0 0 2.5px #6366F1,0 10px 32px rgba(0,0,0,.22)':'2px 3px 10px rgba(0,0,0,.13),1px 1px 0 rgba(0,0,0,.06)'}}>
                     <div style={{height:26,background:'rgba(0,0,0,.09)',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 9px'}}>
                       <div style={{display:'flex',gap:4}}>{['0.5','0.3','0.2'].map((o,i)=><div key={i} style={{width:8,height:8,borderRadius:'50%',background:`rgba(0,0,0,${o})`}}/>)}</div>
                       {isSel&&<div style={{fontSize:9,color:'rgba(0,0,0,.35)',fontWeight:600}}>DBL-CLICK TO EDIT</div>}
                     </div>
                     <div style={{flex:1,padding:'8px 10px',overflow:'hidden'}}>
-                      {isEdit
-                        ? <textarea autoFocus value={node.text} onChange={e=>updateNode(node.id,{text:e.target.value})} onBlur={commitEdit} onMouseDown={e=>e.stopPropagation()} style={{...textStyle}}/>
-                        : <div style={{fontSize:node.fontSize||13,fontWeight:node.fontWeight||400,fontStyle:node.fontStyle||'normal',color:'rgba(0,0,0,.82)',lineHeight:1.55,whiteSpace:'pre-wrap',wordBreak:'break-word',userSelect:'none',textAlign:node.textAlign||'left',height:'100%',overflow:'hidden'}}>
-                            {node.text||<span style={{opacity:.35}}>Double-click to type…</span>}
-                          </div>
-                      }
+                      {isEdit?<textarea autoFocus value={node.text} onChange={e=>updateNode(node.id,{text:e.target.value})} onBlur={commitEdit} onMouseDown={e=>e.stopPropagation()} style={{...textBase}}/>
+                        :<div style={{fontSize:node.fontSize||13,fontWeight:node.fontWeight||400,fontStyle:node.fontStyle||'normal',color:'rgba(0,0,0,.82)',lineHeight:1.55,whiteSpace:'pre-wrap',wordBreak:'break-word',userSelect:'none',textAlign:node.textAlign||'left',height:'100%',overflow:'hidden'}}>
+                          {node.text||<span style={{opacity:.35}}>Double-click…</span>}
+                        </div>}
                     </div>
                   </div>
                 )}
@@ -4350,69 +4430,55 @@ function BrainstormSpace({ team, session, members=[] }) {
                 {node.type==='text'&&(
                   <div style={{width:'100%',height:'100%',display:'flex',alignItems:'flex-start',padding:'4px 6px',overflow:'hidden',
                     border:isSel?'1.5px solid #6366F1':isEdit?'1.5px solid #6366F1':'1.5px dashed rgba(100,90,60,.25)',
-                    borderRadius:5,background:isSel?'rgba(99,102,241,.04)':'transparent',
-                    boxShadow:isSel?'0 0 0 3px rgba(99,102,241,.15)':'none'}}>
-                    {isEdit
-                      ? <textarea autoFocus value={node.text} onChange={e=>updateNode(node.id,{text:e.target.value})} onBlur={commitEdit} onMouseDown={e=>e.stopPropagation()} style={{...textStyle,color:'#1a1a1a'}}/>
-                      : <div style={{fontSize:node.fontSize||16,fontWeight:node.fontWeight||400,fontStyle:node.fontStyle||'normal',color:node.text?'#1a1a1a':'rgba(100,90,60,.35)',whiteSpace:'pre-wrap',wordBreak:'break-word',userSelect:'none',textAlign:node.textAlign||'left',lineHeight:1.5,width:'100%'}}>
-                          {node.text||'Type here…'}
-                        </div>
-                    }
+                    borderRadius:5,background:isSel?'rgba(99,102,241,.04)':'transparent',boxShadow:isSel?'0 0 0 3px rgba(99,102,241,.15)':'none'}}>
+                    {isEdit?<textarea autoFocus value={node.text} onChange={e=>updateNode(node.id,{text:e.target.value})} onBlur={commitEdit} onMouseDown={e=>e.stopPropagation()} style={{...textBase,color:'#1a1a1a'}}/>
+                      :<div style={{fontSize:node.fontSize||16,fontWeight:node.fontWeight||400,fontStyle:node.fontStyle||'normal',color:node.text?'#1a1a1a':'rgba(100,90,60,.35)',whiteSpace:'pre-wrap',wordBreak:'break-word',userSelect:'none',textAlign:node.textAlign||'left',lineHeight:1.5,width:'100%'}}>
+                        {node.text||'Type here…'}
+                      </div>}
                   </div>
                 )}
 
                 {/* SHAPE */}
                 {node.type==='shape'&&(
-                  <div style={{width:'100%',height:'100%',position:'relative',
-                    boxShadow:isSel?`0 0 0 2.5px #6366F1, 0 6px 20px rgba(0,0,0,.1)`:'0 2px 8px rgba(0,0,0,.08)',
-                    borderRadius:node.shapeType==='rect'?10:0,transition:'box-shadow .12s'}}>
+                  <div style={{width:'100%',height:'100%',position:'relative',boxShadow:isSel?'0 0 0 2.5px #6366F1,0 6px 20px rgba(0,0,0,.1)':'0 2px 8px rgba(0,0,0,.08)',borderRadius:node.shapeType==='rect'?10:0}}>
                     <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',overflow:'visible'}}>{renderShapeSvg(node)}</svg>
                     <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',padding:8}}>
-                      {isEdit
-                        ? <textarea autoFocus value={node.text} onChange={e=>updateNode(node.id,{text:e.target.value})} onBlur={commitEdit} onMouseDown={e=>e.stopPropagation()} style={{background:'transparent',border:'none',outline:'none',resize:'none',textAlign:node.textAlign||'center',fontFamily:'Inter,sans-serif',fontSize:node.fontSize||13,fontWeight:node.fontWeight||700,color:'#1a1a1a',width:'90%',lineHeight:1.4,boxSizing:'border-box'}}/>
-                        : <div style={{fontSize:node.fontSize||13,fontWeight:node.fontWeight||700,color:'#1a1a1a',textAlign:node.textAlign||'center',userSelect:'none',wordBreak:'break-word',lineHeight:1.4,width:'100%',padding:'0 6px'}}>{node.text}</div>
-                      }
+                      {isEdit?<textarea autoFocus value={node.text} onChange={e=>updateNode(node.id,{text:e.target.value})} onBlur={commitEdit} onMouseDown={e=>e.stopPropagation()} style={{background:'transparent',border:'none',outline:'none',resize:'none',textAlign:node.textAlign||'center',fontFamily:'Inter,sans-serif',fontSize:node.fontSize||13,fontWeight:node.fontWeight||700,color:'#1a1a1a',width:'90%',lineHeight:1.4,boxSizing:'border-box'}}/>
+                        :<div style={{fontSize:node.fontSize||13,fontWeight:node.fontWeight||700,color:'#1a1a1a',textAlign:node.textAlign||'center',userSelect:'none',wordBreak:'break-word',lineHeight:1.4,width:'100%',padding:'0 6px'}}>{node.text}</div>}
                     </div>
                   </div>
                 )}
 
-                {/* ── Resize handle (bottom-right) ── */}
+                {/* Resize handle */}
                 {isSel&&!isEdit&&(
                   <div onMouseDown={e=>onResizeMouseDown(e,node)}
                     style={{position:'absolute',right:-5,bottom:-5,width:12,height:12,borderRadius:3,background:'#6366F1',border:'2px solid #fff',cursor:'se-resize',zIndex:30,boxShadow:'0 1px 4px rgba(0,0,0,.2)'}}/>
                 )}
 
-                {/* ── Port dots: blue dots on all 4 sides when selected ── */}
-                {/* In connect mode: click to start connection */}
-                {/* Normal: drag port dot to connect */}
-                {showPorts&&!isEdit&&PORT_SIDES.map(side=>{
+                {/* Port dots — visible when selected, draggable to connect */}
+                {isSel&&!isEdit&&PORT_SIDES.map(side=>{
+                  const isActive=portDrag?.fromId===node.id&&portDrag?.side===side;
                   const pos={
                     top:    {left:'50%',top:-7,transform:'translateX(-50%)'},
                     bottom: {left:'50%',bottom:-7,transform:'translateX(-50%)'},
                     left:   {top:'50%',left:-7,transform:'translateY(-50%)'},
                     right:  {top:'50%',right:-7,transform:'translateY(-50%)'},
                   }[side];
-                  const isPortSrc=portDrag?.fromId===node.id&&portDrag?.side===side;
                   return(
-                    <div key={side}
-                      onMouseDown={e=>onPortMouseDown(e,node,side)}
-                      style={{
-                        position:'absolute',width:12,height:12,borderRadius:'50%',
-                        background:isPortSrc?'#34D399':'#3B82F6',
+                    <div key={side} onMouseDown={e=>onPortMouseDown(e,node,side)}
+                      style={{position:'absolute',width:12,height:12,borderRadius:'50%',
+                        background:isActive?'#34D399':'#3B82F6',
                         border:'2.5px solid #fff',cursor:'crosshair',zIndex:40,
-                        boxShadow:isPortSrc?'0 0 8px rgba(52,211,153,.7)':'0 0 6px rgba(59,130,246,.5)',
-                        transition:'background .1s, box-shadow .1s',
-                        ...pos
-                      }}
-                      title={`Connect from ${side}`}
-                    />
+                        boxShadow:isActive?'0 0 8px rgba(52,211,153,.8)':'0 0 6px rgba(59,130,246,.6)',
+                        ...pos}}
+                      title="Drag to connect"/>
                   );
                 })}
               </div>
             );
           })}
 
-          {/* Selection marquee */}
+          {/* Selection box */}
           {selBox&&(()=>{
             const sx=Math.min(selBox.x1,selBox.x2),sy=Math.min(selBox.y1,selBox.y2);
             const sw=Math.abs(selBox.x2-selBox.x1),sh=Math.abs(selBox.y2-selBox.y1);
@@ -4420,43 +4486,38 @@ function BrainstormSpace({ team, session, members=[] }) {
           })()}
         </div>
 
-        {/* ── Context menu ── */}
-        {ctxMenu&&(()=>{
-          return(
-            <div style={{position:'fixed',left:ctxMenu.x,top:ctxMenu.y,zIndex:9999,background:'#fff',border:'1px solid rgba(0,0,0,.1)',borderRadius:10,padding:5,boxShadow:'0 8px 28px rgba(0,0,0,.15)',minWidth:175}} onMouseDown={e=>e.stopPropagation()}>
-              {[
-                {l:'✏️  Edit', a:()=>{setEditingId(ctxMenu.nodeId);setCtxMenu(null);}},
-                {l:'📋  Copy  Ctrl+C', a:()=>{const n=nodes.find(x=>x.id===ctxMenu.nodeId);if(n)setClipboard({nodes:[n],connections:[]});setCtxMenu(null);}},
-                {l:'📄  Duplicate', a:()=>{const n=nodes.find(x=>x.id===ctxMenu.nodeId);if(!n)return;const nn=[...nodes,{...n,id:nextId.current++,x:n.x+20,y:n.y+20}];setNodes(nn);pushHist(nn,connections,drawPaths);setCtxMenu(null);}},
-                {l:'⤳  Connect from here', a:()=>{setTool('connect');setConnectFrom(ctxMenu.nodeId);setCtxMenu(null);}},
-                {sep:true},
-                {l:'🗑  Delete', danger:true, a:()=>{const nn=nodes.filter(n=>n.id!==ctxMenu.nodeId);const nc=connections.filter(c=>c.from!==ctxMenu.nodeId&&c.to!==ctxMenu.nodeId);setNodes(nn);setConnections(nc);pushHist(nn,nc,drawPaths);setCtxMenu(null);}},
-              ].map((item,i)=>item.sep
-                ? <div key={i} style={{height:1,background:'rgba(0,0,0,.08)',margin:'3px 0'}}/>
-                : <button key={i} onClick={item.a} style={{display:'block',width:'100%',padding:'8px 12px',borderRadius:7,border:'none',background:'transparent',color:item.danger?'#EF4444':'#1a1a1a',cursor:'pointer',fontSize:13,textAlign:'left',fontWeight:item.danger?600:400}}
-                    onMouseEnter={e=>e.target.style.background=item.danger?'rgba(239,68,68,.08)':'rgba(0,0,0,.04)'}
-                    onMouseLeave={e=>e.target.style.background='transparent'}>{item.l}</button>
-              )}
-            </div>
-          );
-        })()}
+        {/* Context menu */}
+        {ctxMenu&&(
+          <div style={{position:'fixed',left:ctxMenu.x,top:ctxMenu.y,zIndex:9999,background:'#fff',border:'1px solid rgba(0,0,0,.1)',borderRadius:10,padding:5,boxShadow:'0 8px 28px rgba(0,0,0,.15)',minWidth:175}} onMouseDown={e=>e.stopPropagation()}>
+            {[
+              {l:'✏️  Edit', a:()=>{setEditingId(ctxMenu.nodeId);setCtxMenu(null);}},
+              {l:'📋  Copy  Ctrl+C', a:()=>{const n=nodesRef.current.find(x=>x.id===ctxMenu.nodeId);if(n)setClipboard({nodes:[n],connections:[]});setCtxMenu(null);}},
+              {l:'📄  Duplicate', a:()=>{const n=nodesRef.current.find(x=>x.id===ctxMenu.nodeId);if(!n)return;const nn=[...nodesRef.current,{...n,id:nextId.current++,x:n.x+20,y:n.y+20}];setNodes(nn);nodesRef.current=nn;pushHist(nn,connectionsRef.current,drawPathsRef.current);setCtxMenu(null);}},
+              {l:'⤳  Connect from here', a:()=>{setTool('connect');toolRef.current='connect';setConnectFrom(ctxMenu.nodeId);connectFromRef.current=ctxMenu.nodeId;setCtxMenu(null);}},
+              {sep:true},
+              {l:'🗑  Delete', danger:true, a:()=>{const nn=nodesRef.current.filter(n=>n.id!==ctxMenu.nodeId);const nc=connectionsRef.current.filter(c=>c.from!==ctxMenu.nodeId&&c.to!==ctxMenu.nodeId);setNodes(nn);nodesRef.current=nn;setConnections(nc);connectionsRef.current=nc;pushHist(nn,nc,drawPathsRef.current);setCtxMenu(null);}},
+            ].map((item,i)=>item.sep
+              ?<div key={i} style={{height:1,background:'rgba(0,0,0,.08)',margin:'3px 0'}}/>
+              :<button key={i} onClick={item.a} style={{display:'block',width:'100%',padding:'8px 12px',borderRadius:7,border:'none',background:'transparent',color:item.danger?'#EF4444':'#1a1a1a',cursor:'pointer',fontSize:13,textAlign:'left',fontWeight:item.danger?600:400}}
+                  onMouseEnter={e=>e.target.style.background=item.danger?'rgba(239,68,68,.08)':'rgba(0,0,0,.04)'}
+                  onMouseLeave={e=>e.target.style.background='transparent'}>{item.l}</button>
+            )}
+          </div>
+        )}
 
-        {/* ── Mini-map ── */}
+        {/* Mini-map */}
         <div style={{position:'absolute',bottom:12,right:12,width:130,height:88,background:'rgba(245,244,240,.92)',border:'1px solid rgba(0,0,0,.1)',borderRadius:8,overflow:'hidden',boxShadow:'0 2px 10px rgba(0,0,0,.1)'}}>
           <svg width="130" height="88">
-            {drawPaths.map(p=>p.pts.length>1&&<circle key={p.id} cx={65+p.pts[0][0]*0.025} cy={44+p.pts[0][1]*0.025} r={2} fill={p.color||'#000'} opacity={0.5}/>)}
             {nodes.map(n=><rect key={n.id} x={65+n.x*0.025} y={44+n.y*0.025} width={Math.max(5,n.w*0.025)} height={Math.max(4,n.h*0.025)} rx={1} fill={n.type==='sticky'?(n.color||'#FDE68A'):n.fill||'#818CF8'} opacity={0.85}/>)}
           </svg>
           <div style={{position:'absolute',bottom:3,left:6,fontSize:9,color:'rgba(0,0,0,.35)',fontWeight:600}}>OVERVIEW</div>
         </div>
 
-        {/* ── Hint ── */}
+        {/* Hints */}
         <div style={{position:'absolute',bottom:12,left:12,fontSize:10,color:'rgba(100,90,60,.45)',pointerEvents:'none',lineHeight:1.7}}>
-          Scroll to pan · Ctrl+scroll to zoom · Alt+drag to pan · Right-click for options<br/>
-          Ctrl+C copy · Ctrl+V paste · Ctrl+D duplicate · Del to delete · V S T H D C = tools
+          Scroll to pan · Ctrl+scroll to zoom · Alt+drag to pan<br/>
+          Ctrl+C copy · Ctrl+V paste · Del to delete · V S T H D C = tools
         </div>
-
-        {/* Auto-save badge */}
         <div style={{position:'absolute',top:10,right:10,fontSize:10,color:'rgba(100,90,60,.45)',background:'rgba(245,244,240,.8)',padding:'2px 8px',borderRadius:20,border:'1px solid rgba(0,0,0,.06)'}}>
           {mode==='personal'?'🔒 Personal':'👥 Shared'} · Auto-saved
         </div>
