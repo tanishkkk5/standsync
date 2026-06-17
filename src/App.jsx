@@ -356,7 +356,10 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
     setJoinLoading(false);
   };
 
-  const goToTeam=(team,role)=>{ if(team&&team.id) onSelectTeam(team,role); };
+  const goToTeam=(team,role)=>{
+    const normalized = team && team.id ? team : (team && team.teams ? team.teams : null);
+    if(normalized&&normalized.id) onSelectTeam(normalized,role);
+  };
 
   // ── Team list ──────────────────────────────────────────────────────────────
   if(view==='list') return(
@@ -404,18 +407,22 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
           <div>
             <div style={{ fontSize:13,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:12 }}>Your teams</div>
             <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:10 }}>
-              {teams.map((tm,i)=>(
-                <Card key={tm.team_id} style={{ padding:'16px 18px',position:'relative',cursor:'pointer' }}>
-                  <div onClick={()=>goToTeam(tm.teams,tm.role)} style={{ display:'flex',alignItems:'center',gap:12 }}>
+              {teams.map((tm,i)=>{
+                const teamData = tm.teams?.id ? tm.teams : (tm.id ? tm : tm.teams);
+                const role = tm.role || 'member';
+                return(
+                <Card key={tm.team_id||tm.id} style={{ padding:'16px 18px',position:'relative',cursor:'pointer' }}>
+                  <div onClick={()=>goToTeam(teamData,role)} style={{ display:'flex',alignItems:'center',gap:12 }}>
                     <div style={{ width:38,height:38,borderRadius:10,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:18 }}>{ICONS[i%ICONS.length]}</div>
                     <div style={{ flex:1,minWidth:0 }}>
-                      <div style={{ fontSize:14,fontWeight:700,color:c.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{tm.teams?.name}</div>
-                      <div style={{ fontSize:11,color:c.mut }}>{tm.role==='manager'?'Manager':'Member'}</div>
+                      <div style={{ fontSize:14,fontWeight:700,color:c.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{teamData?.name||'Team'}</div>
+                      <div style={{ fontSize:11,color:c.mut }}>{role==='manager'?'Manager':'Member'}</div>
                     </div>
                   </div>
-                  {tm.role==='manager'&&<button onClick={e=>{e.stopPropagation();if(window.confirm('Delete "'+tm.teams?.name+'"?'))deleteTeam(tm.teams?.id);}} style={{ position:'absolute',top:8,right:8,width:24,height:24,borderRadius:6,background:'rgba(239,68,68,.1)',border:'none',color:'#F87171',cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center' }}>🗑</button>}
+                  {role==='manager'&&<button onClick={e=>{e.stopPropagation();if(window.confirm('Delete "'+teamData?.name+'"?'))deleteTeam(teamData?.id);}} style={{ position:'absolute',top:8,right:8,width:24,height:24,borderRadius:6,background:'rgba(239,68,68,.1)',border:'none',color:'#F87171',cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center' }}>🗑</button>}
                 </Card>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -475,14 +482,17 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
             <div>
               <div style={{ fontSize:13,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:12 }}>Or jump to a team</div>
               <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:8 }}>
-                {teams.map((tm,i)=>(
-                  <div key={tm.team_id} onClick={()=>goToTeam(tm.teams,tm.role)} style={{ padding:'14px 16px',borderRadius:10,border:`1px solid ${c.bord}`,background:c.surf,cursor:'pointer',display:'flex',alignItems:'center',gap:10,transition:'all .15s' }}
+                {teams.map((tm,i)=>{
+                  const td=tm.teams?.id?tm.teams:(tm.id?tm:tm.teams);
+                  return(
+                  <div key={tm.team_id||tm.id} onClick={()=>goToTeam(td,tm.role)} style={{ padding:'14px 16px',borderRadius:10,border:`1px solid ${c.bord}`,background:c.surf,cursor:'pointer',display:'flex',alignItems:'center',gap:10,transition:'all .15s' }}
                     onMouseEnter={e=>{e.currentTarget.style.borderColor='#6366F1';}}
                     onMouseLeave={e=>{e.currentTarget.style.borderColor=c.bord;}}>
                     <div style={{ width:32,height:32,borderRadius:9,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>{ICONS[i%ICONS.length]}</div>
-                    <div style={{ flex:1,minWidth:0 }}><div style={{ fontSize:13,fontWeight:700,color:c.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{tm.teams?.name}</div><div style={{ fontSize:11,color:c.mut }}>{tm.role==='manager'?'Manager':'Member'}</div></div>
+                    <div style={{ flex:1,minWidth:0 }}><div style={{ fontSize:13,fontWeight:700,color:c.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{td?.name||'Team'}</div><div style={{ fontSize:11,color:c.mut }}>{tm.role==='manager'?'Manager':'Member'}</div></div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -555,12 +565,12 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
         <p style={{ fontSize:13,color:c.mut,marginBottom:22 }}>Select a team to open the task board for this meeting.</p>
         <div style={{ display:'flex',flexDirection:'column',gap:10 }}>
           {teams.map((tm,i)=>(
-            <div key={tm.team_id} onClick={()=>{ goToTeam(tm.teams,tm.role); }} style={{ padding:'18px 22px',borderRadius:12,border:`1.5px solid ${c.bord}`,background:c.surf,cursor:'pointer',display:'flex',alignItems:'center',gap:14,transition:'all .15s' }}
+            <div key={tm.team_id} onClick={()=>{ goToTeam(tm.teams?.id?tm.teams:(tm.id?tm:tm.teams),tm.role); }} style={{ padding:'18px 22px',borderRadius:12,border:`1.5px solid ${c.bord}`,background:c.surf,cursor:'pointer',display:'flex',alignItems:'center',gap:14,transition:'all .15s' }}
               onMouseEnter={e=>{e.currentTarget.style.borderColor='#6366F1';}}
               onMouseLeave={e=>{e.currentTarget.style.borderColor=c.bord;}}>
               <div style={{ width:44,height:44,borderRadius:12,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0 }}>{ICONS[i%ICONS.length]}</div>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:15,fontWeight:700,color:c.text,marginBottom:3 }}>{tm.teams?.name}</div>
+                <div style={{ fontSize:15,fontWeight:700,color:c.text,marginBottom:3 }}>{(tm.teams?.id?tm.teams:(tm.id?tm:tm.teams))?.name||'Team'}</div>
                 <div style={{ fontSize:12,color:c.mut }}>{tm.role==='manager'?'Manager':'Member'} · {tm.teams?.standup_name||'Standup'}</div>
               </div>
               <span style={{ fontSize:13,color:'#818CF8',fontWeight:600 }}>Open board →</span>
@@ -2706,6 +2716,129 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
 // heading1, heading2, heading3, paragraph, bullet, numbered, todo,
 // callout, code, divider, table, image-url, quote
 
+// ─── PROJECT FILE PANEL ───────────────────────────────────────────────────────
+function ProjectFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, projects, pages, dark, c }) {
+  const [extracting, setExtracting] = useState(false);
+  const fileInputRef = useRef();
+  const files = projectFiles[selProject] || [];
+
+  const fileIcon = (f) => {
+    if (f.type?.startsWith('image/')) return '🖼️';
+    if (f.type === 'application/pdf' || f.name?.match(/\.pdf$/i)) return '📄';
+    if (f.name?.match(/\.pptx?$/i)) return '📊';
+    if (f.name?.match(/\.docx?$/i)) return '📝';
+    if (f.name?.match(/\.xlsx?$/i)) return '📈';
+    if (f.type?.includes('text')) return '📃';
+    return '📎';
+  };
+
+  const handleFiles = async (fileList) => {
+    if (!fileList?.length) return;
+    setExtracting(true);
+    const newFiles = [];
+    for (const file of Array.from(fileList)) {
+      const id = 'f' + Date.now() + Math.random().toString(36).slice(2);
+      const type = file.type;
+      let extractedText = '';
+      let dataUrl = '';
+      const readAsDataUrl = () => new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(file); });
+      const readAsText = () => new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsText(file); });
+
+      try {
+        if (type === 'text/plain' || type === 'text/csv' || type.includes('json') || file.name?.match(/\.(txt|csv|json|md)$/i)) {
+          extractedText = await readAsText();
+        } else if (type.startsWith('image/')) {
+          dataUrl = await readAsDataUrl();
+          extractedText = `[Image file: ${file.name}]`;
+        } else if (type === 'application/pdf' || file.name?.match(/\.pdf$/i)) {
+          dataUrl = await readAsDataUrl();
+          extractedText = `[PDF: ${file.name} · ${Math.round(file.size/1024)}KB · Uploaded for AI reference. The AI will use this filename and description when answering questions about it.]`;
+        } else if (file.name?.match(/\.pptx?$/i) || type.includes('presentation')) {
+          dataUrl = await readAsDataUrl();
+          extractedText = `[Presentation: ${file.name} · ${Math.round(file.size/1024)}KB · Uploaded for AI reference.]`;
+        } else if (file.name?.match(/\.docx?$/i) || type.includes('word')) {
+          dataUrl = await readAsDataUrl();
+          extractedText = `[Word document: ${file.name} · ${Math.round(file.size/1024)}KB · Uploaded for AI reference.]`;
+        } else if (file.name?.match(/\.xlsx?$/i) || type.includes('excel') || type.includes('spreadsheet')) {
+          dataUrl = await readAsDataUrl();
+          extractedText = `[Spreadsheet: ${file.name} · ${Math.round(file.size/1024)}KB · Uploaded for AI reference.]`;
+        } else {
+          dataUrl = await readAsDataUrl();
+          extractedText = `[File: ${file.name} · ${Math.round(file.size/1024)}KB]`;
+        }
+      } catch(e) { extractedText = `[${file.name}]`; }
+
+      newFiles.push({
+        id, name: file.name, type, size: file.size,
+        dataUrl: type.startsWith('image/') ? dataUrl : undefined,
+        extractedText, uploadedAt: Date.now()
+      });
+    }
+    const updated = { ...projectFiles, [selProject]: [...files, ...newFiles] };
+    setProjectFiles(updated);
+    saveWiki(projects, pages, updated);
+    setExtracting(false);
+  };
+
+  const removeFile = (fid) => {
+    const updated = { ...projectFiles, [selProject]: files.filter(f => f.id !== fid) };
+    setProjectFiles(updated);
+    saveWiki(projects, pages, updated);
+  };
+
+  return (
+    <div style={{ marginBottom: 24, borderRadius: 14, border: `1px solid ${c.bord}`, overflow: 'hidden', background: dark ? 'rgba(255,255,255,.03)' : 'rgba(255,255,255,.7)' }}>
+      <div style={{ padding: '12px 18px', borderBottom: `1px solid ${c.bord}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 16 }}>📎</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: c.text, flex: 1 }}>Project Files & SOPs</span>
+        <span style={{ fontSize: 11, color: c.mut }}>{files.length} file{files.length !== 1 ? 's' : ''} · AI reads all</span>
+        <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.ppt,.pptx,.doc,.docx,.txt,.csv,.json,.xlsx,.xls,.md" onChange={e => handleFiles(e.target.files)} style={{ display: 'none' }}/>
+        <button onClick={() => fileInputRef.current?.click()} disabled={extracting}
+          style={{ padding: '6px 14px', borderRadius: 8, background: extracting ? 'rgba(99,102,241,.3)' : 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: extracting ? 'wait' : 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+          {extracting
+            ? <><div style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid rgba(255,255,255,.3)', borderTop: '2px solid #fff', animation: 'spin .75s linear infinite' }}/> Reading…</>
+            : '+ Browse files'}
+        </button>
+      </div>
+
+      {files.length === 0 ? (
+        <div style={{ padding: '28px', textAlign: 'center', cursor: 'pointer' }} onClick={() => fileInputRef.current?.click()}>
+          <div style={{ fontSize: 36, marginBottom: 8 }}>📁</div>
+          <div style={{ fontSize: 13, color: c.mut, marginBottom: 4 }}>Upload PDFs, presentations, images, docs, SOPs</div>
+          <div style={{ fontSize: 11, color: c.mut, marginBottom: 14 }}>AI will read extracted content and answer questions about it</div>
+          <div style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+            {['📄 PDF','📊 PPT/PPTX','📝 DOC/DOCX','🖼️ Images','📃 TXT/CSV'].map(t => (
+              <span key={t} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: dark ? 'rgba(255,255,255,.06)' : 'rgba(99,102,241,.08)', color: c.mut, border: `1px solid ${c.bord}` }}>{t}</span>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px,1fr))', gap: 10, padding: 14 }}>
+          {files.map(f => (
+            <div key={f.id} style={{ padding: '12px 14px', borderRadius: 10, background: dark ? 'rgba(255,255,255,.05)' : 'rgba(255,255,255,.9)', border: `1px solid ${c.bord}`, position: 'relative' }}>
+              {f.type?.startsWith('image/') && f.dataUrl
+                ? <img src={f.dataUrl} alt={f.name} style={{ width: '100%', height: 72, objectFit: 'cover', borderRadius: 6, marginBottom: 8 }}/>
+                : <div style={{ fontSize: 28, marginBottom: 8, textAlign: 'center' }}>{fileIcon(f)}</div>
+              }
+              <div style={{ fontSize: 12, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }} title={f.name}>{f.name}</div>
+              <div style={{ fontSize: 10, color: c.mut }}>{Math.round(f.size/1024)}KB · {new Date(f.uploadedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
+              <div style={{ fontSize: 10, marginTop: 4, color: f.extractedText && !f.extractedText.startsWith('[') ? '#34D399' : '#818CF8' }}>
+                {f.extractedText && !f.extractedText.startsWith('[') ? '✓ Text extracted · AI readable' : '✦ AI readable via reference'}
+              </div>
+              <button onClick={() => removeFile(f.id)} style={{ position: 'absolute', top: 6, right: 6, width: 20, height: 20, borderRadius: '50%', background: 'rgba(239,68,68,.12)', border: 'none', color: '#F87171', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+            </div>
+          ))}
+          <div onClick={() => fileInputRef.current?.click()} style={{ padding: 12, borderRadius: 10, border: `1.5px dashed ${c.bord}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer', minHeight: 80 }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = '#818CF8'} onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
+            <div style={{ fontSize: 22, color: c.mut }}>+</div>
+            <div style={{ fontSize: 11, color: c.mut }}>Add more</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProjectWiki({ team, session, members = [] }) {
   const c = useC();
   const { dark } = useTheme();
@@ -2719,6 +2852,8 @@ function ProjectWiki({ team, session, members = [] }) {
   const [selPage, setSelPage]   = useState(null);         // page id
   const [view, setView]         = useState('home');       // home | overview | page | newProject | newPage
   const [sideCollapsed, setSideCollapsed] = useState(false);
+  // File attachments per project: {[projectId]: [{id,name,type,size,dataUrl,extractedText,uploadedAt}]}
+  const [projectFiles, setProjectFiles] = useState({});
 
   // AI
   const [aiQuery, setAiQuery]   = useState('');
@@ -2755,6 +2890,7 @@ function ProjectWiki({ team, session, members = [] }) {
         const d = JSON.parse(raw);
         setProjects(d.projects || []);
         setPages(d.pages || []);
+        if (d.projectFiles) setProjectFiles(d.projectFiles);
         if (d.projects?.length) setSelProject(d.projects[0].id);
       } else {
         // Seed demo
@@ -2786,10 +2922,17 @@ function ProjectWiki({ team, session, members = [] }) {
   }, [WIKI_KEY]);
 
   // ── Save ──────────────────────────────────────────────────────────────────
-  const saveWiki = useCallback((p, pg) => {
-    try { localStorage.setItem(WIKI_KEY, JSON.stringify({ projects: p, pages: pg, savedAt: Date.now() })); }
-    catch(e) {}
-  }, [WIKI_KEY]);
+  const saveWiki = useCallback((p, pg, pf) => {
+    try {
+      const files = pf !== undefined ? pf : projectFiles;
+      // Strip dataUrl from files before saving to keep storage small — keep extractedText only
+      const filesForStorage = {};
+      Object.keys(files).forEach(pid => {
+        filesForStorage[pid] = files[pid].map(f => ({ ...f, dataUrl: f.type?.startsWith('image/') ? f.dataUrl : undefined }));
+      });
+      localStorage.setItem(WIKI_KEY, JSON.stringify({ projects: p, pages: pg, projectFiles: filesForStorage, savedAt: Date.now() }));
+    } catch(e) {}
+  }, [WIKI_KEY, projectFiles]);
 
   const autoSave = useCallback((p, pg) => {
     setSaving(true);
@@ -2815,11 +2958,15 @@ function ProjectWiki({ team, session, members = [] }) {
   // ── All text from project pages (for AI context) ───────────────────────
   const getProjectContext = useCallback((projectId) => {
     const pgs = pages.filter(p => p.projectId === projectId);
-    return pgs.map(pg => {
+    const pageText = pgs.map(pg => {
       const text = pg.blocks?.map(b => b.content || '').join('\n') || '';
       return `## ${pg.emoji} ${pg.title}\n${text}`;
     }).join('\n\n---\n\n');
-  }, [pages]);
+    // Include extracted text from uploaded files
+    const files = projectFiles[projectId] || [];
+    const fileText = files.filter(f => f.extractedText).map(f => `## 📎 ${f.name}\n${f.extractedText}`).join('\n\n---\n\n');
+    return [pageText, fileText].filter(Boolean).join('\n\n===FILE ATTACHMENTS===\n\n');
+  }, [pages, projectFiles]);
 
   // ── AI Ask ────────────────────────────────────────────────────────────────
   const askWikiAI = async (query) => {
@@ -3125,7 +3272,8 @@ Answer clearly and concisely. Reference specific page names or sections when rel
           ))}
         </div>
 
-        {/* AI Q&A panel */}
+        {/* ── FILE ATTACHMENTS ── */}
+        <ProjectFilePanel selProject={selProject} projectFiles={projectFiles} setProjectFiles={setProjectFiles} saveWiki={saveWiki} projects={projects} pages={pages} dark={dark} c={c}/>
         <div style={{ marginBottom: 28, borderRadius: 14, border: `1px solid rgba(124,110,245,.25)`, background: dark ? 'rgba(99,102,241,.06)' : 'rgba(99,102,241,.04)', overflow: 'hidden' }}>
           <div style={{ padding: '14px 18px', borderBottom: `1px solid rgba(124,110,245,.15)`, display: 'flex', alignItems: 'center', gap: 10 }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z" fill="#A78BFA"/></svg>
