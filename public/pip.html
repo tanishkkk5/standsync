@@ -5,26 +5,40 @@
 <title>StandSync PiP</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#07051A;color:#F0ECFF;height:100vh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
-.hdr{padding:11px 14px;background:rgba(124,110,245,.15);border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:9px;flex-shrink:0}
-.logo{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#6B5FE4,#9B8AFB);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
-.tasks{flex:1;overflow-y:auto;padding:6px 0}
-.task{display:flex;align-items:center;gap:9px;padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.05)}
-.cb{width:18px;height:18px;border-radius:50%;border:2px solid rgba(128,128,128,.4);background:transparent;cursor:pointer;flex-shrink:0;transition:all .2s}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#07051A;color:#F0ECFF;height:100vh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased;font-size:13px}
+.hdr{padding:10px 12px;background:rgba(124,110,245,.15);border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:8px;flex-shrink:0}
+.logo{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#6B5FE4,#9B8AFB);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+.bar-wrap{height:3px;background:rgba(255,255,255,.07);flex-shrink:0}
+.bar-fill{height:100%;background:linear-gradient(90deg,#6B5FE4,#34D399);transition:width .4s}
+.tasks{flex:1;overflow-y:auto;padding:4px 0}
+.task{display:flex;align-items:flex-start;gap:8px;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.04);transition:background .1s}
+.task:hover{background:rgba(255,255,255,.03)}
+.cb{width:17px;height:17px;border-radius:50%;border:2px solid rgba(128,128,128,.4);background:transparent;cursor:pointer;flex-shrink:0;margin-top:1px;transition:all .2s}
 .cb.done{border-color:#34D399;background:#34D399}
-.cb.inprog{border-color:#38BDF8}
-.cb.blocked{border-color:#EF4444}
-.title{flex:1;font-size:12px;line-height:1.4}
-.title.done{text-decoration:line-through;opacity:.4}
-.pri{font-size:9px;color:rgba(240,236,255,.35);text-transform:uppercase}
-.empty{padding:24px;text-align:center;font-size:12px;color:rgba(240,236,255,.3);line-height:1.8}
-.bar{height:3px;background:rgba(255,255,255,.07)}
-.fill{height:100%;background:linear-gradient(90deg,#6B5FE4,#34D399);transition:width .4s}
-.inp{display:flex;gap:8px;padding:9px;border-top:1px solid rgba(255,255,255,.07);flex-shrink:0}
-input{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:7px 10px;color:#F0ECFF;font-size:12px;outline:none;font-family:inherit}
-input:focus{border-color:rgba(124,110,245,.5)}
-input::placeholder{color:rgba(240,236,255,.3)}
-.send{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#6B5FE4,#9B8AFB);border:none;color:#fff;cursor:pointer;font-size:14px;flex-shrink:0}
+.cb.inprog{border-color:#38BDF8;background:rgba(56,189,248,.15)}
+.cb.blocked{border-color:#EF4444;background:rgba(239,68,68,.15)}
+.task-body{flex:1;min-width:0}
+.task-title{font-size:12px;line-height:1.4;word-break:break-word}
+.task-title.done{text-decoration:line-through;opacity:.4}
+.task-meta{display:flex;gap:5px;margin-top:3px;flex-wrap:wrap}
+.tag{font-size:9px;padding:1px 6px;border-radius:10px;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.tag.critical{background:rgba(239,68,68,.2);color:#F87171}
+.tag.high{background:rgba(249,115,22,.2);color:#FB923C}
+.tag.medium{background:rgba(245,158,11,.15);color:#FCD34D}
+.tag.low{background:rgba(16,185,129,.15);color:#6EE7B7}
+.tag.deadline{background:rgba(124,110,245,.15);color:#A78BFA}
+.tag.status{background:rgba(56,189,248,.12);color:#7DD3FC}
+.empty{padding:24px 16px;text-align:center;font-size:12px;color:rgba(240,236,255,.3);line-height:1.8}
+.add-form{border-top:1px solid rgba(255,255,255,.07);padding:8px 10px;flex-shrink:0;background:rgba(255,255,255,.02)}
+.add-row1{display:flex;gap:6px;margin-bottom:6px}
+.add-row2{display:flex;gap:5px}
+input[type=text]{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:6px 10px;color:#F0ECFF;font-size:12px;outline:none;font-family:inherit}
+input[type=text]:focus{border-color:rgba(124,110,245,.5)}
+input[type=text]::placeholder{color:rgba(240,236,255,.28)}
+select{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:5px 6px;color:#F0ECFF;font-size:11px;outline:none;cursor:pointer;flex:1}
+select option{background:#0D0B24;color:#F0ECFF}
+.send{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#6B5FE4,#9B8AFB);border:none;color:#fff;cursor:pointer;font-size:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.send:disabled{opacity:.35;cursor:default}
 ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:rgba(124,110,245,.3);border-radius:3px}
 </style>
 </head>
@@ -32,79 +46,103 @@ input::placeholder{color:rgba(240,236,255,.3)}
 <div class="hdr">
   <div class="logo">⚡</div>
   <div style="flex:1">
-    <div style="font-size:12px;font-weight:700" id="team-name">StandSync</div>
-    <div style="font-size:10px;color:rgba(240,236,255,.45)" id="progress">Loading...</div>
+    <div style="font-size:12px;font-weight:700" id="team-name">StandSync PiP</div>
+    <div style="font-size:10px;color:rgba(240,236,255,.4)" id="progress">Loading...</div>
   </div>
 </div>
-<div class="bar"><div class="fill" id="bar" style="width:0%"></div></div>
-<div class="tasks" id="task-list"><div class="empty">⏳ Connecting...</div></div>
-<div class="inp">
-  <input id="inp" placeholder="Add a task..." />
-  <button class="send" id="send-btn">↑</button>
+<div class="bar-wrap"><div class="bar-fill" id="bar" style="width:0%"></div></div>
+<div class="tasks" id="task-list"><div class="empty">⏳ Connecting to StandSync...</div></div>
+<div class="add-form">
+  <div class="add-row1">
+    <input type="text" id="inp" placeholder="Add a task..."/>
+    <button class="send" id="send-btn" disabled>↑</button>
+  </div>
+  <div class="add-row2">
+    <select id="pri">
+      <option value="medium">⚡ Medium</option>
+      <option value="critical">🔴 Critical</option>
+      <option value="high">🟠 High</option>
+      <option value="low">🟢 Low</option>
+    </select>
+    <select id="deadline">
+      <option value="">No deadline</option>
+      <option value="Today EOD (6 PM)">Today EOD</option>
+      <option value="Tomorrow EOD">Tomorrow EOD</option>
+      <option value="This week">This week</option>
+      <option value="Next week">Next week</option>
+    </select>
+  </div>
 </div>
 <script>
-var tasks = [], myEmail = '', myName = '', teamName = 'Team';
-var nextStatus = {todo:'in-progress','in-progress':'done',done:'todo',blocked:'todo'};
+var tasks=[], myEmail='', myName='', teamName='Team';
+var nextStatus={todo:'in-progress','in-progress':'done',done:'todo',blocked:'todo'};
+var statusLabel={'in-progress':'In progress','done':'Done','blocked':'Blocked','todo':''};
 
-function render() {
-  var mine = tasks.filter(function(t){ return t.assignee_email === myEmail; });
-  var done = mine.filter(function(t){ return t.status === 'done'; }).length;
-  var pct = mine.length ? Math.round(done/mine.length*100) : 0;
-  document.getElementById('team-name').textContent = teamName;
-  document.getElementById('progress').textContent = done + '/' + mine.length + ' done · ' + pct + '%';
-  document.getElementById('bar').style.width = pct + '%';
-  var html = '';
-  if (!mine.length) {
-    html = '<div class="empty">No tasks yet.<br>Add one below!</div>';
+function render(){
+  var mine=tasks.filter(function(t){return t.assignee_email===myEmail;});
+  var done=mine.filter(function(t){return t.status==='done';}).length;
+  var pct=mine.length?Math.round(done/mine.length*100):0;
+  document.getElementById('team-name').textContent=teamName;
+  document.getElementById('progress').textContent=done+'/'+mine.length+' done · '+pct+'%';
+  document.getElementById('bar').style.width=pct+'%';
+  var html='';
+  if(!mine.length){
+    html='<div class="empty">No tasks yet.<br>Add one below!</div>';
   } else {
-    mine.forEach(function(t) {
-      var cls = t.status === 'done' ? 'done' : t.status === 'in-progress' ? 'inprog' : t.status === 'blocked' ? 'blocked' : '';
-      html += '<div class="task">' +
-        '<button class="cb ' + cls + '" data-id="' + t.id + '" data-next="' + (nextStatus[t.status]||'todo') + '"></button>' +
-        '<span class="title ' + (t.status==='done'?'done':'') + '">' + (t.title||'').replace(/</g,'&lt;') + '</span>' +
-        '<span class="pri">' + (t.priority||'') + '</span>' +
-        '</div>';
+    mine.forEach(function(t){
+      var cls=t.status==='done'?'done':t.status==='in-progress'?'inprog':t.status==='blocked'?'blocked':'';
+      var priTag=t.priority?'<span class="tag '+t.priority+'">'+t.priority+'</span>':'';
+      var dlTag=t.due_label?'<span class="tag deadline">📅 '+t.due_label+'</span>':'';
+      var stTag=statusLabel[t.status]?'<span class="tag status">'+statusLabel[t.status]+'</span>':'';
+      html+='<div class="task">'+
+        '<button class="cb '+cls+'" data-id="'+t.id+'" data-next="'+(nextStatus[t.status]||'todo')+'"></button>'+
+        '<div class="task-body">'+
+          '<div class="task-title '+(t.status==='done'?'done':'')+'">'+
+            (t.title||'').replace(/</g,'&lt;')+
+          '</div>'+
+          '<div class="task-meta">'+priTag+stTag+dlTag+'</div>'+
+        '</div>'+
+      '</div>';
     });
   }
-  document.getElementById('task-list').innerHTML = html;
+  document.getElementById('task-list').innerHTML=html;
 }
 
-document.addEventListener('click', function(e) {
-  if (e.target.classList.contains('cb')) {
-    var id = e.target.dataset.id;
-    var next = e.target.dataset.next;
-    if (window.opener) window.opener.postMessage({type:'status',id:id,status:next}, '*');
-    tasks = tasks.map(function(t){ return t.id===id ? Object.assign({},t,{status:next}) : t; });
+document.addEventListener('click',function(e){
+  if(e.target.classList.contains('cb')){
+    var id=e.target.dataset.id;
+    var next=e.target.dataset.next;
+    if(window.opener) window.opener.postMessage({type:'status',id:id,status:next},'*');
+    tasks=tasks.map(function(t){return t.id===id?Object.assign({},t,{status:next}):t;});
     render();
   }
 });
 
-document.getElementById('send-btn').addEventListener('click', function() {
-  var v = document.getElementById('inp').value.trim();
-  if (!v) return;
-  if (window.opener) window.opener.postMessage({type:'addTask',title:v,myEmail:myEmail,myName:myName}, '*');
-  tasks.push({id:'tmp'+Date.now(),title:v,status:'todo',priority:'medium',assignee_email:myEmail});
-  render();
-  document.getElementById('inp').value = '';
-});
+var inp=document.getElementById('inp');
+var sendBtn=document.getElementById('send-btn');
+inp.addEventListener('input',function(){sendBtn.disabled=!inp.value.trim();});
+inp.addEventListener('keydown',function(e){if(e.key==='Enter'&&inp.value.trim())send();});
+sendBtn.addEventListener('click',send);
 
-document.getElementById('inp').addEventListener('keydown', function(e) {
-  if (e.key === 'Enter') document.getElementById('send-btn').click();
-});
+function send(){
+  var v=inp.value.trim(); if(!v) return;
+  var pri=document.getElementById('pri').value||'medium';
+  var dl=document.getElementById('deadline').value||'';
+  var task={id:'tmp'+Date.now(),title:v,status:'todo',priority:pri,due_label:dl,assignee_email:myEmail,assignee_name:myName};
+  if(window.opener) window.opener.postMessage({type:'addTask',task:task},'*');
+  tasks.push(task); render();
+  inp.value=''; sendBtn.disabled=true;
+  document.getElementById('pri').value='medium';
+  document.getElementById('deadline').value='';
+}
 
-window.addEventListener('message', function(e) {
-  if (!e.data) return;
-  if (e.data.type === 'init') {
-    tasks = e.data.tasks || [];
-    myEmail = e.data.myEmail || '';
-    myName = e.data.myName || '';
-    teamName = e.data.teamName || 'Team';
+window.addEventListener('message',function(e){
+  if(!e.data) return;
+  if(e.data.type==='init'){
+    tasks=e.data.tasks||[]; myEmail=e.data.myEmail||''; myName=e.data.myName||''; teamName=e.data.teamName||'Team';
     render();
   }
-  if (e.data.type === 'tasks') {
-    tasks = e.data.tasks || [];
-    render();
-  }
+  if(e.data.type==='tasks'){tasks=e.data.tasks||[];render();}
 });
 </script>
 </body>
