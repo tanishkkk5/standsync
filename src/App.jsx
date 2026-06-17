@@ -3513,66 +3513,58 @@ function BrainstormSpace({ team, session, members=[] }) {
   const c = useC();
   const { dark } = useTheme();
   const canvasRef = useRef();
+  const svgRef = useRef();
   const nextId = useRef(1);
 
-  // ── Mode: personal vs shared ──
-  const [mode, setMode] = useState('personal'); // 'personal' | 'shared'
   const userId = session?.user?.id || 'anon';
   const teamId = team?.id || 'demo';
+  const [mode, setMode] = useState('personal');
   const BOARD_KEY = `ss-bs-${mode === 'personal' ? userId : 'shared-' + teamId}`;
 
-  // ── Canvas transform ──
-  const [pan, setPan] = useState({ x: 120, y: 80 });
+  const [pan, setPan]   = useState({ x: 120, y: 80 });
   const [zoom, setZoom] = useState(1);
-
-  // ── Board data ──
-  const [nodes, setNodes]           = useState([]);
+  const [nodes, setNodes]             = useState([]);
   const [connections, setConnections] = useState([]);
-  const [drawPaths, setDrawPaths]   = useState([]);
+  const [drawPaths, setDrawPaths]     = useState([]);
+  const [selected, setSelected]       = useState(new Set());
+  const [tool, setTool]               = useState('select');
+  const [editingId, setEditingId]     = useState(null);
 
-  // ── Selection & interaction ──
-  const [selected, setSelected]     = useState(new Set());
-  const [tool, setTool]             = useState('select');
-  const [editingId, setEditingId]   = useState(null);
+  // draw
+  const [drawColor, setDrawColor] = useState('#000000');
+  const [drawWidth, setDrawWidth] = useState(3);
+  const [currentPath, setCurrentPath] = useState(null);
+  const isDrawing = useRef(false);
 
-  // ── Dragging ──
-  const [dragging, setDragging]     = useState(null); // {nodeIds, startPt, origPositions}
-  const [resizing, setResizing]     = useState(null);
-  const [selBox, setSelBox]         = useState(null);
+  // sticky / shape
+  const [stickyColor, setStickyColor] = useState('#FDE68A');
+  const [shapeType, setShapeType]     = useState('rect');
+  const [shapeColorIdx, setShapeColorIdx] = useState(0);
 
-  // ── Panning ──
-  const [isPanning, setIsPanning]   = useState(false);
+  // connector
+  const [connType, setConnType]       = useState('curve');
+  const [connColor, setConnColor]     = useState('#000000');
+  const [connectFrom, setConnectFrom] = useState(null); // nodeId
+  const [connPreview, setConnPreview] = useState(null); // {x,y} in canvas space
+
+  // drag / resize
+  const [dragging, setDragging]   = useState(null);
+  const [resizing, setResizing]   = useState(null);
+  const [selBox, setSelBox]       = useState(null);
+
+  // port drag (for connect-by-dragging port dot)
+  const [portDrag, setPortDrag]   = useState(null); // {fromId, preview}
+
+  const [isPanning, setIsPanning] = useState(false);
   const panRef = useRef({ x: 0, y: 0 });
 
-  // ── Draw tool ──
-  const [drawColor, setDrawColor]   = useState('#818CF8');
-  const [drawWidth, setDrawWidth]   = useState(3);
-  const [currentPath, setCurrentPath] = useState(null);
+  const [clipboard, setClipboard] = useState(null);
+  const [ctxMenu, setCtxMenu]     = useState(null);
 
-  // ── Sticky options ──
-  const [stickyColor, setStickyColor] = useState('#FDE68A');
-  const [showStickyPicker, setShowStickyPicker] = useState(false);
+  const [bsHist, setBsHist] = useState([]);
+  const [bsIdx, setBsIdx]   = useState(-1);
 
-  // ── Shape options ──
-  const [shapeType, setShapeType]   = useState('rect'); // rect|circle|diamond|pill
-  const [shapeColor, setShapeColor] = useState(0);
-
-  // ── Connector options ──
-  const [connType, setConnType]     = useState('curve'); // curve|straight|elbow
-  const [connectFrom, setConnectFrom] = useState(null);
-  const [connPreview, setConnPreview] = useState(null);
-
-  // ── Clipboard ──
-  const [clipboard, setClipboard]   = useState(null);
-
-  // ── Context menu ──
-  const [ctxMenu, setCtxMenu]       = useState(null); // {x,y,nodeId}
-
-  // ── Undo/redo ──
-  const [bsHist, setBsHist]         = useState([]);
-  const [bsIdx, setBsIdx]           = useState(-1);
-
-  // ── Load from storage ──────────────────────────────────────────────────────
+  // ── Load ──
   useEffect(() => {
     try {
       const raw = localStorage.getItem(BOARD_KEY);
@@ -3582,7 +3574,6 @@ function BrainstormSpace({ team, session, members=[] }) {
         if (d.connections) setConnections(d.connections);
         if (d.drawPaths)   setDrawPaths(d.drawPaths);
       } else {
-        // Seed with welcome note
         const welcome = { id: 1, type: 'sticky', x: 60, y: 40, w: 180, h: 150,
           text: '👋 Welcome!\nDouble-click to edit\nDrag to move\nS = sticky  T = text\nD = draw  C = connect', color: '#FDE68A',
           fontSize: 12, fontWeight: 400, fontStyle: 'normal', textAlign: 'left' };
@@ -3591,13 +3582,10 @@ function BrainstormSpace({ team, session, members=[] }) {
     } catch(e) {}
   }, [BOARD_KEY]);
 
-  // ── Auto-save ──────────────────────────────────────────────────────────────
   const saveToStorage = useCallback((n, co, dp) => {
-    try { localStorage.setItem(BOARD_KEY, JSON.stringify({ nodes: n, connections: co, drawPaths: dp, savedAt: Date.now() })); }
-    catch(e) {}
+    try { localStorage.setItem(BOARD_KEY, JSON.stringify({ nodes: n, connections: co, drawPaths: dp, savedAt: Date.now() })); } catch(e) {}
   }, [BOARD_KEY]);
 
-  // ── History ────────────────────────────────────────────────────────────────
   const pushHist = useCallback((n, co, dp) => {
     setBsHist(h => [...h.slice(0, bsIdx + 1), { nodes: JSON.parse(JSON.stringify(n)), connections: JSON.parse(JSON.stringify(co)), drawPaths: JSON.parse(JSON.stringify(dp)) }]);
     setBsIdx(i => i + 1);
@@ -3608,28 +3596,25 @@ function BrainstormSpace({ team, session, members=[] }) {
     if (bsIdx < 1) return;
     const s = bsHist[bsIdx - 1];
     setNodes(s.nodes); setConnections(s.connections); setDrawPaths(s.drawPaths);
-    setBsIdx(i => i - 1);
-    saveToStorage(s.nodes, s.connections, s.drawPaths);
+    setBsIdx(i => i - 1); saveToStorage(s.nodes, s.connections, s.drawPaths);
   }, [bsHist, bsIdx, saveToStorage]);
 
   const redo = useCallback(() => {
     if (bsIdx >= bsHist.length - 1) return;
     const s = bsHist[bsIdx + 1];
     setNodes(s.nodes); setConnections(s.connections); setDrawPaths(s.drawPaths);
-    setBsIdx(i => i + 1);
-    saveToStorage(s.nodes, s.connections, s.drawPaths);
+    setBsIdx(i => i + 1); saveToStorage(s.nodes, s.connections, s.drawPaths);
   }, [bsHist, bsIdx, saveToStorage]);
 
-  // ── Coordinate transform ───────────────────────────────────────────────────
+  // ── toCanvas: client coords → canvas coords ──
   const toCanvas = useCallback((cx, cy) => {
     const rect = canvasRef.current?.getBoundingClientRect() || { left: 0, top: 0 };
     return { x: (cx - rect.left - pan.x) / zoom, y: (cy - rect.top - pan.y) / zoom };
   }, [pan, zoom]);
 
-  // ── Wheel handler ──────────────────────────────────────────────────────────
+  // ── Wheel zoom ──
   useEffect(() => {
-    const el = canvasRef.current;
-    if (!el) return;
+    const el = canvasRef.current; if (!el) return;
     const handler = (e) => {
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) {
@@ -3649,698 +3634,683 @@ function BrainstormSpace({ team, session, members=[] }) {
     return () => el.removeEventListener('wheel', handler);
   }, []);
 
-  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
+  // ── Keyboard ──
   useEffect(() => {
     const handler = (e) => {
       if (editingId) return;
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); return; }
-
-      if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
-        const selNodes = nodes.filter(n => selected.has(n.id));
-        if (selNodes.length) setClipboard({ nodes: selNodes, connections: connections.filter(c => selected.has(c.from) && selected.has(c.to)) });
+      if ((e.metaKey||e.ctrlKey) && e.key==='z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
+      if ((e.metaKey||e.ctrlKey) && (e.key==='y'||(e.key==='z'&&e.shiftKey))) { e.preventDefault(); redo(); return; }
+      if ((e.metaKey||e.ctrlKey) && e.key==='c') {
+        const sn = nodes.filter(n => selected.has(n.id));
+        if (sn.length) setClipboard({ nodes: sn, connections: connections.filter(c => selected.has(c.from) && selected.has(c.to)) });
         return;
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'v') {
+      if ((e.metaKey||e.ctrlKey) && e.key==='v') {
         if (!clipboard) return;
-        const offset = 20;
         const idMap = {};
-        const newNodes = clipboard.nodes.map(n => {
-          const nid = nextId.current++;
-          idMap[n.id] = nid;
-          return { ...n, id: nid, x: n.x + offset, y: n.y + offset };
-        });
-        const newConns = (clipboard.connections || []).map(c => ({ ...c, id: nextId.current++, from: idMap[c.from], to: idMap[c.to] }));
-        const nn = [...nodes, ...newNodes], nc = [...connections, ...newConns];
-        setNodes(nn); setConnections(nc);
-        setSelected(new Set(newNodes.map(n => n.id)));
-        setClipboard({ nodes: newNodes, connections: newConns }); // update offset for repeated paste
-        pushHist(nn, nc, drawPaths);
-        return;
+        const nn2 = clipboard.nodes.map(n => { const nid = nextId.current++; idMap[n.id]=nid; return {...n,id:nid,x:n.x+20,y:n.y+20}; });
+        const nc2 = (clipboard.connections||[]).map(c => ({...c,id:nextId.current++,from:idMap[c.from],to:idMap[c.to]}));
+        const nn=[...nodes,...nn2], nc=[...connections,...nc2];
+        setNodes(nn); setConnections(nc); setSelected(new Set(nn2.map(n=>n.id)));
+        setClipboard({nodes:nn2,connections:nc2}); pushHist(nn,nc,drawPaths); return;
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
-        e.preventDefault();
+      if ((e.metaKey||e.ctrlKey) && e.key==='d') {
+        e.preventDefault(); if (!selected.size) return;
+        const sn=nodes.filter(n=>selected.has(n.id));
+        const nn2=sn.map(n=>({...n,id:nextId.current++,x:n.x+20,y:n.y+20}));
+        const nn=[...nodes,...nn2]; setNodes(nn); setSelected(new Set(nn2.map(n=>n.id))); pushHist(nn,connections,drawPaths); return;
+      }
+      if ((e.metaKey||e.ctrlKey) && e.key==='a') { e.preventDefault(); setSelected(new Set(nodes.map(n=>n.id))); return; }
+      if (e.key==='Delete'||e.key==='Backspace') {
         if (!selected.size) return;
-        const selNodes = nodes.filter(n => selected.has(n.id));
-        const newNodes = selNodes.map(n => ({ ...n, id: nextId.current++, x: n.x + 20, y: n.y + 20 }));
-        const nn = [...nodes, ...newNodes];
-        setNodes(nn); setSelected(new Set(newNodes.map(n => n.id)));
-        pushHist(nn, connections, drawPaths);
-        return;
+        const nn=nodes.filter(n=>!selected.has(n.id));
+        const nc=connections.filter(c=>!selected.has(c.id)&&!selected.has(c.from)&&!selected.has(c.to));
+        const np=drawPaths.filter(p=>!selected.has(p.id));
+        setNodes(nn); setConnections(nc); setDrawPaths(np); setSelected(new Set()); pushHist(nn,nc,np); return;
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'a') { e.preventDefault(); setSelected(new Set(nodes.map(n => n.id))); return; }
-
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (!selected.size) return;
-        const nn = nodes.filter(n => !selected.has(n.id));
-        const nc = connections.filter(c => !selected.has(c.id) && !selected.has(c.from) && !selected.has(c.to));
-        const np = drawPaths.filter(p => !selected.has(p.id));
-        setNodes(nn); setConnections(nc); setDrawPaths(np); setSelected(new Set());
-        pushHist(nn, nc, np);
-        return;
-      }
-      if (e.key === 'Escape') { setSelected(new Set()); setConnectFrom(null); setCtxMenu(null); }
-      if (!e.metaKey && !e.ctrlKey) {
-        if (e.key === 'v') setTool('select');
-        if (e.key === 's') { setTool('sticky'); setShowStickyPicker(true); }
-        if (e.key === 't') setTool('text');
-        if (e.key === 'd') setTool('draw');
-        if (e.key === 'c') setTool('connect');
-        if (e.key === 'h') setTool('shape');
-        if (e.key === '=') setZoom(z => Math.min(4, z * 1.15));
-        if (e.key === '-') setZoom(z => Math.max(0.1, z / 1.15));
+      if (e.key==='Escape') { setSelected(new Set()); setConnectFrom(null); setPortDrag(null); setCtxMenu(null); }
+      if (!e.metaKey&&!e.ctrlKey) {
+        if (e.key==='v') setTool('select');
+        if (e.key==='s') setTool('sticky');
+        if (e.key==='t') setTool('text');
+        if (e.key==='d') setTool('draw');
+        if (e.key==='c') setTool('connect');
+        if (e.key==='h') setTool('shape');
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [editingId, nodes, connections, drawPaths, selected, clipboard, undo, redo, pushHist]);
 
-  // ── Node helpers ───────────────────────────────────────────────────────────
-  const addNode = useCallback((type, x, y, extra = {}) => {
+  // ── addNode ──
+  const addNode = useCallback((type, x, y, extra={}) => {
     const id = nextId.current++;
-    const defaults = {
-      sticky:  { w: 180, h: 160, text: '', color: stickyColor, fontSize: 13, fontWeight: 400, fontStyle: 'normal', textAlign: 'left' },
-      text:    { w: 220, h: 56,  text: 'Type here...', color: 'transparent', borderColor: 'transparent', fontSize: 16, fontWeight: 400, fontStyle: 'normal', textAlign: 'left' },
-      shape:   { w: 140, h: 90,  text: '', ...BS_SHAPE_COLORS[shapeColor], fontSize: 13, fontWeight: 700, fontStyle: 'normal', textAlign: 'center' },
-      pill:    { w: 160, h: 52,  text: 'Label', fill: '#FBBF24', stroke: '#D97706', fontSize: 13, fontWeight: 700, fontStyle: 'normal', textAlign: 'center' },
+    const node = {
+      id, x, y,
+      type: type==='pill'?'shape':type,
+      shapeType: type==='pill'?'pill':(type==='shape'?shapeType:undefined),
+      w: type==='sticky'?180:type==='text'?220:type==='shape'||type==='pill'?140:180,
+      h: type==='sticky'?160:type==='text'?56:type==='shape'?90:type==='pill'?52:160,
+      text: type==='sticky'?'':(type==='text'?'Type here...':(type==='shape'||type==='pill'?'Label':'')),
+      color: type==='sticky'?stickyColor:undefined,
+      fill: (type==='shape'||type==='pill')?(BS_SHAPE_COLORS[shapeColorIdx]?.fill||'rgba(99,102,241,.15)'):undefined,
+      stroke: (type==='shape'||type==='pill')?(BS_SHAPE_COLORS[shapeColorIdx]?.stroke||'#6366F1'):undefined,
+      fontSize: type==='text'?16:13, fontWeight:(type==='shape'||type==='pill')?700:400,
+      fontStyle:'normal', textAlign:(type==='shape'||type==='pill')?'center':'left',
+      ...extra
     };
-    const node = { id, type: type === 'pill' ? 'shape' : type, shapeType: type === 'pill' ? 'pill' : (type === 'shape' ? shapeType : undefined), x, y, ...defaults[type] || defaults.sticky, ...extra };
-    const nn = [...nodes, node];
-    setNodes(nn);
-    setSelected(new Set([id]));
-    pushHist(nn, connections, drawPaths);
+    const nn=[...nodes, node];
+    setNodes(nn); setSelected(new Set([id])); pushHist(nn,connections,drawPaths);
     return id;
-  }, [nodes, connections, drawPaths, stickyColor, shapeColor, shapeType, pushHist]);
+  }, [nodes,connections,drawPaths,stickyColor,shapeColorIdx,shapeType,pushHist]);
 
-  const updateNode = useCallback((id, props) => {
-    setNodes(ns => ns.map(n => n.id === id ? { ...n, ...props } : n));
-  }, []);
-
-  const updateNodeAndSave = useCallback((id, props) => {
-    setNodes(ns => {
-      const nn = ns.map(n => n.id === id ? { ...n, ...props } : n);
-      saveToStorage(nn, connections, drawPaths);
-      return nn;
-    });
-  }, [connections, drawPaths, saveToStorage]);
-
+  const updateNode = useCallback((id,props) => setNodes(ns=>ns.map(n=>n.id===id?{...n,...props}:n)), []);
+  const updateNodeSave = useCallback((id,props) => {
+    setNodes(ns=>{const nn=ns.map(n=>n.id===id?{...n,...props}:n); saveToStorage(nn,connections,drawPaths); return nn;});
+  }, [connections,drawPaths,saveToStorage]);
   const commitEdit = useCallback(() => {
     if (!editingId) return;
-    setEditingId(null);
-    saveToStorage(nodes, connections, drawPaths);
-    pushHist(nodes, connections, drawPaths);
-  }, [editingId, nodes, connections, drawPaths, saveToStorage, pushHist]);
+    setEditingId(null); saveToStorage(nodes,connections,drawPaths); pushHist(nodes,connections,drawPaths);
+  }, [editingId,nodes,connections,drawPaths,saveToStorage,pushHist]);
 
-  // ── Connection geometry ────────────────────────────────────────────────────
+  // ── geometry ──
   const getCenter = useCallback((id) => {
-    const n = nodes.find(x => x.id === id);
-    if (!n) return { x: 0, y: 0 };
-    return { x: n.x + n.w / 2, y: n.y + n.h / 2 };
+    const n=nodes.find(x=>x.id===id); if(!n) return {x:0,y:0};
+    return {x:n.x+n.w/2, y:n.y+n.h/2};
   }, [nodes]);
 
-  const connPath = useCallback((x1, y1, x2, y2, type) => {
-    if (type === 'straight') return `M${x1},${y1} L${x2},${y2}`;
-    if (type === 'elbow') {
-      const mx = (x1 + x2) / 2;
-      return `M${x1},${y1} L${mx},${y1} L${mx},${y2} L${x2},${y2}`;
-    }
-    // curve (default)
-    const dx = Math.abs(x2 - x1) * 0.5;
-    return `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
+  const connPath = useCallback((x1,y1,x2,y2,type) => {
+    if (type==='straight') return `M${x1},${y1} L${x2},${y2}`;
+    if (type==='elbow') { const mx=(x1+x2)/2; return `M${x1},${y1} L${mx},${y1} L${mx},${y2} L${x2},${y2}`; }
+    const dx=Math.abs(x2-x1)*0.5;
+    return `M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`;
   }, []);
 
-  const pathStr = (pts) => pts.length < 2 ? '' : 'M' + pts.map(p => `${p[0]},${p[1]}`).join(' L');
+  // BUG FIX: path must be relative to SVG origin (0,0), not offset origin
+  const pathStr = (pts) => pts.length<2?'':'M'+pts.map(p=>`${p[0]},${p[1]}`).join(' L');
 
-  // ── Canvas mouse events ────────────────────────────────────────────────────
+  // ── getPortPoint: returns canvas-space coords of a port on a node ──
+  const getPortPoint = useCallback((node, side) => {
+    const cx=node.x, cy=node.y, w=node.w, h=node.h;
+    if (side==='top')    return {x:cx+w/2, y:cy};
+    if (side==='bottom') return {x:cx+w/2, y:cy+h};
+    if (side==='left')   return {x:cx,     y:cy+h/2};
+    if (side==='right')  return {x:cx+w,   y:cy+h/2};
+    return {x:cx+w/2, y:cy+h/2};
+  }, []);
+
+  const PORT_SIDES = ['top','right','bottom','left'];
+
+  // ── FIT VIEW ──
+  const fitView = useCallback(() => {
+    if (!nodes.length) { setPan({x:120,y:80}); setZoom(1); return; }
+    const pad=60;
+    const minX=Math.min(...nodes.map(n=>n.x))-pad, minY=Math.min(...nodes.map(n=>n.y))-pad;
+    const maxX=Math.max(...nodes.map(n=>n.x+n.w))+pad, maxY=Math.max(...nodes.map(n=>n.y+n.h))+pad;
+    const rect=canvasRef.current?.getBoundingClientRect()||{width:1100,height:650};
+    const z=Math.min(1.5,Math.min(rect.width/(maxX-minX),rect.height/(maxY-minY))*0.9);
+    setZoom(z); setPan({x:(-minX*z)+(rect.width-(maxX-minX)*z)/2, y:(-minY*z)+(rect.height-(maxY-minY)*z)/2});
+  }, [nodes]);
+
+  // ── Shape SVG ──
+  const renderShapeSvg = (node) => {
+    const {w,h,shapeType:st,fill,stroke}=node;
+    const f=fill||'rgba(99,102,241,.15)', s=stroke||'#6366F1';
+    if (st==='circle')  return <ellipse cx={w/2} cy={h/2} rx={w/2-2} ry={h/2-2} fill={f} stroke={s} strokeWidth={2}/>;
+    if (st==='diamond') return <polygon points={`${w/2},2 ${w-2},${h/2} ${w/2},${h-2} 2,${h/2}`} fill={f} stroke={s} strokeWidth={2}/>;
+    if (st==='pill')    return <rect x={1} y={1} width={w-2} height={h-2} rx={Math.min(h/2-1,28)} fill={f} stroke={s} strokeWidth={2}/>;
+    return <rect x={1} y={1} width={w-2} height={h-2} rx={10} fill={f} stroke={s} strokeWidth={2}/>;
+  };
+
+  // ── CANVAS mouse handlers ──────────────────────────────────────────────────
   const onCanvasMouseDown = useCallback((e) => {
-    if (e.button === 1 || (e.button === 0 && e.altKey)) {
-      setIsPanning(true);
-      panRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
-      return;
+    if (e.button===1||(e.button===0&&e.altKey)) {
+      setIsPanning(true); panRef.current={x:e.clientX-pan.x,y:e.clientY-pan.y}; return;
     }
-    if (e.button !== 0) return;
+    if (e.button!==0) return;
     setCtxMenu(null);
-    const pt = toCanvas(e.clientX, e.clientY);
+    const pt=toCanvas(e.clientX,e.clientY);
 
-    if (tool === 'sticky') {
-      addNode('sticky', pt.x - 90, pt.y - 80);
-      setTool('select');
+    if (tool==='sticky') { addNode('sticky',pt.x-90,pt.y-80); setTool('select'); return; }
+    if (tool==='text')   { const id=addNode('text',pt.x-110,pt.y-28); setTimeout(()=>setEditingId(id),50); setTool('select'); return; }
+    if (tool==='shape')  { addNode('shape',pt.x-70,pt.y-45); setTool('select'); return; }
+    if (tool==='draw') {
+      isDrawing.current=true;
+      setCurrentPath({id:nextId.current++, color:drawColor, width:drawWidth, pts:[[pt.x,pt.y]]});
       return;
     }
-    if (tool === 'text') {
-      const id = addNode('text', pt.x - 110, pt.y - 28);
-      setTimeout(() => setEditingId(id), 50);
-      setTool('select');
-      return;
-    }
-    if (tool === 'shape') {
-      addNode('shape', pt.x - 70, pt.y - 45);
-      setTool('select');
-      return;
-    }
-    if (tool === 'draw') {
-      setCurrentPath({ id: nextId.current++, color: drawColor, width: drawWidth, pts: [[pt.x, pt.y]] });
-      return;
-    }
-    if (tool === 'select') {
+    if (tool==='select'||tool==='connect') {
       if (!e.shiftKey) setSelected(new Set());
-      setSelBox({ x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y, shift: e.shiftKey });
+      setSelBox({x1:pt.x,y1:pt.y,x2:pt.x,y2:pt.y,shift:e.shiftKey});
     }
-  }, [tool, pan, toCanvas, addNode, drawColor, drawWidth]);
+  }, [tool,pan,toCanvas,addNode,drawColor,drawWidth]);
 
   const onCanvasMouseMove = useCallback((e) => {
-    if (isPanning) {
-      setPan({ x: e.clientX - panRef.current.x, y: e.clientY - panRef.current.y });
-      return;
-    }
-    const pt = toCanvas(e.clientX, e.clientY);
+    if (isPanning) { setPan({x:e.clientX-panRef.current.x,y:e.clientY-panRef.current.y}); return; }
+    const pt=toCanvas(e.clientX,e.clientY);
 
-    if (currentPath) {
-      setCurrentPath(p => ({ ...p, pts: [...p.pts, [pt.x, pt.y]] }));
-      return;
+    // FIX: draw tracking must always work while isDrawing is true
+    if (isDrawing.current && currentPath) {
+      setCurrentPath(p=>({...p, pts:[...p.pts,[pt.x,pt.y]]})); return;
     }
     if (dragging) {
-      const dx = pt.x - dragging.startPt.x;
-      const dy = pt.y - dragging.startPt.y;
-      setNodes(ns => ns.map(n => dragging.nodeIds.includes(n.id)
-        ? { ...n, x: dragging.origPositions[n.id].x + dx, y: dragging.origPositions[n.id].y + dy }
-        : n
-      ));
+      const dx=pt.x-dragging.startPt.x, dy=pt.y-dragging.startPt.y;
+      setNodes(ns=>ns.map(n=>dragging.nodeIds.includes(n.id)?{...n,x:dragging.origPositions[n.id].x+dx,y:dragging.origPositions[n.id].y+dy}:n));
       return;
     }
     if (resizing) {
-      setNodes(ns => ns.map(n => n.id === resizing.id
-        ? { ...n, w: Math.max(80, resizing.origW + (pt.x - resizing.startPt.x)), h: Math.max(36, resizing.origH + (pt.y - resizing.startPt.y)) }
-        : n
-      ));
+      setNodes(ns=>ns.map(n=>n.id===resizing.id?{...n,w:Math.max(80,resizing.origW+(pt.x-resizing.startPt.x)),h:Math.max(36,resizing.origH+(pt.y-resizing.startPt.y))}:n));
       return;
     }
+    if (portDrag) { setPortDrag(p=>({...p,preview:pt})); return; }
     if (selBox) {
-      const sb = { ...selBox, x2: pt.x, y2: pt.y };
-      setSelBox(sb);
-      const x1 = Math.min(sb.x1, sb.x2), x2 = Math.max(sb.x1, sb.x2);
-      const y1 = Math.min(sb.y1, sb.y2), y2 = Math.max(sb.y1, sb.y2);
-      const inBox = new Set(nodes.filter(n => n.x + n.w > x1 && n.x < x2 && n.y + n.h > y1 && n.y < y2).map(n => n.id));
-      if (sb.shift) nodes.forEach(n => selected.has(n.id) && inBox.add(n.id));
-      setSelected(inBox);
+      const sb={...selBox,x2:pt.x,y2:pt.y}; setSelBox(sb);
+      const x1=Math.min(sb.x1,sb.x2),x2=Math.max(sb.x1,sb.x2),y1=Math.min(sb.y1,sb.y2),y2=Math.max(sb.y1,sb.y2);
+      setSelected(new Set(nodes.filter(n=>n.x+n.w>x1&&n.x<x2&&n.y+n.h>y1&&n.y<y2).map(n=>n.id)));
     }
     if (connectFrom) setConnPreview(pt);
-  }, [isPanning, currentPath, dragging, resizing, selBox, connectFrom, toCanvas, nodes, selected]);
+  }, [isPanning,currentPath,dragging,resizing,portDrag,selBox,connectFrom,toCanvas,nodes]);
 
-  const onCanvasMouseUp = useCallback(() => {
+  const onCanvasMouseUp = useCallback((e) => {
     setIsPanning(false);
-    if (currentPath?.pts?.length > 1) {
-      const np = [...drawPaths, currentPath];
-      setDrawPaths(np);
-      pushHist(nodes, connections, np);
+    // FIX: commit draw path
+    if (isDrawing.current) {
+      isDrawing.current=false;
+      if (currentPath && currentPath.pts.length>1) {
+        const np=[...drawPaths,currentPath];
+        setDrawPaths(np); pushHist(nodes,connections,np);
+      }
+      setCurrentPath(null);
+      return;
     }
-    setCurrentPath(null);
-    if (dragging) pushHist(nodes, connections, drawPaths);
-    if (resizing) pushHist(nodes, connections, drawPaths);
-    setDragging(null);
-    setResizing(null);
-    setSelBox(null);
-  }, [currentPath, drawPaths, dragging, resizing, nodes, connections, pushHist]);
+    if (dragging) { pushHist(nodes,connections,drawPaths); }
+    if (resizing) { pushHist(nodes,connections,drawPaths); }
+    // portDrag completed on a node's onMouseUp
+    if (portDrag && !portDrag.targetId) { setPortDrag(null); }
+    setDragging(null); setResizing(null); setSelBox(null);
+  }, [currentPath,drawPaths,dragging,resizing,portDrag,nodes,connections,pushHist]);
 
-  // ── Node mouse events ──────────────────────────────────────────────────────
+  // ── NODE mouse handlers ──────────────────────────────────────────────────
   const onNodeMouseDown = useCallback((e, node) => {
     e.stopPropagation();
-    if (e.button !== 0) return;
+    if (e.button!==0) return;
     setCtxMenu(null);
 
-    if (tool === 'connect') {
+    // FIX: connect tool — click node to set from, click another to connect
+    if (tool==='connect') {
       if (!connectFrom) {
-        setConnectFrom(node.id);
-      } else if (connectFrom !== node.id) {
-        const id = nextId.current++;
-        const nc = [...connections, { id, from: connectFrom, to: node.id, type: connType, label: '', color: '#818CF8', strokeWidth: 1.8 }];
-        setConnections(nc);
-        pushHist(nodes, nc, drawPaths);
-        setConnectFrom(null);
-        setConnPreview(null);
+        setConnectFrom(node.id); setSelected(new Set([node.id]));
+      } else if (connectFrom!==node.id) {
+        const id=nextId.current++;
+        const nc=[...connections,{id,from:connectFrom,to:node.id,type:connType,color:connColor,strokeWidth:2}];
+        setConnections(nc); pushHist(nodes,nc,drawPaths);
+        setConnectFrom(null); setConnPreview(null);
       }
       return;
     }
 
-    // Select
-    const newSel = e.shiftKey
-      ? new Set([...selected, node.id])
-      : selected.has(node.id) ? selected : new Set([node.id]);
+    // Normal select + drag
+    const newSel=e.shiftKey?new Set([...selected,node.id]):(selected.has(node.id)?selected:new Set([node.id]));
     setSelected(newSel);
+    const pt=toCanvas(e.clientX,e.clientY);
+    const ids=[...newSel];
+    const origPositions={};
+    nodes.forEach(n=>{if(ids.includes(n.id))origPositions[n.id]={x:n.x,y:n.y};});
+    setDragging({nodeIds:ids,startPt:pt,origPositions});
+  }, [tool,connectFrom,connections,nodes,drawPaths,selected,toCanvas,connType,connColor,pushHist]);
 
-    const pt = toCanvas(e.clientX, e.clientY);
-    const ids = [...newSel];
-    const origPositions = {};
-    nodes.forEach(n => { if (ids.includes(n.id)) origPositions[n.id] = { x: n.x, y: n.y }; });
-    setDragging({ nodeIds: ids, startPt: pt, origPositions });
-  }, [tool, connectFrom, connections, nodes, drawPaths, selected, toCanvas, connType, pushHist]);
+  const onNodeMouseUp = useCallback((e, node) => {
+    // FIX: portDrag completion — drop on a node to create connection
+    if (portDrag && portDrag.fromId && portDrag.fromId!==node.id) {
+      e.stopPropagation();
+      const id=nextId.current++;
+      const nc=[...connections,{id,from:portDrag.fromId,to:node.id,type:connType,color:connColor,strokeWidth:2}];
+      setConnections(nc); pushHist(nodes,nc,drawPaths);
+      setPortDrag(null);
+    }
+  }, [portDrag,connections,nodes,drawPaths,connType,connColor,pushHist]);
 
-  const onNodeDblClick = useCallback((e, node) => {
+  // ── PORT drag initiate ──
+  const onPortMouseDown = useCallback((e, node, side) => {
     e.stopPropagation();
-    setEditingId(node.id);
+    e.preventDefault();
+    const pt=toCanvas(e.clientX,e.clientY);
+    setPortDrag({fromId:node.id,side,preview:pt});
     setSelected(new Set([node.id]));
-  }, []);
+    // also set connectFrom so the line shows
+    setConnectFrom(node.id);
+  }, [toCanvas]);
 
   const onResizeMouseDown = useCallback((e, node) => {
     e.stopPropagation();
-    const pt = toCanvas(e.clientX, e.clientY);
-    setResizing({ id: node.id, startPt: pt, origW: node.w, origH: node.h });
+    const pt=toCanvas(e.clientX,e.clientY);
+    setResizing({id:node.id,startPt:pt,origW:node.w,origH:node.h});
   }, [toCanvas]);
 
-  const onNodeContextMenu = useCallback((e, node) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setSelected(new Set([node.id]));
-    setCtxMenu({ x: e.clientX, y: e.clientY, nodeId: node.id });
+  const onNodeDblClick = useCallback((e, node) => {
+    e.stopPropagation(); setEditingId(node.id); setSelected(new Set([node.id]));
   }, []);
 
-  // ── Fit view ───────────────────────────────────────────────────────────────
-  const fitView = useCallback(() => {
-    if (!nodes.length) { setPan({ x: 120, y: 80 }); setZoom(1); return; }
-    const pad = 60;
-    const minX = Math.min(...nodes.map(n => n.x)) - pad;
-    const minY = Math.min(...nodes.map(n => n.y)) - pad;
-    const maxX = Math.max(...nodes.map(n => n.x + n.w)) + pad;
-    const maxY = Math.max(...nodes.map(n => n.y + n.h)) + pad;
-    const rect = canvasRef.current?.getBoundingClientRect() || { width: 1100, height: 650 };
-    const z = Math.min(1.5, Math.min(rect.width / (maxX - minX), rect.height / (maxY - minY)) * 0.9);
-    setZoom(z);
-    setPan({ x: (-minX * z) + (rect.width - (maxX - minX) * z) / 2, y: (-minY * z) + (rect.height - (maxY - minY) * z) / 2 });
-  }, [nodes]);
+  const onNodeContextMenu = useCallback((e, node) => {
+    e.preventDefault(); e.stopPropagation();
+    setSelected(new Set([node.id])); setCtxMenu({x:e.clientX,y:e.clientY,nodeId:node.id});
+  }, []);
 
-  // ── Shape SVG ──────────────────────────────────────────────────────────────
-  const renderShapePath = (node) => {
-    const { w, h, shapeType: st, fill, stroke } = node;
-    const f = fill || 'rgba(99,102,241,.15)';
-    const s = stroke || '#6366F1';
-    if (st === 'circle') return <ellipse cx={w/2} cy={h/2} rx={w/2-2} ry={h/2-2} fill={f} stroke={s} strokeWidth={2}/>;
-    if (st === 'diamond') return <polygon points={`${w/2},2 ${w-2},${h/2} ${w/2},${h-2} 2,${h/2}`} fill={f} stroke={s} strokeWidth={2}/>;
-    if (st === 'pill') return <rect x={1} y={1} width={w-2} height={h-2} rx={Math.min(h/2-1, 28)} fill={f} stroke={s} strokeWidth={2}/>;
-    return <rect x={1} y={1} width={w-2} height={h-2} rx={10} fill={f} stroke={s} strokeWidth={2}/>;
-  };
+  // ── Cancel port drag on window mouseup ──
+  useEffect(() => {
+    const handler=(e)=>{
+      if (portDrag) { setPortDrag(null); setConnectFrom(null); setConnPreview(null); }
+    };
+    window.addEventListener('mouseup',handler);
+    return ()=>window.removeEventListener('mouseup',handler);
+  }, [portDrag]);
 
-  // ── Selected node for property panel ──────────────────────────────────────
-  const selNode = nodes.find(n => selected.size === 1 && selected.has(n.id));
-  const selConn = connections.find(c => selected.size === 1 && selected.has(c.id));
+  // ── derived ──
+  const selNode = nodes.find(n=>selected.size===1&&selected.has(n.id));
+  const selConn = connections.find(c=>selected.size===1&&selected.has(c.id));
 
-  const TOOLS = [
-    { id: 'select',  label: 'Select  V',     ico: '↖', shortcut: 'V' },
-    { id: 'sticky',  label: 'Sticky  S',     ico: '🗒', shortcut: 'S' },
-    { id: 'text',    label: 'Text  T',       ico: 'T',  shortcut: 'T' },
-    { id: 'shape',   label: 'Shape  H',      ico: '⬜', shortcut: 'H' },
-    { id: 'draw',    label: 'Pen  D',        ico: '✏',  shortcut: 'D' },
-    { id: 'connect', label: 'Connect  C',    ico: '⤳',  shortcut: 'C' },
+  const TOOLS=[
+    {id:'select', label:'Select  V',  ico:'↖'},
+    {id:'sticky', label:'Sticky  S',  ico:'🗒'},
+    {id:'text',   label:'Text  T',    ico:'T'},
+    {id:'shape',  label:'Shape  H',   ico:'⬜'},
+    {id:'draw',   label:'Pen  D',     ico:'✏'},
+    {id:'connect',label:'Connect  C', ico:'⤳'},
   ];
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 62px)', borderRadius: 14, overflow: 'hidden', border: `1px solid ${c.bord}`, userSelect: 'none', position: 'relative' }}>
+  // ── SVG arrow marker IDs ──
+  const allConnColors=[...new Set([...BS_DRAW_COLORS,'#000000',connColor,...connections.map(c=>c.color||'#000')])];
 
-      {/* ────────── TOOLBAR ────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: dark ? 'rgba(10,8,28,.98)' : 'rgba(255,255,255,.98)', borderBottom: `1px solid ${c.bord}`, flexShrink: 0, zIndex: 30, flexWrap: 'wrap', backdropFilter: 'blur(20px)' }}>
+  return (
+    <div style={{display:'flex',flexDirection:'column',height:'calc(100vh - 62px)',borderRadius:14,overflow:'hidden',border:`1px solid ${c.bord}`,userSelect:'none',position:'relative'}}>
+
+      {/* ══ TOOLBAR ══ */}
+      <div style={{display:'flex',alignItems:'center',gap:6,padding:'6px 10px',background:dark?'rgba(10,8,28,.98)':'rgba(255,255,255,.98)',borderBottom:`1px solid ${c.bord}`,flexShrink:0,zIndex:30,flexWrap:'wrap',backdropFilter:'blur(20px)'}}>
 
         {/* Mode toggle */}
-        <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', border: `1px solid ${c.bord}`, flexShrink: 0 }}>
-          {['personal','shared'].map(m => (
-            <button key={m} onClick={() => setMode(m)} style={{ padding: '5px 12px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer', background: mode === m ? '#6366F1' : 'transparent', color: mode === m ? '#fff' : c.mut, textTransform: 'capitalize', transition: 'all .15s' }}>{m === 'personal' ? '🔒 Personal' : '👥 Shared'}</button>
+        <div style={{display:'flex',borderRadius:8,overflow:'hidden',border:`1px solid ${c.bord}`,flexShrink:0}}>
+          {['personal','shared'].map(m=>(
+            <button key={m} onClick={()=>setMode(m)} style={{padding:'5px 12px',fontSize:11,fontWeight:600,border:'none',cursor:'pointer',background:mode===m?'#6366F1':'transparent',color:mode===m?'#fff':c.mut,transition:'all .15s'}}>
+              {m==='personal'?'🔒 Personal':'👥 Shared'}
+            </button>
           ))}
         </div>
 
-        <div style={{ width: 1, height: 24, background: c.bord, flexShrink: 0 }}/>
+        <div style={{width:1,height:24,background:c.bord,flexShrink:0}}/>
 
-        {/* Tool buttons */}
-        <div style={{ display: 'flex', gap: 2, background: dark ? 'rgba(255,255,255,.04)' : 'rgba(99,102,241,.05)', borderRadius: 10, padding: 3, border: `1px solid ${c.bord}` }}>
-          {TOOLS.map(t => (
-            <button key={t.id} onClick={() => { setTool(t.id); if (t.id !== 'sticky') setShowStickyPicker(false); }} title={t.label}
-              style={{ width: 34, height: 32, borderRadius: 7, border: 'none', background: tool === t.id ? (dark ? 'rgba(99,102,241,.28)' : 'rgba(99,102,241,.18)') : 'transparent', color: tool === t.id ? '#818CF8' : c.mut, cursor: 'pointer', fontSize: t.id === 'text' ? 13 : 17, fontWeight: tool === t.id ? 700 : 400, transition: 'all .12s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {/* Tools */}
+        <div style={{display:'flex',gap:2,background:dark?'rgba(255,255,255,.04)':'rgba(99,102,241,.05)',borderRadius:10,padding:3,border:`1px solid ${c.bord}`}}>
+          {TOOLS.map(t=>(
+            <button key={t.id} onClick={()=>{setTool(t.id);if(t.id!=='connect'){setConnectFrom(null);setConnPreview(null);}}} title={t.label}
+              style={{width:34,height:32,borderRadius:7,border:'none',background:tool===t.id?(dark?'rgba(99,102,241,.28)':'rgba(99,102,241,.18)'):'transparent',color:tool===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:t.id==='text'?13:17,fontWeight:tool===t.id?700:400,transition:'all .12s',display:'flex',alignItems:'center',justifyContent:'center'}}>
               {t.ico}
             </button>
           ))}
         </div>
 
-        {/* Shape type sub-picker */}
-        {tool === 'shape' && (
-          <div style={{ display: 'flex', gap: 2, background: dark ? 'rgba(255,255,255,.04)' : 'rgba(99,102,241,.05)', borderRadius: 10, padding: 3, border: `1px solid ${c.bord}` }}>
-            {[['rect','▭'],['circle','○'],['diamond','◇'],['pill','⬭']].map(([st, ic]) => (
-              <button key={st} onClick={() => setShapeType(st)} title={st}
-                style={{ width: 32, height: 32, borderRadius: 7, border: 'none', background: shapeType === st ? 'rgba(99,102,241,.22)' : 'transparent', color: shapeType === st ? '#818CF8' : c.mut, cursor: 'pointer', fontSize: 16 }}>{ic}</button>
+        {/* Shape sub-type */}
+        {tool==='shape'&&(
+          <div style={{display:'flex',gap:2,background:dark?'rgba(255,255,255,.04)':'rgba(99,102,241,.05)',borderRadius:10,padding:3,border:`1px solid ${c.bord}`}}>
+            {[['rect','▭'],['circle','○'],['diamond','◇'],['pill','⬭']].map(([st,ic])=>(
+              <button key={st} onClick={()=>setShapeType(st)} style={{width:32,height:32,borderRadius:7,border:'none',background:shapeType===st?'rgba(99,102,241,.22)':'transparent',color:shapeType===st?'#818CF8':c.mut,cursor:'pointer',fontSize:16}}>{ic}</button>
             ))}
           </div>
         )}
 
-        {/* Sticky color quick-pick */}
-        {(tool === 'sticky') && (
-          <div style={{ display: 'flex', gap: 3, alignItems: 'center', flexWrap: 'wrap' }}>
-            {BS_STICKY_COLORS.map(col => (
-              <button key={col} onClick={() => setStickyColor(col)} style={{ width: 20, height: 20, borderRadius: '50%', background: col, border: stickyColor === col ? '2.5px solid #818CF8' : `1.5px solid ${c.bord}`, cursor: 'pointer', flexShrink: 0, boxShadow: stickyColor === col ? '0 0 6px rgba(99,102,241,.5)' : 'none', transition: 'all .12s' }}/>
+        {/* Sticky colors */}
+        {tool==='sticky'&&(
+          <div style={{display:'flex',gap:3,alignItems:'center'}}>
+            {BS_STICKY_COLORS.map(col=>(
+              <button key={col} onClick={()=>setStickyColor(col)} style={{width:20,height:20,borderRadius:'50%',background:col,border:stickyColor===col?'2.5px solid #818CF8':`1.5px solid ${c.bord}`,cursor:'pointer',flexShrink:0}}/>
             ))}
           </div>
         )}
 
-        {/* Draw options */}
-        {tool === 'draw' && (
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: 3 }}>
-              {BS_DRAW_COLORS.map(col => (
-                <button key={col} onClick={() => setDrawColor(col)} style={{ width: 20, height: 20, borderRadius: '50%', background: col, border: drawColor === col ? '2.5px solid #818CF8' : `1.5px solid ${c.bord}`, cursor: 'pointer', flexShrink: 0 }}/>
+        {/* Draw options — default black */}
+        {tool==='draw'&&(
+          <div style={{display:'flex',gap:6,alignItems:'center'}}>
+            <div style={{display:'flex',gap:3}}>
+              {['#000000',...BS_DRAW_COLORS].map(col=>(
+                <button key={col} onClick={()=>setDrawColor(col)} style={{width:20,height:20,borderRadius:'50%',background:col,border:drawColor===col?'2.5px solid #818CF8':`1.5px solid ${c.bord}`,cursor:'pointer',flexShrink:0}}/>
               ))}
             </div>
-            <div style={{ width: 1, height: 22, background: c.bord }}/>
-            {[1, 3, 6, 12].map(w => (
-              <button key={w} onClick={() => setDrawWidth(w)} title={`${w}px`}
-                style={{ width: 32, height: 32, borderRadius: 7, background: drawWidth === w ? 'rgba(99,102,241,.2)' : 'transparent', border: `1px solid ${c.bord}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ width: Math.min(w * 2, 20), height: Math.min(w, 10), borderRadius: w, background: drawColor }}/>
+            <div style={{width:1,height:22,background:c.bord}}/>
+            {[1,3,6,12].map(w=>(
+              <button key={w} onClick={()=>setDrawWidth(w)} title={`${w}px`}
+                style={{width:32,height:32,borderRadius:7,background:drawWidth===w?'rgba(99,102,241,.2)':'transparent',border:`1px solid ${c.bord}`,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                <div style={{width:Math.min(w*2,20),height:Math.min(w,10),borderRadius:w,background:drawColor}}/>
               </button>
             ))}
           </div>
         )}
 
-        {/* Connect type */}
-        {tool === 'connect' && (
-          <div style={{ display: 'flex', gap: 2, background: dark ? 'rgba(255,255,255,.04)' : 'rgba(99,102,241,.05)', borderRadius: 10, padding: 3, border: `1px solid ${c.bord}` }}>
-            {[['curve','⌒ Curve'],['straight','→ Straight'],['elbow','⌐ Elbow']].map(([ct, lbl]) => (
-              <button key={ct} onClick={() => setConnType(ct)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', background: connType === ct ? 'rgba(99,102,241,.22)' : 'transparent', color: connType === ct ? '#818CF8' : c.mut, cursor: 'pointer', fontSize: 11, fontWeight: connType === ct ? 700 : 400 }}>{lbl}</button>
-            ))}
+        {/* Connector options — default black */}
+        {tool==='connect'&&(
+          <div style={{display:'flex',gap:6,alignItems:'center'}}>
+            <div style={{display:'flex',gap:2,background:dark?'rgba(255,255,255,.04)':'rgba(99,102,241,.05)',borderRadius:10,padding:3,border:`1px solid ${c.bord}`}}>
+              {[['curve','⌒ Curve'],['straight','→ Straight'],['elbow','⌐ Elbow']].map(([ct,lbl])=>(
+                <button key={ct} onClick={()=>setConnType(ct)} style={{padding:'4px 10px',borderRadius:7,border:'none',background:connType===ct?'rgba(99,102,241,.22)':'transparent',color:connType===ct?'#818CF8':c.mut,cursor:'pointer',fontSize:11,fontWeight:connType===ct?700:400}}>{lbl}</button>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:3}}>
+              {['#000000',...BS_DRAW_COLORS.slice(0,6)].map(col=>(
+                <button key={col} onClick={()=>setConnColor(col)} style={{width:18,height:18,borderRadius:'50%',background:col,border:connColor===col?'2.5px solid #818CF8':`1.5px solid ${c.bord}`,cursor:'pointer'}}/>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Node formatting panel (shows when a node is selected) */}
-        {selNode && tool === 'select' && (
-          <div style={{ display: 'flex', gap: 4, alignItems: 'center', borderLeft: `1px solid ${c.bord}`, paddingLeft: 8, flexWrap: 'wrap' }}>
-            {/* Font size */}
-            {[10,12,14,16,20,24].map(fs => (
-              <button key={fs} onClick={() => updateNodeAndSave(selNode.id, { fontSize: fs })}
-                style={{ padding: '1px 6px', borderRadius: 5, border: `1px solid ${c.bord}`, background: selNode.fontSize === fs ? 'rgba(99,102,241,.2)' : 'transparent', color: c.text, cursor: 'pointer', fontSize: 11 }}>{fs}</button>
+        {/* Node formatting */}
+        {selNode&&tool==='select'&&(
+          <div style={{display:'flex',gap:4,alignItems:'center',borderLeft:`1px solid ${c.bord}`,paddingLeft:8,flexWrap:'wrap'}}>
+            {[10,12,14,16,20,24].map(fs=>(
+              <button key={fs} onClick={()=>updateNodeSave(selNode.id,{fontSize:fs})}
+                style={{padding:'1px 6px',borderRadius:5,border:`1px solid ${c.bord}`,background:selNode.fontSize===fs?'rgba(99,102,241,.2)':'transparent',color:c.text,cursor:'pointer',fontSize:11}}>{fs}</button>
             ))}
-            <div style={{ width: 1, height: 20, background: c.bord }}/>
-            {/* Bold */}
-            <button onClick={() => updateNodeAndSave(selNode.id, { fontWeight: selNode.fontWeight >= 700 ? 400 : 700 })}
-              style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${c.bord}`, background: selNode.fontWeight >= 700 ? 'rgba(99,102,241,.2)' : 'transparent', color: c.text, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>B</button>
-            {/* Italic */}
-            <button onClick={() => updateNodeAndSave(selNode.id, { fontStyle: selNode.fontStyle === 'italic' ? 'normal' : 'italic' })}
-              style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${c.bord}`, background: selNode.fontStyle === 'italic' ? 'rgba(99,102,241,.2)' : 'transparent', color: c.text, cursor: 'pointer', fontStyle: 'italic', fontSize: 13 }}>I</button>
-            {/* Text align */}
-            {['left','center','right'].map(a => (
-              <button key={a} onClick={() => updateNodeAndSave(selNode.id, { textAlign: a })}
-                style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${c.bord}`, background: selNode.textAlign === a ? 'rgba(99,102,241,.2)' : 'transparent', color: c.text, cursor: 'pointer', fontSize: 12 }}>
-                {a === 'left' ? '≡' : a === 'center' ? '☰' : '≣'}
+            <div style={{width:1,height:20,background:c.bord}}/>
+            <button onClick={()=>updateNodeSave(selNode.id,{fontWeight:selNode.fontWeight>=700?400:700})}
+              style={{width:28,height:28,borderRadius:6,border:`1px solid ${c.bord}`,background:selNode.fontWeight>=700?'rgba(99,102,241,.2)':'transparent',color:c.text,cursor:'pointer',fontWeight:700,fontSize:13}}>B</button>
+            <button onClick={()=>updateNodeSave(selNode.id,{fontStyle:selNode.fontStyle==='italic'?'normal':'italic'})}
+              style={{width:28,height:28,borderRadius:6,border:`1px solid ${c.bord}`,background:selNode.fontStyle==='italic'?'rgba(99,102,241,.2)':'transparent',color:c.text,cursor:'pointer',fontStyle:'italic',fontSize:13}}>I</button>
+            {['left','center','right'].map(a=>(
+              <button key={a} onClick={()=>updateNodeSave(selNode.id,{textAlign:a})}
+                style={{width:28,height:28,borderRadius:6,border:`1px solid ${c.bord}`,background:selNode.textAlign===a?'rgba(99,102,241,.2)':'transparent',color:c.text,cursor:'pointer',fontSize:12}}>
+                {a==='left'?'≡':a==='center'?'☰':'≣'}
               </button>
             ))}
-            <div style={{ width: 1, height: 20, background: c.bord }}/>
-            {/* Color swatches for sticky */}
-            {selNode.type === 'sticky' && BS_STICKY_COLORS.map(col => (
-              <button key={col} onClick={() => updateNodeAndSave(selNode.id, { color: col })}
-                style={{ width: 18, height: 18, borderRadius: '50%', background: col, border: selNode.color === col ? '2.5px solid #818CF8' : `1px solid ${c.bord}`, cursor: 'pointer', flexShrink: 0 }}/>
+            <div style={{width:1,height:20,background:c.bord}}/>
+            {selNode.type==='sticky'&&BS_STICKY_COLORS.map(col=>(
+              <button key={col} onClick={()=>updateNodeSave(selNode.id,{color:col})}
+                style={{width:18,height:18,borderRadius:'50%',background:col,border:selNode.color===col?'2.5px solid #818CF8':`1px solid ${c.bord}`,cursor:'pointer',flexShrink:0}}/>
             ))}
-            {/* Color swatches for shape */}
-            {selNode.type === 'shape' && BS_SHAPE_COLORS.map((sc, i) => (
-              <button key={i} onClick={() => updateNodeAndSave(selNode.id, { fill: sc.fill, stroke: sc.stroke })}
-                style={{ width: 18, height: 18, borderRadius: 4, background: sc.fill, border: `2px solid ${sc.stroke}`, cursor: 'pointer', flexShrink: 0 }}/>
+            {selNode.type==='shape'&&BS_SHAPE_COLORS.map((sc,i)=>(
+              <button key={i} onClick={()=>updateNodeSave(selNode.id,{fill:sc.fill,stroke:sc.stroke})}
+                style={{width:18,height:18,borderRadius:4,background:sc.fill,border:`2px solid ${sc.stroke}`,cursor:'pointer',flexShrink:0}}/>
             ))}
-            <div style={{ width: 1, height: 20, background: c.bord }}/>
-            <button onClick={() => {
-              const nn = nodes.filter(n => !selected.has(n.id));
-              const nc = connections.filter(c2 => !selected.has(c2.from) && !selected.has(c2.to));
-              setNodes(nn); setConnections(nc); setSelected(new Set());
-              pushHist(nn, nc, drawPaths);
-            }} style={{ padding: '3px 10px', borderRadius: 6, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.22)', color: '#F87171', cursor: 'pointer', fontSize: 11 }}>🗑 Delete</button>
+            <div style={{width:1,height:20,background:c.bord}}/>
+            <button onClick={()=>{
+              const nn=nodes.filter(n=>!selected.has(n.id));
+              const nc=connections.filter(c2=>!selected.has(c2.from)&&!selected.has(c2.to));
+              setNodes(nn);setConnections(nc);setSelected(new Set());pushHist(nn,nc,drawPaths);
+            }} style={{padding:'3px 10px',borderRadius:6,background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.22)',color:'#F87171',cursor:'pointer',fontSize:11}}>🗑 Delete</button>
           </div>
         )}
 
-        {/* Connector formatting */}
-        {selConn && tool === 'select' && (
-          <div style={{ display: 'flex', gap: 4, alignItems: 'center', borderLeft: `1px solid ${c.bord}`, paddingLeft: 8 }}>
-            <span style={{ fontSize: 11, color: c.mut }}>Line:</span>
-            {[['curve','⌒'],['straight','→'],['elbow','⌐']].map(([ct, ic]) => (
-              <button key={ct} onClick={() => { setConnections(cs => cs.map(cc => cc.id === selConn.id ? { ...cc, type: ct } : cc)); saveToStorage(nodes, connections, drawPaths); }}
-                style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${c.bord}`, background: selConn.type === ct ? 'rgba(99,102,241,.2)' : 'transparent', color: c.text, cursor: 'pointer', fontSize: 13 }}>{ic}</button>
+        {/* Connector selection formatting */}
+        {selConn&&tool==='select'&&(
+          <div style={{display:'flex',gap:4,alignItems:'center',borderLeft:`1px solid ${c.bord}`,paddingLeft:8}}>
+            {[['curve','⌒'],['straight','→'],['elbow','⌐']].map(([ct,ic])=>(
+              <button key={ct} onClick={()=>{setConnections(cs=>cs.map(cc=>cc.id===selConn.id?{...cc,type:ct}:cc));saveToStorage(nodes,connections,drawPaths);}}
+                style={{width:28,height:28,borderRadius:6,border:`1px solid ${c.bord}`,background:selConn.type===ct?'rgba(99,102,241,.2)':'transparent',color:c.text,cursor:'pointer',fontSize:13}}>{ic}</button>
             ))}
-            {BS_DRAW_COLORS.slice(0, 6).map(col => (
-              <button key={col} onClick={() => { setConnections(cs => cs.map(cc => cc.id === selConn.id ? { ...cc, color: col } : cc)); saveToStorage(nodes, connections, drawPaths); }}
-                style={{ width: 18, height: 18, borderRadius: '50%', background: col, border: selConn.color === col ? '2.5px solid #818CF8' : `1px solid ${c.bord}`, cursor: 'pointer' }}/>
+            {['#000000',...BS_DRAW_COLORS.slice(0,5)].map(col=>(
+              <button key={col} onClick={()=>{setConnections(cs=>cs.map(cc=>cc.id===selConn.id?{...cc,color:col}:cc));saveToStorage(nodes,connections,drawPaths);}}
+                style={{width:18,height:18,borderRadius:'50%',background:col,border:selConn.color===col?'2.5px solid #818CF8':`1px solid ${c.bord}`,cursor:'pointer'}}/>
             ))}
-            <button onClick={() => { const nc = connections.filter(c2 => c2.id !== selConn.id); setConnections(nc); setSelected(new Set()); pushHist(nodes, nc, drawPaths); }}
-              style={{ padding: '3px 10px', borderRadius: 6, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.22)', color: '#F87171', cursor: 'pointer', fontSize: 11 }}>🗑</button>
+            <button onClick={()=>{const nc=connections.filter(c2=>c2.id!==selConn.id);setConnections(nc);setSelected(new Set());pushHist(nodes,nc,drawPaths);}}
+              style={{padding:'3px 10px',borderRadius:6,background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.22)',color:'#F87171',cursor:'pointer',fontSize:11}}>🗑</button>
           </div>
         )}
 
-        <div style={{ flex: 1 }}/>
+        {connectFrom&&<span style={{fontSize:11,color:'#34D399',background:'rgba(52,211,153,.1)',padding:'4px 10px',borderRadius:8,border:'1px solid rgba(52,211,153,.2)',flexShrink:0}}>Click a node to connect · Esc to cancel</span>}
 
-        {/* Connect hint */}
-        {connectFrom && <span style={{ fontSize: 11, color: '#34D399', background: 'rgba(52,211,153,.1)', padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(52,211,153,.2)', flexShrink: 0 }}>Click another node to connect  ·  Esc to cancel</span>}
+        <div style={{flex:1}}/>
 
-        {/* Right: zoom + history + fit + clear */}
-        <div style={{ display: 'flex', gap: 3, alignItems: 'center', flexShrink: 0 }}>
-          <button onClick={undo} title="Undo Ctrl+Z" style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${c.bord}`, background: 'transparent', color: c.mut, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>↩</button>
-          <button onClick={redo} title="Redo Ctrl+Y" style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${c.bord}`, background: 'transparent', color: c.mut, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>↪</button>
-          <div style={{ width: 1, height: 20, background: c.bord }}/>
-          <button onClick={() => setZoom(z => Math.max(0.1, z / 1.2))} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${c.bord}`, background: 'transparent', color: c.text, cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-          <button onClick={() => { setZoom(1); }} style={{ fontSize: 11, color: c.mut, width: 46, textAlign: 'center', background: 'transparent', border: `1px solid ${c.bord}`, borderRadius: 6, height: 26, cursor: 'pointer', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
-          <button onClick={() => setZoom(z => Math.min(4, z * 1.2))} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${c.bord}`, background: 'transparent', color: c.text, cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
-          <button onClick={fitView} style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${c.bord}`, background: 'transparent', color: c.mut, cursor: 'pointer', fontSize: 11 }}>Fit</button>
-          <button onClick={() => { if (window.confirm('Clear entire board? Auto-saves persist until you clear.')) { const empty = { nodes: [], connections: [], drawPaths: [] }; setNodes([]); setConnections([]); setDrawPaths([]); setSelected(new Set()); pushHist([], [], []); } }} style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(239,68,68,.2)', background: 'rgba(239,68,68,.05)', color: '#F87171', cursor: 'pointer', fontSize: 11 }}>Clear</button>
+        <div style={{display:'flex',gap:3,alignItems:'center',flexShrink:0}}>
+          <button onClick={undo} title="Undo Ctrl+Z" style={{width:28,height:28,borderRadius:7,border:`1px solid ${c.bord}`,background:'transparent',color:c.mut,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>↩</button>
+          <button onClick={redo} title="Redo Ctrl+Y" style={{width:28,height:28,borderRadius:7,border:`1px solid ${c.bord}`,background:'transparent',color:c.mut,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>↪</button>
+          <div style={{width:1,height:20,background:c.bord}}/>
+          <button onClick={()=>setZoom(z=>Math.max(0.1,z/1.2))} style={{width:26,height:26,borderRadius:6,border:`1px solid ${c.bord}`,background:'transparent',color:c.text,cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
+          <button onClick={()=>setZoom(1)} style={{fontSize:11,color:c.mut,width:46,textAlign:'center',background:'transparent',border:`1px solid ${c.bord}`,borderRadius:6,height:26,cursor:'pointer',fontWeight:600}}>{Math.round(zoom*100)}%</button>
+          <button onClick={()=>setZoom(z=>Math.min(4,z*1.2))} style={{width:26,height:26,borderRadius:6,border:`1px solid ${c.bord}`,background:'transparent',color:c.text,cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
+          <button onClick={fitView} style={{padding:'4px 8px',borderRadius:6,border:`1px solid ${c.bord}`,background:'transparent',color:c.mut,cursor:'pointer',fontSize:11}}>Fit</button>
+          <button onClick={()=>{if(window.confirm('Clear entire board?')){setNodes([]);setConnections([]);setDrawPaths([]);setSelected(new Set());pushHist([],[],[]);}}}
+            style={{padding:'4px 8px',borderRadius:6,border:'1px solid rgba(239,68,68,.2)',background:'rgba(239,68,68,.05)',color:'#F87171',cursor:'pointer',fontSize:11}}>Clear</button>
         </div>
       </div>
 
-      {/* ────────── CANVAS ────────── */}
+      {/* ══ CANVAS ══ */}
       <div
         ref={canvasRef}
         onMouseDown={onCanvasMouseDown}
         onMouseMove={onCanvasMouseMove}
         onMouseUp={onCanvasMouseUp}
         onMouseLeave={onCanvasMouseUp}
-        style={{
-          flex: 1, position: 'relative', overflow: 'hidden',
-          cursor: isPanning ? 'grabbing' : tool === 'draw' ? 'crosshair' : ['sticky','text','shape'].includes(tool) ? 'cell' : tool === 'connect' ? 'crosshair' : 'default',
-          background: dark ? '#F5F4F0' : '#F5F4F0',  /* off-white breadboard */
-        }}
-        onClick={() => { setCtxMenu(null); }}
+        style={{flex:1,position:'relative',overflow:'hidden',
+          cursor:isPanning?'grabbing':tool==='draw'?'crosshair':['sticky','text','shape'].includes(tool)?'cell':tool==='connect'?'crosshair':'default',
+          background:'#F5F4F0'}}
+        onClick={()=>setCtxMenu(null)}
       >
-        {/* ── Dot grid ── */}
-        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+        {/* Dot grid — always #F5F4F0 off-white */}
+        <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none'}}>
           <defs>
-            <pattern id="bsgrid" x={pan.x % (20 * zoom)} y={pan.y % (20 * zoom)} width={20 * zoom} height={20 * zoom} patternUnits="userSpaceOnUse">
-              <circle cx={1} cy={1} r={0.9} fill={dark ? 'rgba(180,174,160,.55)' : 'rgba(140,130,110,.4)'}/>
+            <pattern id="bsgrid" x={pan.x%(20*zoom)} y={pan.y%(20*zoom)} width={20*zoom} height={20*zoom} patternUnits="userSpaceOnUse">
+              <circle cx={1} cy={1} r={0.9} fill="rgba(140,130,110,.4)"/>
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="#F5F4F0"/>
           <rect width="100%" height="100%" fill="url(#bsgrid)"/>
         </svg>
 
-        {/* ── Transform group ── */}
-        <div style={{ position: 'absolute', left: pan.x, top: pan.y, transform: `scale(${zoom})`, transformOrigin: '0 0', width: 0, height: 0 }}>
+        {/* ── Transform layer ── */}
+        <div style={{position:'absolute',left:pan.x,top:pan.y,transform:`scale(${zoom})`,transformOrigin:'0 0',width:0,height:0}}>
 
-          {/* ── SVG layer: connections + draw ── */}
-          <svg style={{ position: 'absolute', left: -6000, top: -6000, width: 20000, height: 20000, overflow: 'visible', pointerEvents: 'none' }}>
+          {/* ═══ FIX: SVG origin at 0,0 so draw paths align correctly ═══ */}
+          <svg ref={svgRef} style={{position:'absolute',left:0,top:0,width:0,height:0,overflow:'visible',pointerEvents:'none'}}>
             <defs>
-              <marker id="bsarrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto">
-                <path d="M0,0 L0,8 L10,4 z" fill="#818CF8"/>
+              {/* Arrow markers for each color */}
+              <marker id="bsarr-default" markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto">
+                <path d="M0,0 L0,8 L10,4 z" fill="#000000"/>
               </marker>
-              <marker id="bsarrow-green" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto">
+              <marker id="bsarr-preview" markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto">
                 <path d="M0,0 L0,8 L10,4 z" fill="#34D399"/>
               </marker>
-              {BS_DRAW_COLORS.map(col => (
-                <marker key={col} id={`bsarrow-${col.replace('#','')}`} markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto">
+              {allConnColors.map(col=>(
+                <marker key={col} id={`bsarr-${col.replace(/[#.]/g,'')}`} markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto">
                   <path d="M0,0 L0,8 L10,4 z" fill={col}/>
                 </marker>
               ))}
             </defs>
 
-            {/* Connections */}
-            {connections.map(conn => {
-              const f = getCenter(conn.from), t = getCenter(conn.to);
-              const isSel = selected.has(conn.id);
-              const col = conn.color || '#818CF8';
-              const markerId = `bsarrow-${col.replace('#','')}`;
-              return (
-                <g key={conn.id} style={{ pointerEvents: 'all' }}>
-                  {/* hit area */}
-                  <path d={connPath(f.x, f.y, t.x, t.y, conn.type || connType)} fill="none" stroke="transparent" strokeWidth={14} style={{ cursor: 'pointer' }}
-                    onClick={e => { e.stopPropagation(); setSelected(new Set([conn.id])); }}/>
-                  {/* visible line */}
-                  <path d={connPath(f.x, f.y, t.x, t.y, conn.type || connType)} fill="none"
-                    stroke={isSel ? '#A78BFA' : col}
-                    strokeWidth={isSel ? conn.strokeWidth + 0.8 || 2.6 : conn.strokeWidth || 1.8}
-                    strokeDasharray={isSel ? '' : ''}
-                    markerEnd={`url(#${isSel ? 'bsarrow' : markerId})`}/>
-                  {/* label */}
-                  {conn.label && (
-                    <text x={(f.x + t.x) / 2} y={(f.y + t.y) / 2 - 7} textAnchor="middle" fontSize={11} fontFamily="Inter" fill="#555">{conn.label}</text>
-                  )}
+            {/* ── Connections ── */}
+            {connections.map(conn=>{
+              const f=getCenter(conn.from), t=getCenter(conn.to);
+              if (!f||!t) return null;
+              const isSel=selected.has(conn.id);
+              const col=conn.color||'#000000';
+              const mid=`bsarr-${col.replace(/[#.]/g,'')}`;
+              return(
+                <g key={conn.id} style={{pointerEvents:'all'}}>
+                  <path d={connPath(f.x,f.y,t.x,t.y,conn.type||'curve')} fill="none" stroke="transparent" strokeWidth={14} style={{cursor:'pointer'}}
+                    onClick={e=>{e.stopPropagation();setSelected(new Set([conn.id]));}}/>
+                  <path d={connPath(f.x,f.y,t.x,t.y,conn.type||'curve')} fill="none"
+                    stroke={isSel?'#A78BFA':col}
+                    strokeWidth={isSel?(conn.strokeWidth||2)+1:conn.strokeWidth||2}
+                    markerEnd={`url(#${isSel?'bsarr-preview':mid})`}/>
+                  {conn.label&&<text x={(f.x+t.x)/2} y={(f.y+t.y)/2-8} textAnchor="middle" fontSize={11} fontFamily="Inter" fill="#555">{conn.label}</text>}
                 </g>
               );
             })}
 
-            {/* Connect preview line */}
-            {connectFrom && connPreview && (() => {
-              const f = getCenter(connectFrom);
-              return <path d={connPath(f.x, f.y, connPreview.x, connPreview.y, connType)} fill="none" stroke="#34D399" strokeWidth={1.8} strokeDasharray="8,4" markerEnd="url(#bsarrow-green)"/>;
+            {/* ── Connect preview (while dragging port or using connect tool) ── */}
+            {(connectFrom||portDrag)&&(connPreview||portDrag?.preview)&&(()=>{
+              const fromId=portDrag?.fromId||connectFrom;
+              const f=getCenter(fromId);
+              const preview=portDrag?.preview||connPreview;
+              if (!f||!preview) return null;
+              return <path d={connPath(f.x,f.y,preview.x,preview.y,connType)} fill="none" stroke="#34D399" strokeWidth={2} strokeDasharray="7,4" markerEnd="url(#bsarr-preview)"/>;
             })()}
 
-            {/* Draw paths */}
-            {drawPaths.map(p => (
-              <path key={p.id} d={pathStr(p.pts)} fill="none" stroke={p.color} strokeWidth={p.width} strokeLinecap="round" strokeLinejoin="round"
-                style={{ pointerEvents: 'all', cursor: 'pointer', opacity: selected.has(p.id) ? 0.55 : 1 }}
-                onClick={e => { e.stopPropagation(); setSelected(new Set([p.id])); }}/>
+            {/* ── Draw paths ── */}
+            {drawPaths.map(p=>(
+              <path key={p.id} d={pathStr(p.pts)} fill="none" stroke={p.color||'#000'} strokeWidth={p.width} strokeLinecap="round" strokeLinejoin="round"
+                style={{pointerEvents:'all',cursor:'pointer',opacity:selected.has(p.id)?0.55:1}}
+                onClick={e=>{e.stopPropagation();setSelected(new Set([p.id]));}}/>
             ))}
 
-            {/* Live draw path */}
-            {currentPath && <path d={pathStr(currentPath.pts)} fill="none" stroke={currentPath.color} strokeWidth={currentPath.width} strokeLinecap="round" strokeLinejoin="round"/>}
+            {/* ── Live draw path ── */}
+            {currentPath&&currentPath.pts.length>1&&(
+              <path d={pathStr(currentPath.pts)} fill="none" stroke={currentPath.color||'#000'} strokeWidth={currentPath.width} strokeLinecap="round" strokeLinejoin="round"/>
+            )}
           </svg>
 
-          {/* ── Nodes ── */}
-          {nodes.map(node => {
-            const isSel = selected.has(node.id);
-            const isEdit = editingId === node.id;
+          {/* ══ Nodes ══ */}
+          {nodes.map(node=>{
+            const isSel=selected.has(node.id);
+            const isEdit=editingId===node.id;
+            const showPorts=isSel; // always show ports on selected nodes
 
-            return (
+            const textStyle={
+              width:'100%',height:'100%',background:'transparent',border:'none',outline:'none',
+              resize:'none',fontFamily:'Inter,sans-serif',fontSize:node.fontSize||13,
+              fontWeight:node.fontWeight||400,fontStyle:node.fontStyle||'normal',
+              color:'rgba(0,0,0,.82)',lineHeight:1.55,textAlign:node.textAlign||'left',
+              boxSizing:'border-box',
+            };
+
+            return(
               <div key={node.id}
-                onMouseDown={e => onNodeMouseDown(e, node)}
-                onDoubleClick={e => onNodeDblClick(e, node)}
-                onContextMenu={e => onNodeContextMenu(e, node)}
-                style={{ position: 'absolute', left: node.x, top: node.y, width: node.w, height: node.h, zIndex: isSel ? 20 : 1, cursor: tool === 'connect' ? (connectFrom === node.id ? 'crosshair' : 'pointer') : dragging ? 'grabbing' : 'grab' }}
+                onMouseDown={e=>onNodeMouseDown(e,node)}
+                onMouseUp={e=>onNodeMouseUp(e,node)}
+                onDoubleClick={e=>onNodeDblClick(e,node)}
+                onContextMenu={e=>onNodeContextMenu(e,node)}
+                style={{position:'absolute',left:node.x,top:node.y,width:node.w,height:node.h,zIndex:isSel?20:1,
+                  cursor:tool==='connect'?'pointer':dragging?'grabbing':'grab'}}
               >
-
-                {/* STICKY NOTE */}
-                {node.type === 'sticky' && (
-                  <div style={{ width: '100%', height: '100%', background: node.color || '#FDE68A', borderRadius: 3, display: 'flex', flexDirection: 'column', overflow: 'hidden',
-                    boxShadow: isSel
-                      ? '0 0 0 2.5px #6366F1, 0 10px 32px rgba(0,0,0,.22)'
-                      : '2px 3px 10px rgba(0,0,0,.13), 1px 1px 0 rgba(0,0,0,.06)',
-                    transition: 'box-shadow .12s' }}>
-                    {/* Top strip */}
-                    <div style={{ height: 28, background: 'rgba(0,0,0,.09)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 9px' }}>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        {['0.5','0.3','0.2'].map((o,i) => <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: `rgba(0,0,0,${o})` }}/>)}
-                      </div>
-                      {isSel && <div style={{ fontSize: 9, color: 'rgba(0,0,0,.4)', fontWeight: 600 }}>DBL-CLICK TO EDIT</div>}
+                {/* STICKY */}
+                {node.type==='sticky'&&(
+                  <div style={{width:'100%',height:'100%',background:node.color||'#FDE68A',borderRadius:3,display:'flex',flexDirection:'column',overflow:'hidden',
+                    boxShadow:isSel?'0 0 0 2.5px #6366F1, 0 10px 32px rgba(0,0,0,.22)':'2px 3px 10px rgba(0,0,0,.13), 1px 1px 0 rgba(0,0,0,.06)'}}>
+                    <div style={{height:26,background:'rgba(0,0,0,.09)',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 9px'}}>
+                      <div style={{display:'flex',gap:4}}>{['0.5','0.3','0.2'].map((o,i)=><div key={i} style={{width:8,height:8,borderRadius:'50%',background:`rgba(0,0,0,${o})`}}/>)}</div>
+                      {isSel&&<div style={{fontSize:9,color:'rgba(0,0,0,.35)',fontWeight:600}}>DBL-CLICK TO EDIT</div>}
                     </div>
-                    {/* Content */}
-                    <div style={{ flex: 1, padding: '8px 10px', overflow: 'hidden' }}>
-                      {isEdit ? (
-                        <textarea autoFocus value={node.text}
-                          onChange={e => updateNode(node.id, { text: e.target.value })}
-                          onBlur={commitEdit}
-                          onMouseDown={e => e.stopPropagation()}
-                          style={{ width: '100%', height: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontFamily: 'Inter,sans-serif', fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 400, fontStyle: node.fontStyle || 'normal', color: 'rgba(0,0,0,.82)', lineHeight: 1.55, textAlign: node.textAlign || 'left' }}/>
-                      ) : (
-                        <div style={{ fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 400, fontStyle: node.fontStyle || 'normal', color: 'rgba(0,0,0,.82)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word', userSelect: 'none', textAlign: node.textAlign || 'left', height: '100%', overflow: 'hidden' }}>
-                          {node.text || <span style={{ opacity: 0.4 }}>Double-click to type…</span>}
-                        </div>
-                      )}
+                    <div style={{flex:1,padding:'8px 10px',overflow:'hidden'}}>
+                      {isEdit
+                        ? <textarea autoFocus value={node.text} onChange={e=>updateNode(node.id,{text:e.target.value})} onBlur={commitEdit} onMouseDown={e=>e.stopPropagation()} style={{...textStyle}}/>
+                        : <div style={{fontSize:node.fontSize||13,fontWeight:node.fontWeight||400,fontStyle:node.fontStyle||'normal',color:'rgba(0,0,0,.82)',lineHeight:1.55,whiteSpace:'pre-wrap',wordBreak:'break-word',userSelect:'none',textAlign:node.textAlign||'left',height:'100%',overflow:'hidden'}}>
+                            {node.text||<span style={{opacity:.35}}>Double-click to type…</span>}
+                          </div>
+                      }
                     </div>
                   </div>
                 )}
 
-                {/* TEXT BOX */}
-                {node.type === 'text' && (
-                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'flex-start', padding: '4px 6px', overflow: 'hidden',
-                    border: isSel ? '1.5px solid #6366F1' : isEdit ? '1.5px solid #6366F1' : '1.5px dashed rgba(100,90,60,.25)',
-                    borderRadius: 5, background: isSel ? 'rgba(99,102,241,.04)' : 'transparent',
-                    boxShadow: isSel ? '0 0 0 3px rgba(99,102,241,.15)' : 'none' }}>
-                    {isEdit ? (
-                      <textarea autoFocus value={node.text}
-                        onChange={e => updateNode(node.id, { text: e.target.value })}
-                        onBlur={commitEdit}
-                        onMouseDown={e => e.stopPropagation()}
-                        style={{ width: '100%', height: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontFamily: 'Inter,sans-serif', fontSize: node.fontSize || 16, fontWeight: node.fontWeight || 400, fontStyle: node.fontStyle || 'normal', color: '#1a1a1a', lineHeight: 1.5, textAlign: node.textAlign || 'left' }}/>
-                    ) : (
-                      <div style={{ fontSize: node.fontSize || 16, fontWeight: node.fontWeight || 400, fontStyle: node.fontStyle || 'normal', color: node.text ? '#1a1a1a' : 'rgba(100,90,60,.35)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', userSelect: 'none', textAlign: node.textAlign || 'left', lineHeight: 1.5, width: '100%' }}>
-                        {node.text || 'Type here…'}
-                      </div>
-                    )}
+                {/* TEXT */}
+                {node.type==='text'&&(
+                  <div style={{width:'100%',height:'100%',display:'flex',alignItems:'flex-start',padding:'4px 6px',overflow:'hidden',
+                    border:isSel?'1.5px solid #6366F1':isEdit?'1.5px solid #6366F1':'1.5px dashed rgba(100,90,60,.25)',
+                    borderRadius:5,background:isSel?'rgba(99,102,241,.04)':'transparent',
+                    boxShadow:isSel?'0 0 0 3px rgba(99,102,241,.15)':'none'}}>
+                    {isEdit
+                      ? <textarea autoFocus value={node.text} onChange={e=>updateNode(node.id,{text:e.target.value})} onBlur={commitEdit} onMouseDown={e=>e.stopPropagation()} style={{...textStyle,color:'#1a1a1a'}}/>
+                      : <div style={{fontSize:node.fontSize||16,fontWeight:node.fontWeight||400,fontStyle:node.fontStyle||'normal',color:node.text?'#1a1a1a':'rgba(100,90,60,.35)',whiteSpace:'pre-wrap',wordBreak:'break-word',userSelect:'none',textAlign:node.textAlign||'left',lineHeight:1.5,width:'100%'}}>
+                          {node.text||'Type here…'}
+                        </div>
+                    }
                   </div>
                 )}
 
                 {/* SHAPE */}
-                {node.type === 'shape' && (
-                  <div style={{ width: '100%', height: '100%', position: 'relative', boxShadow: isSel ? `0 0 0 2.5px #6366F1, 0 6px 20px rgba(0,0,0,.1)` : '0 2px 8px rgba(0,0,0,.08)', borderRadius: node.shapeType === 'rect' ? 10 : 0, transition: 'box-shadow .12s' }}>
-                    <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible' }}>
-                      {renderShapePath(node)}
-                    </svg>
-                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 8 }}>
-                      {isEdit ? (
-                        <textarea autoFocus value={node.text}
-                          onChange={e => updateNode(node.id, { text: e.target.value })}
-                          onBlur={commitEdit}
-                          onMouseDown={e => e.stopPropagation()}
-                          style={{ background: 'transparent', border: 'none', outline: 'none', resize: 'none', textAlign: node.textAlign || 'center', fontFamily: 'Inter,sans-serif', fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 700, color: '#1a1a1a', width: '90%', lineHeight: 1.4 }}/>
-                      ) : (
-                        <div style={{ fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 700, color: '#1a1a1a', textAlign: node.textAlign || 'center', userSelect: 'none', wordBreak: 'break-word', lineHeight: 1.4, width: '100%', padding: '0 6px' }}>
-                          {node.text}
-                        </div>
-                      )}
+                {node.type==='shape'&&(
+                  <div style={{width:'100%',height:'100%',position:'relative',
+                    boxShadow:isSel?`0 0 0 2.5px #6366F1, 0 6px 20px rgba(0,0,0,.1)`:'0 2px 8px rgba(0,0,0,.08)',
+                    borderRadius:node.shapeType==='rect'?10:0,transition:'box-shadow .12s'}}>
+                    <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',overflow:'visible'}}>{renderShapeSvg(node)}</svg>
+                    <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',padding:8}}>
+                      {isEdit
+                        ? <textarea autoFocus value={node.text} onChange={e=>updateNode(node.id,{text:e.target.value})} onBlur={commitEdit} onMouseDown={e=>e.stopPropagation()} style={{background:'transparent',border:'none',outline:'none',resize:'none',textAlign:node.textAlign||'center',fontFamily:'Inter,sans-serif',fontSize:node.fontSize||13,fontWeight:node.fontWeight||700,color:'#1a1a1a',width:'90%',lineHeight:1.4,boxSizing:'border-box'}}/>
+                        : <div style={{fontSize:node.fontSize||13,fontWeight:node.fontWeight||700,color:'#1a1a1a',textAlign:node.textAlign||'center',userSelect:'none',wordBreak:'break-word',lineHeight:1.4,width:'100%',padding:'0 6px'}}>{node.text}</div>
+                      }
                     </div>
                   </div>
                 )}
 
-                {/* Resize handle */}
-                {isSel && !isEdit && (
-                  <div onMouseDown={e => onResizeMouseDown(e, node)}
-                    style={{ position: 'absolute', right: -5, bottom: -5, width: 13, height: 13, borderRadius: 3, background: '#6366F1', border: '2px solid #fff', cursor: 'se-resize', zIndex: 30, boxShadow: '0 1px 4px rgba(0,0,0,.2)' }}/>
+                {/* ── Resize handle (bottom-right) ── */}
+                {isSel&&!isEdit&&(
+                  <div onMouseDown={e=>onResizeMouseDown(e,node)}
+                    style={{position:'absolute',right:-5,bottom:-5,width:12,height:12,borderRadius:3,background:'#6366F1',border:'2px solid #fff',cursor:'se-resize',zIndex:30,boxShadow:'0 1px 4px rgba(0,0,0,.2)'}}/>
                 )}
 
-                {/* Connector port dots */}
-                {tool === 'connect' && [
-                  { style: { left: '50%', top: -6, transform: 'translateX(-50%)' }},
-                  { style: { left: '50%', bottom: -6, transform: 'translateX(-50%)' }},
-                  { style: { top: '50%', left: -6, transform: 'translateY(-50%)' }},
-                  { style: { top: '50%', right: -6, transform: 'translateY(-50%)' }},
-                ].map((p, i) => (
-                  <div key={i} style={{ position: 'absolute', width: 11, height: 11, borderRadius: '50%', background: connectFrom === node.id ? '#34D399' : '#6366F1', border: '2px solid #fff', zIndex: 40, boxShadow: '0 0 6px rgba(99,102,241,.5)', pointerEvents: 'none', ...p.style }}/>
-                ))}
+                {/* ── Port dots: blue dots on all 4 sides when selected ── */}
+                {/* In connect mode: click to start connection */}
+                {/* Normal: drag port dot to connect */}
+                {showPorts&&!isEdit&&PORT_SIDES.map(side=>{
+                  const pos={
+                    top:    {left:'50%',top:-7,transform:'translateX(-50%)'},
+                    bottom: {left:'50%',bottom:-7,transform:'translateX(-50%)'},
+                    left:   {top:'50%',left:-7,transform:'translateY(-50%)'},
+                    right:  {top:'50%',right:-7,transform:'translateY(-50%)'},
+                  }[side];
+                  const isPortSrc=portDrag?.fromId===node.id&&portDrag?.side===side;
+                  return(
+                    <div key={side}
+                      onMouseDown={e=>onPortMouseDown(e,node,side)}
+                      style={{
+                        position:'absolute',width:12,height:12,borderRadius:'50%',
+                        background:isPortSrc?'#34D399':'#3B82F6',
+                        border:'2.5px solid #fff',cursor:'crosshair',zIndex:40,
+                        boxShadow:isPortSrc?'0 0 8px rgba(52,211,153,.7)':'0 0 6px rgba(59,130,246,.5)',
+                        transition:'background .1s, box-shadow .1s',
+                        ...pos
+                      }}
+                      title={`Connect from ${side}`}
+                    />
+                  );
+                })}
               </div>
             );
           })}
 
           {/* Selection marquee */}
-          {selBox && (() => {
-            const sx = Math.min(selBox.x1, selBox.x2), sy = Math.min(selBox.y1, selBox.y2);
-            const sw = Math.abs(selBox.x2 - selBox.x1), sh = Math.abs(selBox.y2 - selBox.y1);
-            return <div style={{ position: 'absolute', left: sx, top: sy, width: sw, height: sh, border: '1.5px solid #6366F1', background: 'rgba(99,102,241,.07)', pointerEvents: 'none', borderRadius: 4 }}/>;
+          {selBox&&(()=>{
+            const sx=Math.min(selBox.x1,selBox.x2),sy=Math.min(selBox.y1,selBox.y2);
+            const sw=Math.abs(selBox.x2-selBox.x1),sh=Math.abs(selBox.y2-selBox.y1);
+            return <div style={{position:'absolute',left:sx,top:sy,width:sw,height:sh,border:'1.5px solid #6366F1',background:'rgba(99,102,241,.06)',pointerEvents:'none',borderRadius:4}}/>;
           })()}
         </div>
 
         {/* ── Context menu ── */}
-        {ctxMenu && (() => {
-          const ctxNode = nodes.find(n => n.id === ctxMenu.nodeId);
-          return (
-            <div style={{ position: 'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 9999, background: '#fff', border: '1px solid rgba(0,0,0,.1)', borderRadius: 10, padding: 5, boxShadow: '0 8px 28px rgba(0,0,0,.15)', minWidth: 170 }} onMouseDown={e => e.stopPropagation()}>
+        {ctxMenu&&(()=>{
+          return(
+            <div style={{position:'fixed',left:ctxMenu.x,top:ctxMenu.y,zIndex:9999,background:'#fff',border:'1px solid rgba(0,0,0,.1)',borderRadius:10,padding:5,boxShadow:'0 8px 28px rgba(0,0,0,.15)',minWidth:175}} onMouseDown={e=>e.stopPropagation()}>
               {[
-                { l: '✏️  Edit', a: () => { setEditingId(ctxMenu.nodeId); setCtxMenu(null); } },
-                { l: '📋  Copy (Ctrl+C)', a: () => { const n = nodes.find(x => x.id === ctxMenu.nodeId); if (n) setClipboard({ nodes: [n], connections: [] }); setCtxMenu(null); } },
-                { l: '📄  Duplicate', a: () => { const n = nodes.find(x => x.id === ctxMenu.nodeId); if (!n) return; const nn2 = [...nodes, { ...n, id: nextId.current++, x: n.x + 20, y: n.y + 20 }]; setNodes(nn2); pushHist(nn2, connections, drawPaths); setCtxMenu(null); } },
-                { l: '🔗  Connect from here', a: () => { setTool('connect'); setConnectFrom(ctxMenu.nodeId); setCtxMenu(null); } },
-                { sep: true },
-                { l: '🗑  Delete', danger: true, a: () => { const nn = nodes.filter(n => n.id !== ctxMenu.nodeId); const nc = connections.filter(c => c.from !== ctxMenu.nodeId && c.to !== ctxMenu.nodeId); setNodes(nn); setConnections(nc); pushHist(nn, nc, drawPaths); setCtxMenu(null); } },
-              ].map((item, i) => item.sep
-                ? <div key={i} style={{ height: 1, background: 'rgba(0,0,0,.08)', margin: '3px 0' }}/>
-                : <button key={i} onClick={item.a} style={{ display: 'block', width: '100%', padding: '8px 12px', borderRadius: 7, border: 'none', background: 'transparent', color: item.danger ? '#EF4444' : '#1a1a1a', cursor: 'pointer', fontSize: 13, textAlign: 'left', fontWeight: item.danger ? 600 : 400 }} onMouseEnter={e => e.target.style.background = item.danger ? 'rgba(239,68,68,.08)' : 'rgba(0,0,0,.04)'} onMouseLeave={e => e.target.style.background = 'transparent'}>{item.l}</button>
+                {l:'✏️  Edit', a:()=>{setEditingId(ctxMenu.nodeId);setCtxMenu(null);}},
+                {l:'📋  Copy  Ctrl+C', a:()=>{const n=nodes.find(x=>x.id===ctxMenu.nodeId);if(n)setClipboard({nodes:[n],connections:[]});setCtxMenu(null);}},
+                {l:'📄  Duplicate', a:()=>{const n=nodes.find(x=>x.id===ctxMenu.nodeId);if(!n)return;const nn=[...nodes,{...n,id:nextId.current++,x:n.x+20,y:n.y+20}];setNodes(nn);pushHist(nn,connections,drawPaths);setCtxMenu(null);}},
+                {l:'⤳  Connect from here', a:()=>{setTool('connect');setConnectFrom(ctxMenu.nodeId);setCtxMenu(null);}},
+                {sep:true},
+                {l:'🗑  Delete', danger:true, a:()=>{const nn=nodes.filter(n=>n.id!==ctxMenu.nodeId);const nc=connections.filter(c=>c.from!==ctxMenu.nodeId&&c.to!==ctxMenu.nodeId);setNodes(nn);setConnections(nc);pushHist(nn,nc,drawPaths);setCtxMenu(null);}},
+              ].map((item,i)=>item.sep
+                ? <div key={i} style={{height:1,background:'rgba(0,0,0,.08)',margin:'3px 0'}}/>
+                : <button key={i} onClick={item.a} style={{display:'block',width:'100%',padding:'8px 12px',borderRadius:7,border:'none',background:'transparent',color:item.danger?'#EF4444':'#1a1a1a',cursor:'pointer',fontSize:13,textAlign:'left',fontWeight:item.danger?600:400}}
+                    onMouseEnter={e=>e.target.style.background=item.danger?'rgba(239,68,68,.08)':'rgba(0,0,0,.04)'}
+                    onMouseLeave={e=>e.target.style.background='transparent'}>{item.l}</button>
               )}
             </div>
           );
         })()}
 
         {/* ── Mini-map ── */}
-        <div style={{ position: 'absolute', bottom: 12, right: 12, width: 130, height: 88, background: 'rgba(245,244,240,.92)', border: '1px solid rgba(0,0,0,.1)', borderRadius: 8, overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,.1)' }}>
-          <svg width="130" height="88" style={{ display: 'block' }}>
-            {drawPaths.map(p => p.pts.length > 1 && <circle key={p.id} cx={65 + p.pts[0][0] * 0.025} cy={44 + p.pts[0][1] * 0.025} r={2} fill={p.color} opacity={0.5}/>)}
-            {nodes.map(n => <rect key={n.id} x={65 + n.x * 0.025} y={44 + n.y * 0.025} width={Math.max(5, n.w * 0.025)} height={Math.max(4, n.h * 0.025)} rx={1} fill={n.type === 'sticky' ? (n.color || '#FDE68A') : n.fill || '#818CF8'} opacity={0.85}/>)}
+        <div style={{position:'absolute',bottom:12,right:12,width:130,height:88,background:'rgba(245,244,240,.92)',border:'1px solid rgba(0,0,0,.1)',borderRadius:8,overflow:'hidden',boxShadow:'0 2px 10px rgba(0,0,0,.1)'}}>
+          <svg width="130" height="88">
+            {drawPaths.map(p=>p.pts.length>1&&<circle key={p.id} cx={65+p.pts[0][0]*0.025} cy={44+p.pts[0][1]*0.025} r={2} fill={p.color||'#000'} opacity={0.5}/>)}
+            {nodes.map(n=><rect key={n.id} x={65+n.x*0.025} y={44+n.y*0.025} width={Math.max(5,n.w*0.025)} height={Math.max(4,n.h*0.025)} rx={1} fill={n.type==='sticky'?(n.color||'#FDE68A'):n.fill||'#818CF8'} opacity={0.85}/>)}
           </svg>
-          <div style={{ position: 'absolute', bottom: 3, left: 6, fontSize: 9, color: 'rgba(0,0,0,.35)', fontWeight: 600 }}>OVERVIEW</div>
+          <div style={{position:'absolute',bottom:3,left:6,fontSize:9,color:'rgba(0,0,0,.35)',fontWeight:600}}>OVERVIEW</div>
         </div>
 
-        {/* ── Hint bar ── */}
-        <div style={{ position: 'absolute', bottom: 12, left: 12, fontSize: 10, color: 'rgba(100,90,60,.5)', pointerEvents: 'none', lineHeight: 1.7 }}>
-          Scroll to pan  ·  Ctrl+scroll or pinch to zoom  ·  Alt+drag to pan  ·  Right-click node for options<br/>
-          Ctrl+C copy  ·  Ctrl+V paste  ·  Ctrl+D duplicate  ·  Del to delete  ·  V S T H D C for tools
+        {/* ── Hint ── */}
+        <div style={{position:'absolute',bottom:12,left:12,fontSize:10,color:'rgba(100,90,60,.45)',pointerEvents:'none',lineHeight:1.7}}>
+          Scroll to pan · Ctrl+scroll to zoom · Alt+drag to pan · Right-click for options<br/>
+          Ctrl+C copy · Ctrl+V paste · Ctrl+D duplicate · Del to delete · V S T H D C = tools
         </div>
 
-        {/* ── Auto-save badge ── */}
-        <div style={{ position: 'absolute', top: 10, right: 10, fontSize: 10, color: 'rgba(100,90,60,.45)', background: 'rgba(245,244,240,.8)', padding: '2px 8px', borderRadius: 20, border: '1px solid rgba(0,0,0,.06)' }}>
-          {mode === 'personal' ? '🔒 Personal' : '👥 Shared'}  ·  Auto-saved
+        {/* Auto-save badge */}
+        <div style={{position:'absolute',top:10,right:10,fontSize:10,color:'rgba(100,90,60,.45)',background:'rgba(245,244,240,.8)',padding:'2px 8px',borderRadius:20,border:'1px solid rgba(0,0,0,.06)'}}>
+          {mode==='personal'?'🔒 Personal':'👥 Shared'} · Auto-saved
         </div>
       </div>
     </div>
