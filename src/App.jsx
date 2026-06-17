@@ -2447,6 +2447,58 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
 }
 
 // ─── MANAGER TABS ─────────────────────────────────────────────────────────────
+// ─── AI SUMMARY BANNER (FIX 2) ───────────────────────────────────────────────
+function AISummaryBanner({ tasks, members }) {
+  const c=useC();
+  const [summary,setSummary]=useState('');
+  const [loading,setLoading]=useState(false);
+  const [open,setOpen]=useState(false);
+  const generate=async()=>{
+    setLoading(true); setOpen(true);
+    try{
+      const done=tasks.filter(t=>t.status==='done').length;
+      const inProg=tasks.filter(t=>t.status==='in-progress').length;
+      const blocked=tasks.filter(t=>t.status==='blocked');
+      const perMember=members.map(m=>{
+        const mt=tasks.filter(t=>t.assignee_email===m.email);
+        const md=mt.filter(t=>t.status==='done').length;
+        const mb=mt.filter(t=>t.status==='blocked').length;
+        return (m.name||m.email)+': '+md+'/'+mt.length+' done'+(mb?' (blocked)':'');
+      }).join('; ');
+      const prompt=`You are a standup facilitator. Generate a concise standup summary.
+Team: ${members.length} members. Tasks: ${tasks.length} total, ${done} done, ${inProg} in progress, ${blocked.length} blocked.
+Blocked: ${blocked.map(t=>t.title+(t.blocker?' — '+t.blocker:'')).join(', ')||'none'}.
+Members: ${perMember}.
+Write exactly 4 bullet points covering: overall progress, who is on track, blockers/risks, recommended action.`;
+      const reply=await askAI(prompt,{tasks,members,teamName:'Team'});
+      setSummary(reply);
+    }catch(e){
+      setSummary('Could not generate summary. Check REACT_APP_GEMINI_KEY in Vercel env vars.');
+    }
+    setLoading(false);
+  };
+  return(
+    <Card style={{ padding:'14px 18px',marginBottom:16,border:'1px solid rgba(124,110,245,.2)' }}>
+      <div style={{ display:'flex',alignItems:'center',gap:10 }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0 }}>
+          <path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z" fill="#A78BFA"/>
+        </svg>
+        <span style={{ fontSize:13,fontWeight:700,color:c.text,flex:1 }}>AI Standup Summary</span>
+        {summary&&<button onClick={()=>setOpen(o=>!o)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:18,lineHeight:1,padding:0 }}>{open?'−':'+'}</button>}
+        <Btn onClick={generate} loading={loading} style={{ padding:'6px 14px',fontSize:12,flexShrink:0 }}>{summary?'Regenerate ✦':'Generate ✦'}</Btn>
+      </div>
+      {!process.env.REACT_APP_GEMINI_KEY&&(
+        <div style={{ marginTop:8,fontSize:11,color:c.mut }}>⚠️ Add REACT_APP_GEMINI_KEY to Vercel to enable AI summaries</div>
+      )}
+      {open&&summary&&(
+        <div style={{ marginTop:12,padding:'12px 14px',background:'rgba(124,110,245,.07)',borderRadius:10,border:'1px solid rgba(124,110,245,.15)',fontSize:13,color:c.sub,lineHeight:1.75,whiteSpace:'pre-wrap' }}>
+          {summary}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function LiveTab({ tasks, members, onStatus, onPriority, onNote, onAddTask, session }) {
   const c=useC(); const [fu,setFu]=useState('all'); const [fs,setFs]=useState('all'); const [showModal,setShowModal]=useState(false);
   const filtered=tasks.filter(t=>fu==='all'||t.assignee_email===fu).filter(t=>fs==='all'||t.status===fs);
@@ -2457,6 +2509,7 @@ function LiveTab({ tasks, members, onStatus, onPriority, onNote, onAddTask, sess
         <StatCard label="Total" value={total} color="#818CF8" icon="📋"/><StatCard label="To do" value={todo} color="#94A3B8" icon="⭕"/><StatCard label="In progress" value={inProg} color="#38BDF8" icon="⚡"/><StatCard label="Done" value={done} color="#34D399" icon="✅"/><StatCard label="Blocked" value={blocked} color={blocked>0?'#EF4444':'#34D399'} icon="⚠️" sub={blocked>0?'needs attention':'all clear'}/>
       </div>
       {total>0&&<Card style={{ padding:'14px 18px',marginBottom:16 }}><div style={{ display:'flex',justifyContent:'space-between',marginBottom:8 }}><span style={{ fontSize:13,color:c.mut }}>Team progress</span><span style={{ fontSize:13,fontWeight:700,color:'#818CF8' }}>{pct}% · {done}/{total}</span></div><Bar pct={pct} h={8} color="linear-gradient(90deg,#6366F1,#34D399)"/></Card>}
+      <AISummaryBanner tasks={tasks} members={members}/>
       <Card style={{ overflow:'hidden' }}>
         <div style={{ padding:'12px 16px',borderBottom:`1px solid ${c.bord}`,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center' }}>
           <div style={{ display:'flex',gap:5,flex:1,flexWrap:'wrap' }}>{[{v:'all',l:'All'},...members.map(m=>({v:m.email,l:(m.name||m.email).split(' ')[0]}))].map(f=><button key={f.v} onClick={()=>setFu(f.v)} style={{ fontSize:12,padding:'5px 12px',borderRadius:20,border:`1px solid ${c.bord}`,background:fu===f.v?'rgba(129,140,248,.2)':'transparent',color:fu===f.v?'#818CF8':c.mut,cursor:'pointer',fontWeight:fu===f.v?700:400,transition:'all .15s' }}>{f.l}</button>)}</div>
@@ -3111,6 +3164,17 @@ export default function App() {
       {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
       {/* PiP is a real popup window — no DOM element needed */}
       {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<MemberView user={userForView} myMember={myMember} tasks={tasks} onAdd={handleAddTask} onStatus={handleStatus} onBlocker={handleBlocker} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} members={members} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme}/>}
+      {/* FIX 1: draggable AI bubble — shown for both manager and member in standup view */}
+      {(session||!SB.IS_LIVE)&&view==='standup'&&(
+        <AIBubble
+          tasks={tasks}
+          members={members}
+          history={history}
+          session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}}
+          myTasks={tasks.filter(t=>t.assignee_email===(session?.user?.email||userForView.email))}
+          teamName={team?.name||'Team'}
+        />
+      )}
     </ThemeCtx.Provider>
   );
 }
