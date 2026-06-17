@@ -1,3 +1,4 @@
+// StandSync v3 - fixed build
 import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 import * as SB from './lib/supabase';
 import * as Email from './lib/email';
@@ -2597,7 +2598,6 @@ class ErrorBoundary extends React.Component {
 
 export default function App() {
   // Init supabase from CDN on first render (avoids TDZ bundling crash)
-  useEffect(() => { initSupabase(); }, []);
   const [dark,setDark]=useState(()=>(localStorage.getItem('ss-theme')||'dark')==='dark');
   const toggle=useCallback(()=>setDark(d=>{const n=!d;localStorage.setItem('ss-theme',n?'dark':'light');document.body.style.background=n?'#060412':'#F1F5F9';return n;}),[]);
 
