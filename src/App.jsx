@@ -39,6 +39,9 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 @keyframes slideDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
 @keyframes popIn{0%{opacity:0;transform:scale(.92) translateY(8px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+.ss-tip{position:relative;display:inline-flex}
+.ss-tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%) scale(.85);background:rgba(18,15,50,.97);color:#F0ECFF;font-size:11px;font-weight:500;padding:4px 9px;border-radius:7px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s,transform .15s;border:1px solid rgba(255,255,255,.1);letter-spacing:-.01em;z-index:9999}
+.ss-tip:hover::after{opacity:1;transform:translateX(-50%) scale(1)}
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 input,select,textarea,button{font-family:inherit}
@@ -2063,9 +2066,10 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
             {TABS.map(t=>{
               const isA=activeTab===t.id;
               return(
-                <button key={t.id} onClick={()=>setActiveTab(t.id)} title={t.l}
-                  style={{ padding:'6px 8px',borderRadius:9,border:'none',background:isA?'rgba(124,110,245,.16)':'transparent',color:isA?'#C4B5FD':c.mut,cursor:'pointer',fontSize:11,fontWeight:isA?600:400,display:'flex',alignItems:'center',gap:5,transition:'all .14s',whiteSpace:'nowrap',flexShrink:0,position:'relative' }}>
-                  <span style={{ fontSize:15,display:'flex',alignItems:'center',justifyContent:'center' }}>{t.ic}</span>
+                <button key={t.id} onClick={()=>setActiveTab(t.id)}
+                  className="ss-tip" data-tip={t.l}
+                  style={{ padding:'6px 8px',borderRadius:9,border:'none',background:isA?'rgba(124,110,245,.16)':'transparent',color:isA?'#C4B5FD':c.mut,cursor:'pointer',fontWeight:isA?600:400,display:'flex',alignItems:'center',gap:5,transition:'all .15s',whiteSpace:'nowrap',flexShrink:0,position:'relative' }}>
+                  <span style={{ fontSize:16,lineHeight:1,transition:'transform .15s' }}>{t.ic}</span>
                   {isA&&<span style={{ fontSize:11 }}>{t.l}</span>}
                 </button>
               );
@@ -2491,9 +2495,11 @@ var STANDSYNC_MGR_TABS = [{id:'live',l:'Live board',ic:'◉'},{id:'team',l:'Team
         {STANDSYNC_MGR_TABS.map(t=>{
               const isA=tab===t.id;
               return(
-                <button key={t.id} onClick={()=>setTabClear(t.id)} title={t.l} style={{ padding:'5px 8px',borderRadius:9,border:'none',background:isA?'rgba(124,110,245,.16)':'transparent',color:isA?'#C4B5FD':c.mut,cursor:'pointer',fontSize:11,fontWeight:isA?600:400,display:'flex',alignItems:'center',gap:5,transition:'all .14s',whiteSpace:'nowrap',flexShrink:0,position:'relative' }}>
-                  <span style={{ width:14,height:14,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>{t.ic||t.i}</span>
-                  {isA&&<span>{t.l}</span>}
+                <button key={t.id} onClick={()=>setTabClear(t.id)}
+                  className="ss-tip" data-tip={t.l}
+                  style={{ padding:'5px 8px',borderRadius:9,border:'none',background:isA?'rgba(124,110,245,.16)':'transparent',color:isA?'#C4B5FD':c.mut,cursor:'pointer',fontWeight:isA?600:400,display:'flex',alignItems:'center',gap:5,transition:'all .15s',whiteSpace:'nowrap',flexShrink:0,position:'relative' }}>
+                  <span style={{ fontSize:16,lineHeight:1,transition:'transform .15s' }}>{t.ic||t.i}</span>
+                  {isA&&<span style={{ fontSize:11 }}>{t.l}</span>}
                   {t.id==='chat'&&unreadChat>0&&<span style={{ position:'absolute',top:0,right:0,minWidth:14,height:14,borderRadius:7,background:'#EF4444',color:'#fff',fontSize:8,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 2px' }}>{unreadChat>9?'9+':unreadChat}</span>}
                 </button>
               );
@@ -2552,19 +2558,21 @@ function usePip({ tasks, onAdd, onStatus, session, team, standup }) {
     const w=360, h=580;
     const left = Math.max(0, (window.screen.availWidth||1200) - w - 20);
     const top  = Math.max(0, (window.screen.availHeight||800) - h - 60);
-    const features = [
-      'width='+w, 'height='+h,
-      'left='+left, 'top='+top,
-      'resizable=yes', 'scrollbars=no',
-      'toolbar=no', 'menubar=no',
-      'location=no', 'status=no',
-      'popup=yes',   // modern browsers: force popup not tab
-    ].join(',');
+    const features = 'width='+w+',height='+h+',left='+left+',top='+top+',resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no,status=no,popup=1';
     const win = window.open('/pip.html', 'standsync_pip', features);
-    if (!win || win.closed) {
-      alert('PiP blocked!\n\nClick the popup blocked icon in your address bar and select "Always allow popups from standsync-olive.vercel.app", then click PiP again.');
+    if (!win) {
+      alert('Popups are blocked.\n\nIn your browser address bar, click the popup blocked icon and choose "Always allow popups from standsync-olive.vercel.app". Then click PiP again.');
       return;
     }
+    // If browser opened it as a tab instead of popup, warn user
+    setTimeout(()=>{
+      try {
+        if(win.outerWidth >= window.outerWidth - 50) {
+          // Opened as tab - show instructions
+          console.warn('PiP opened as tab. User needs to allow popups.');
+        }
+      } catch(e){}
+    }, 500);
 
     // Send init data once window loads
     win.addEventListener('load', function() {
