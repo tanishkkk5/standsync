@@ -2362,7 +2362,7 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
         )}
         {activeTab==='chat'&&<RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme}/>}
         {activeTab==='cal'&&<CalendarPanel team={null} session={session} members={members}/>}
-        {activeTab==='brain'&&<BrainstormSpace team={team} session={session}/>}
+        {activeTab==='brain'&&<BrainstormSpace team={null} session={session} members={members}/>}
         {activeTab==='ai'&&<AIAssistant tasks={tasks} members={members} history={[]} session={session} myTasks={mine} teamName="Team"/>}
 
         {/* ── SELF TASKS (personal, not team) ── */}
@@ -2693,477 +2693,786 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
     </div>
   );
 }
+
 // ─── BRAINSTORM SPACE ─────────────────────────────────────────────────────────
-// Full infinite canvas: sticky notes, text boxes, shapes, free draw, connectors
-function BrainstormSpace({ team, session }) {
+// Full Miro-like infinite canvas. Personal + Shared modes. Auto-saved.
+// Features: sticky notes (stack/copy/paste/del), text boxes, shapes (rect/circle/diamond/pill),
+// free-draw pen (color + thickness), connectors (straight/curved/elbow), node drag,
+// color picker, text formatting, mini-map, undo/redo, fit view, zoom.
+
+const BS_STICKY_COLORS = ['#FDE68A','#FCA5A5','#6EE7B7','#93C5FD','#C4B5FD','#FBB6CE','#FED7AA','#D9F99D','#fff','#1e1b4b'];
+const BS_DRAW_COLORS   = ['#818CF8','#34D399','#F87171','#FBBF24','#60A5FA','#F472B6','#A78BFA','#000','#fff'];
+const BS_SHAPE_COLORS  = [
+  {fill:'rgba(99,102,241,.15)',  stroke:'#6366F1'},
+  {fill:'rgba(52,211,153,.15)', stroke:'#34D399'},
+  {fill:'rgba(248,113,113,.15)',stroke:'#F87171'},
+  {fill:'rgba(251,191,36,.18)', stroke:'#FBBF24'},
+  {fill:'rgba(196,181,253,.2)', stroke:'#A78BFA'},
+  {fill:'rgba(255,255,255,.9)', stroke:'#94A3B8'},
+];
+
+function BrainstormSpace({ team, session, members=[] }) {
   const c = useC();
   const { dark } = useTheme();
   const canvasRef = useRef();
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
-  const [nodes, setNodes] = useState([]);
-  const [connections, setConnections] = useState([]);
-  const [selected, setSelected] = useState(new Set());
-  const [tool, setTool] = useState('select');
-  const [drawColor, setDrawColor] = useState('#818CF8');
-  const [drawWidth, setDrawWidth] = useState(3);
-  const [stickyColor, setStickyColor] = useState('#FDE68A');
-  const [shapeType, setShapeType] = useState('rect');
-  const [drawPaths, setDrawPaths] = useState([]);
-  const [currentPath, setCurrentPath] = useState(null);
-  const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
-  const [connectFrom, setConnectFrom] = useState(null);
-  const [connectPreview, setConnectPreview] = useState(null);
-  const [editingId, setEditingId] = useState(null);
-  const [dragging, setDragging] = useState(null);
-  const [resizing, setResizing] = useState(null);
-  const [selectionBox, setSelectionBox] = useState(null);
-  const [bsHistory, setBsHistory] = useState([]);
-  const [bsHistIdx, setBsHistIdx] = useState(-1);
-  const nextId = useRef(100);
-  const BOARD_KEY = 'ss-board-' + (team?.id || 'demo');
-  const STICKY_COLORS = ['#FDE68A','#A7F3D0','#BAE6FD','#DDD6FE','#FBCFE8','#FED7AA','#F9A8D4','#6EE7B7'];
-  const DRAW_COLORS = ['#818CF8','#34D399','#F87171','#FBBF24','#60A5FA','#F472B6','#A78BFA','#F0ECFF','#06040F'];
+  const nextId = useRef(1);
 
+  // ── Mode: personal vs shared ──
+  const [mode, setMode] = useState('personal'); // 'personal' | 'shared'
+  const userId = session?.user?.id || 'anon';
+  const teamId = team?.id || 'demo';
+  const BOARD_KEY = `ss-bs-${mode === 'personal' ? userId : 'shared-' + teamId}`;
+
+  // ── Canvas transform ──
+  const [pan, setPan] = useState({ x: 120, y: 80 });
+  const [zoom, setZoom] = useState(1);
+
+  // ── Board data ──
+  const [nodes, setNodes]           = useState([]);
+  const [connections, setConnections] = useState([]);
+  const [drawPaths, setDrawPaths]   = useState([]);
+
+  // ── Selection & interaction ──
+  const [selected, setSelected]     = useState(new Set());
+  const [tool, setTool]             = useState('select');
+  const [editingId, setEditingId]   = useState(null);
+
+  // ── Dragging ──
+  const [dragging, setDragging]     = useState(null); // {nodeIds, startPt, origPositions}
+  const [resizing, setResizing]     = useState(null);
+  const [selBox, setSelBox]         = useState(null);
+
+  // ── Panning ──
+  const [isPanning, setIsPanning]   = useState(false);
+  const panRef = useRef({ x: 0, y: 0 });
+
+  // ── Draw tool ──
+  const [drawColor, setDrawColor]   = useState('#818CF8');
+  const [drawWidth, setDrawWidth]   = useState(3);
+  const [currentPath, setCurrentPath] = useState(null);
+
+  // ── Sticky options ──
+  const [stickyColor, setStickyColor] = useState('#FDE68A');
+  const [showStickyPicker, setShowStickyPicker] = useState(false);
+
+  // ── Shape options ──
+  const [shapeType, setShapeType]   = useState('rect'); // rect|circle|diamond|pill
+  const [shapeColor, setShapeColor] = useState(0);
+
+  // ── Connector options ──
+  const [connType, setConnType]     = useState('curve'); // curve|straight|elbow
+  const [connectFrom, setConnectFrom] = useState(null);
+  const [connPreview, setConnPreview] = useState(null);
+
+  // ── Clipboard ──
+  const [clipboard, setClipboard]   = useState(null);
+
+  // ── Context menu ──
+  const [ctxMenu, setCtxMenu]       = useState(null); // {x,y,nodeId}
+
+  // ── Undo/redo ──
+  const [bsHist, setBsHist]         = useState([]);
+  const [bsIdx, setBsIdx]           = useState(-1);
+
+  // ── Load from storage ──────────────────────────────────────────────────────
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(BOARD_KEY);
-      if (saved) {
-        const d = JSON.parse(saved);
-        if (d.nodes) { setNodes(d.nodes); if (d.nodes.length) nextId.current = Math.max(...d.nodes.map(n => n.id)) + 1; }
+      const raw = localStorage.getItem(BOARD_KEY);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d.nodes)       { setNodes(d.nodes); if (d.nodes.length) nextId.current = Math.max(...d.nodes.map(n => n.id), 0) + 1; }
         if (d.connections) setConnections(d.connections);
-        if (d.drawPaths) setDrawPaths(d.drawPaths);
+        if (d.drawPaths)   setDrawPaths(d.drawPaths);
+      } else {
+        // Seed with welcome note
+        const welcome = { id: 1, type: 'sticky', x: 60, y: 40, w: 180, h: 150,
+          text: '👋 Welcome!\nDouble-click to edit\nDrag to move\nS = sticky  T = text\nD = draw  C = connect', color: '#FDE68A',
+          fontSize: 12, fontWeight: 400, fontStyle: 'normal', textAlign: 'left' };
+        setNodes([welcome]); nextId.current = 2;
       }
     } catch(e) {}
   }, [BOARD_KEY]);
 
-  const saveBoard = useCallback((n, co, dp) => {
-    try { localStorage.setItem(BOARD_KEY, JSON.stringify({ nodes: n, connections: co, drawPaths: dp })); } catch(e) {}
+  // ── Auto-save ──────────────────────────────────────────────────────────────
+  const saveToStorage = useCallback((n, co, dp) => {
+    try { localStorage.setItem(BOARD_KEY, JSON.stringify({ nodes: n, connections: co, drawPaths: dp, savedAt: Date.now() })); }
+    catch(e) {}
   }, [BOARD_KEY]);
 
-  const pushHistory = useCallback((n, co, dp) => {
-    setBsHistory(h => [...h.slice(0, bsHistIdx + 1), { nodes: n, connections: co, drawPaths: dp }]);
-    setBsHistIdx(i => i + 1);
-    saveBoard(n, co, dp);
-  }, [bsHistIdx, saveBoard]);
+  // ── History ────────────────────────────────────────────────────────────────
+  const pushHist = useCallback((n, co, dp) => {
+    setBsHist(h => [...h.slice(0, bsIdx + 1), { nodes: JSON.parse(JSON.stringify(n)), connections: JSON.parse(JSON.stringify(co)), drawPaths: JSON.parse(JSON.stringify(dp)) }]);
+    setBsIdx(i => i + 1);
+    saveToStorage(n, co, dp);
+  }, [bsIdx, saveToStorage]);
 
   const undo = useCallback(() => {
-    if (bsHistIdx < 1) return;
-    const prev = bsHistory[bsHistIdx - 1];
-    setNodes(prev.nodes); setConnections(prev.connections); setDrawPaths(prev.drawPaths);
-    setBsHistIdx(i => i - 1);
-  }, [bsHistory, bsHistIdx]);
+    if (bsIdx < 1) return;
+    const s = bsHist[bsIdx - 1];
+    setNodes(s.nodes); setConnections(s.connections); setDrawPaths(s.drawPaths);
+    setBsIdx(i => i - 1);
+    saveToStorage(s.nodes, s.connections, s.drawPaths);
+  }, [bsHist, bsIdx, saveToStorage]);
 
   const redo = useCallback(() => {
-    if (bsHistIdx >= bsHistory.length - 1) return;
-    const next = bsHistory[bsHistIdx + 1];
-    setNodes(next.nodes); setConnections(next.connections); setDrawPaths(next.drawPaths);
-    setBsHistIdx(i => i + 1);
-  }, [bsHistory, bsHistIdx]);
+    if (bsIdx >= bsHist.length - 1) return;
+    const s = bsHist[bsIdx + 1];
+    setNodes(s.nodes); setConnections(s.connections); setDrawPaths(s.drawPaths);
+    setBsIdx(i => i + 1);
+    saveToStorage(s.nodes, s.connections, s.drawPaths);
+  }, [bsHist, bsIdx, saveToStorage]);
 
+  // ── Coordinate transform ───────────────────────────────────────────────────
   const toCanvas = useCallback((cx, cy) => {
     const rect = canvasRef.current?.getBoundingClientRect() || { left: 0, top: 0 };
     return { x: (cx - rect.left - pan.x) / zoom, y: (cy - rect.top - pan.y) / zoom };
   }, [pan, zoom]);
 
+  // ── Wheel handler ──────────────────────────────────────────────────────────
   useEffect(() => {
     const el = canvasRef.current;
     if (!el) return;
-    const onWheel = (e) => {
+    const handler = (e) => {
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) {
-        const factor = e.deltaY > 0 ? 0.92 : 1.08;
-        setZoom(z => Math.min(3, Math.max(0.15, z * factor)));
+        const rect = el.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const factor = e.deltaY < 0 ? 1.1 : 0.91;
+        setZoom(z => {
+          const nz = Math.min(4, Math.max(0.1, z * factor));
+          setPan(p => ({ x: mx - (mx - p.x) * (nz / z), y: my - (my - p.y) * (nz / z) }));
+          return nz;
+        });
       } else {
-        setPan(p => ({ x: p.x - e.deltaX * 0.8, y: p.y - e.deltaY * 0.8 }));
+        setPan(p => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }));
       }
     };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
+    el.addEventListener('wheel', handler, { passive: false });
+    return () => el.removeEventListener('wheel', handler);
   }, []);
 
+  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
   useEffect(() => {
-    const onKey = (e) => {
+    const handler = (e) => {
       if (editingId) return;
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) { undo(); return; }
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { redo(); return; }
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selected.size > 0) {
-          const nn = nodes.filter(n => !selected.has(n.id));
-          const nc = connections.filter(c => !selected.has(c.id) && !selected.has(c.from) && !selected.has(c.to));
-          const np = drawPaths.filter(p => !selected.has(p.id));
-          setNodes(nn); setConnections(nc); setDrawPaths(np); setSelected(new Set());
-          pushHistory(nn, nc, np);
-        }
-      }
-      if (e.key === 'Escape') { setSelected(new Set()); setConnectFrom(null); setTool('select'); }
-      if (e.key === 'v' && !e.metaKey && !e.ctrlKey) setTool('select');
-      if (e.key === 's' && !e.metaKey && !e.ctrlKey) setTool('sticky');
-      if (e.key === 't' && !e.metaKey && !e.ctrlKey) setTool('text');
-      if (e.key === 'd' && !e.metaKey && !e.ctrlKey) setTool('draw');
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [editingId, selected, nodes, connections, drawPaths, undo, redo, pushHistory]);
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); return; }
+
+      if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
+        const selNodes = nodes.filter(n => selected.has(n.id));
+        if (selNodes.length) setClipboard({ nodes: selNodes, connections: connections.filter(c => selected.has(c.from) && selected.has(c.to)) });
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'v') {
+        if (!clipboard) return;
+        const offset = 20;
+        const idMap = {};
+        const newNodes = clipboard.nodes.map(n => {
+          const nid = nextId.current++;
+          idMap[n.id] = nid;
+          return { ...n, id: nid, x: n.x + offset, y: n.y + offset };
+        });
+        const newConns = (clipboard.connections || []).map(c => ({ ...c, id: nextId.current++, from: idMap[c.from], to: idMap[c.to] }));
+        const nn = [...nodes, ...newNodes], nc = [...connections, ...newConns];
+        setNodes(nn); setConnections(nc);
+        setSelected(new Set(newNodes.map(n => n.id)));
+        setClipboard({ nodes: newNodes, connections: newConns }); // update offset for repeated paste
+        pushHist(nn, nc, drawPaths);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
+        e.preventDefault();
+        if (!selected.size) return;
+        const selNodes = nodes.filter(n => selected.has(n.id));
+        const newNodes = selNodes.map(n => ({ ...n, id: nextId.current++, x: n.x + 20, y: n.y + 20 }));
+        const nn = [...nodes, ...newNodes];
+        setNodes(nn); setSelected(new Set(newNodes.map(n => n.id)));
+        pushHist(nn, connections, drawPaths);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'a') { e.preventDefault(); setSelected(new Set(nodes.map(n => n.id))); return; }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (!selected.size) return;
+        const nn = nodes.filter(n => !selected.has(n.id));
+        const nc = connections.filter(c => !selected.has(c.id) && !selected.has(c.from) && !selected.has(c.to));
+        const np = drawPaths.filter(p => !selected.has(p.id));
+        setNodes(nn); setConnections(nc); setDrawPaths(np); setSelected(new Set());
+        pushHist(nn, nc, np);
+        return;
+      }
+      if (e.key === 'Escape') { setSelected(new Set()); setConnectFrom(null); setCtxMenu(null); }
+      if (!e.metaKey && !e.ctrlKey) {
+        if (e.key === 'v') setTool('select');
+        if (e.key === 's') { setTool('sticky'); setShowStickyPicker(true); }
+        if (e.key === 't') setTool('text');
+        if (e.key === 'd') setTool('draw');
+        if (e.key === 'c') setTool('connect');
+        if (e.key === 'h') setTool('shape');
+        if (e.key === '=') setZoom(z => Math.min(4, z * 1.15));
+        if (e.key === '-') setZoom(z => Math.max(0.1, z / 1.15));
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [editingId, nodes, connections, drawPaths, selected, clipboard, undo, redo, pushHist]);
+
+  // ── Node helpers ───────────────────────────────────────────────────────────
   const addNode = useCallback((type, x, y, extra = {}) => {
     const id = nextId.current++;
-    const node = {
-      id, type, x, y,
-      text: type === 'sticky' ? 'Double-click to edit' : type === 'text' ? 'Text' : type === 'shape' ? '' : '',
-      color: type === 'sticky' ? stickyColor : undefined,
-      w: type === 'sticky' ? 160 : type === 'text' ? 200 : 140,
-      h: type === 'sticky' ? 140 : type === 'text' ? 64 : 100,
-      fontSize: 13, fontWeight: type === 'shape' ? 700 : 400, fontStyle: 'normal',
-      shapeType: extra.shapeType || 'rect', ...extra,
+    const defaults = {
+      sticky:  { w: 180, h: 160, text: '', color: stickyColor, fontSize: 13, fontWeight: 400, fontStyle: 'normal', textAlign: 'left' },
+      text:    { w: 220, h: 56,  text: 'Type here...', color: 'transparent', borderColor: 'transparent', fontSize: 16, fontWeight: 400, fontStyle: 'normal', textAlign: 'left' },
+      shape:   { w: 140, h: 90,  text: '', ...BS_SHAPE_COLORS[shapeColor], fontSize: 13, fontWeight: 700, fontStyle: 'normal', textAlign: 'center' },
+      pill:    { w: 160, h: 52,  text: 'Label', fill: '#FBBF24', stroke: '#D97706', fontSize: 13, fontWeight: 700, fontStyle: 'normal', textAlign: 'center' },
     };
+    const node = { id, type: type === 'pill' ? 'shape' : type, shapeType: type === 'pill' ? 'pill' : (type === 'shape' ? shapeType : undefined), x, y, ...defaults[type] || defaults.sticky, ...extra };
     const nn = [...nodes, node];
-    setNodes(nn); pushHistory(nn, connections, drawPaths);
+    setNodes(nn);
     setSelected(new Set([id]));
+    pushHist(nn, connections, drawPaths);
     return id;
-  }, [nodes, connections, drawPaths, stickyColor, pushHistory]);
+  }, [nodes, connections, drawPaths, stickyColor, shapeColor, shapeType, pushHist]);
 
-  const onMouseDown = useCallback((e) => {
+  const updateNode = useCallback((id, props) => {
+    setNodes(ns => ns.map(n => n.id === id ? { ...n, ...props } : n));
+  }, []);
+
+  const updateNodeAndSave = useCallback((id, props) => {
+    setNodes(ns => {
+      const nn = ns.map(n => n.id === id ? { ...n, ...props } : n);
+      saveToStorage(nn, connections, drawPaths);
+      return nn;
+    });
+  }, [connections, drawPaths, saveToStorage]);
+
+  const commitEdit = useCallback(() => {
+    if (!editingId) return;
+    setEditingId(null);
+    saveToStorage(nodes, connections, drawPaths);
+    pushHist(nodes, connections, drawPaths);
+  }, [editingId, nodes, connections, drawPaths, saveToStorage, pushHist]);
+
+  // ── Connection geometry ────────────────────────────────────────────────────
+  const getCenter = useCallback((id) => {
+    const n = nodes.find(x => x.id === id);
+    if (!n) return { x: 0, y: 0 };
+    return { x: n.x + n.w / 2, y: n.y + n.h / 2 };
+  }, [nodes]);
+
+  const connPath = useCallback((x1, y1, x2, y2, type) => {
+    if (type === 'straight') return `M${x1},${y1} L${x2},${y2}`;
+    if (type === 'elbow') {
+      const mx = (x1 + x2) / 2;
+      return `M${x1},${y1} L${mx},${y1} L${mx},${y2} L${x2},${y2}`;
+    }
+    // curve (default)
+    const dx = Math.abs(x2 - x1) * 0.5;
+    return `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
+  }, []);
+
+  const pathStr = (pts) => pts.length < 2 ? '' : 'M' + pts.map(p => `${p[0]},${p[1]}`).join(' L');
+
+  // ── Canvas mouse events ────────────────────────────────────────────────────
+  const onCanvasMouseDown = useCallback((e) => {
     if (e.button === 1 || (e.button === 0 && e.altKey)) {
-      setIsPanning(true); setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y }); return;
+      setIsPanning(true);
+      panRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+      return;
     }
     if (e.button !== 0) return;
+    setCtxMenu(null);
     const pt = toCanvas(e.clientX, e.clientY);
-    if (tool === 'sticky') { addNode('sticky', pt.x - 80, pt.y - 70); setTool('select'); return; }
-    if (tool === 'text') { addNode('text', pt.x - 100, pt.y - 32); setTool('select'); return; }
-    if (tool === 'shape') { addNode('shape', pt.x - 70, pt.y - 50, { shapeType }); setTool('select'); return; }
-    if (tool === 'draw') { setCurrentPath({ id: nextId.current++, color: drawColor, width: drawWidth, pts: [[pt.x, pt.y]] }); return; }
-    if (tool === 'select') { setSelectionBox({ x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y }); if (!e.shiftKey) setSelected(new Set()); }
-  }, [tool, pan, toCanvas, addNode, drawColor, drawWidth, shapeType]);
 
-  const onMouseMove = useCallback((e) => {
-    if (isPanning) { setPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y }); return; }
+    if (tool === 'sticky') {
+      addNode('sticky', pt.x - 90, pt.y - 80);
+      setTool('select');
+      return;
+    }
+    if (tool === 'text') {
+      const id = addNode('text', pt.x - 110, pt.y - 28);
+      setTimeout(() => setEditingId(id), 50);
+      setTool('select');
+      return;
+    }
+    if (tool === 'shape') {
+      addNode('shape', pt.x - 70, pt.y - 45);
+      setTool('select');
+      return;
+    }
+    if (tool === 'draw') {
+      setCurrentPath({ id: nextId.current++, color: drawColor, width: drawWidth, pts: [[pt.x, pt.y]] });
+      return;
+    }
+    if (tool === 'select') {
+      if (!e.shiftKey) setSelected(new Set());
+      setSelBox({ x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y, shift: e.shiftKey });
+    }
+  }, [tool, pan, toCanvas, addNode, drawColor, drawWidth]);
+
+  const onCanvasMouseMove = useCallback((e) => {
+    if (isPanning) {
+      setPan({ x: e.clientX - panRef.current.x, y: e.clientY - panRef.current.y });
+      return;
+    }
     const pt = toCanvas(e.clientX, e.clientY);
-    if (currentPath) { setCurrentPath(p => ({ ...p, pts: [...p.pts, [pt.x, pt.y]] })); return; }
+
+    if (currentPath) {
+      setCurrentPath(p => ({ ...p, pts: [...p.pts, [pt.x, pt.y]] }));
+      return;
+    }
     if (dragging) {
-      const dx = pt.x - dragging.startX, dy = pt.y - dragging.startY;
-      setNodes(ns => ns.map(n => selected.has(n.id) ? { ...n, x: (n._ox || n.x) + dx, y: (n._oy || n.y) + dy } : n));
+      const dx = pt.x - dragging.startPt.x;
+      const dy = pt.y - dragging.startPt.y;
+      setNodes(ns => ns.map(n => dragging.nodeIds.includes(n.id)
+        ? { ...n, x: dragging.origPositions[n.id].x + dx, y: dragging.origPositions[n.id].y + dy }
+        : n
+      ));
       return;
     }
     if (resizing) {
-      setNodes(ns => ns.map(n => n.id === resizing.id ? { ...n, w: Math.max(80, resizing.origW + (pt.x - resizing.startX)), h: Math.max(40, resizing.origH + (pt.y - resizing.startY)) } : n));
+      setNodes(ns => ns.map(n => n.id === resizing.id
+        ? { ...n, w: Math.max(80, resizing.origW + (pt.x - resizing.startPt.x)), h: Math.max(36, resizing.origH + (pt.y - resizing.startPt.y)) }
+        : n
+      ));
       return;
     }
-    if (selectionBox) {
-      const sb = { ...selectionBox, x2: pt.x, y2: pt.y };
-      setSelectionBox(sb);
+    if (selBox) {
+      const sb = { ...selBox, x2: pt.x, y2: pt.y };
+      setSelBox(sb);
       const x1 = Math.min(sb.x1, sb.x2), x2 = Math.max(sb.x1, sb.x2);
       const y1 = Math.min(sb.y1, sb.y2), y2 = Math.max(sb.y1, sb.y2);
-      setSelected(new Set(nodes.filter(n => n.x < x2 && n.x + n.w > x1 && n.y < y2 && n.y + n.h > y1).map(n => n.id)));
+      const inBox = new Set(nodes.filter(n => n.x + n.w > x1 && n.x < x2 && n.y + n.h > y1 && n.y < y2).map(n => n.id));
+      if (sb.shift) nodes.forEach(n => selected.has(n.id) && inBox.add(n.id));
+      setSelected(inBox);
     }
-    if (connectFrom) setConnectPreview(pt);
-  }, [isPanning, panStart, currentPath, dragging, resizing, selectionBox, connectFrom, toCanvas, nodes, selected]);
+    if (connectFrom) setConnPreview(pt);
+  }, [isPanning, currentPath, dragging, resizing, selBox, connectFrom, toCanvas, nodes, selected]);
 
-  const onMouseUp = useCallback(() => {
+  const onCanvasMouseUp = useCallback(() => {
     setIsPanning(false);
     if (currentPath?.pts?.length > 1) {
       const np = [...drawPaths, currentPath];
-      setDrawPaths(np); pushHistory(nodes, connections, np);
+      setDrawPaths(np);
+      pushHist(nodes, connections, np);
     }
     setCurrentPath(null);
-    if (dragging) pushHistory(nodes, connections, drawPaths);
-    setDragging(null); setResizing(null); setSelectionBox(null);
-  }, [currentPath, drawPaths, dragging, nodes, connections, pushHistory]);
+    if (dragging) pushHist(nodes, connections, drawPaths);
+    if (resizing) pushHist(nodes, connections, drawPaths);
+    setDragging(null);
+    setResizing(null);
+    setSelBox(null);
+  }, [currentPath, drawPaths, dragging, resizing, nodes, connections, pushHist]);
 
+  // ── Node mouse events ──────────────────────────────────────────────────────
   const onNodeMouseDown = useCallback((e, node) => {
     e.stopPropagation();
     if (e.button !== 0) return;
+    setCtxMenu(null);
+
     if (tool === 'connect') {
-      if (!connectFrom) { setConnectFrom(node.id); }
-      else if (connectFrom !== node.id) {
+      if (!connectFrom) {
+        setConnectFrom(node.id);
+      } else if (connectFrom !== node.id) {
         const id = nextId.current++;
-        const nc = [...connections, { id, from: connectFrom, to: node.id, label: '' }];
-        setConnections(nc); pushHistory(nodes, nc, drawPaths);
-        setConnectFrom(null); setConnectPreview(null);
+        const nc = [...connections, { id, from: connectFrom, to: node.id, type: connType, label: '', color: '#818CF8', strokeWidth: 1.8 }];
+        setConnections(nc);
+        pushHist(nodes, nc, drawPaths);
+        setConnectFrom(null);
+        setConnPreview(null);
       }
       return;
     }
-    const newSel = e.shiftKey ? new Set([...selected, node.id]) : (selected.has(node.id) ? selected : new Set([node.id]));
-    setSelected(newSel);
-    const pt = toCanvas(e.clientX, e.clientY);
-    setNodes(ns => ns.map(n => newSel.has(n.id) ? { ...n, _ox: n.x, _oy: n.y } : n));
-    setDragging({ id: node.id, startX: pt.x, startY: pt.y });
-  }, [tool, connectFrom, connections, nodes, drawPaths, selected, toCanvas, pushHistory]);
 
-  const onResizeDown = useCallback((e, node) => {
+    // Select
+    const newSel = e.shiftKey
+      ? new Set([...selected, node.id])
+      : selected.has(node.id) ? selected : new Set([node.id]);
+    setSelected(newSel);
+
+    const pt = toCanvas(e.clientX, e.clientY);
+    const ids = [...newSel];
+    const origPositions = {};
+    nodes.forEach(n => { if (ids.includes(n.id)) origPositions[n.id] = { x: n.x, y: n.y }; });
+    setDragging({ nodeIds: ids, startPt: pt, origPositions });
+  }, [tool, connectFrom, connections, nodes, drawPaths, selected, toCanvas, connType, pushHist]);
+
+  const onNodeDblClick = useCallback((e, node) => {
+    e.stopPropagation();
+    setEditingId(node.id);
+    setSelected(new Set([node.id]));
+  }, []);
+
+  const onResizeMouseDown = useCallback((e, node) => {
     e.stopPropagation();
     const pt = toCanvas(e.clientX, e.clientY);
-    setResizing({ id: node.id, startX: pt.x, startY: pt.y, origW: node.w, origH: node.h });
+    setResizing({ id: node.id, startPt: pt, origW: node.w, origH: node.h });
   }, [toCanvas]);
 
-  const updateNodeText = useCallback((id, text) => setNodes(ns => ns.map(n => n.id === id ? { ...n, text } : n)), []);
-  const updateNode = useCallback((id, props) => setNodes(ns => ns.map(n => n.id === id ? { ...n, ...props } : n)), []);
+  const onNodeContextMenu = useCallback((e, node) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelected(new Set([node.id]));
+    setCtxMenu({ x: e.clientX, y: e.clientY, nodeId: node.id });
+  }, []);
 
-  const commitText = useCallback(() => {
-    if (editingId) { pushHistory(nodes, connections, drawPaths); setEditingId(null); }
-  }, [editingId, nodes, connections, drawPaths, pushHistory]);
-
-  const getCenter = useCallback((id) => {
-    const n = nodes.find(x => x.id === id);
-    return n ? { x: n.x + n.w / 2, y: n.y + n.h / 2 } : { x: 0, y: 0 };
+  // ── Fit view ───────────────────────────────────────────────────────────────
+  const fitView = useCallback(() => {
+    if (!nodes.length) { setPan({ x: 120, y: 80 }); setZoom(1); return; }
+    const pad = 60;
+    const minX = Math.min(...nodes.map(n => n.x)) - pad;
+    const minY = Math.min(...nodes.map(n => n.y)) - pad;
+    const maxX = Math.max(...nodes.map(n => n.x + n.w)) + pad;
+    const maxY = Math.max(...nodes.map(n => n.y + n.h)) + pad;
+    const rect = canvasRef.current?.getBoundingClientRect() || { width: 1100, height: 650 };
+    const z = Math.min(1.5, Math.min(rect.width / (maxX - minX), rect.height / (maxY - minY)) * 0.9);
+    setZoom(z);
+    setPan({ x: (-minX * z) + (rect.width - (maxX - minX) * z) / 2, y: (-minY * z) + (rect.height - (maxY - minY) * z) / 2 });
   }, [nodes]);
 
-  const curvePath = (x1, y1, x2, y2) => `M${x1},${y1} C${(x1+x2)/2},${y1} ${(x1+x2)/2},${y2} ${x2},${y2}`;
-  const pathStr = (pts) => pts.length < 2 ? '' : 'M' + pts.map(([x, y]) => `${x},${y}`).join(' L');
-
-  const renderShapeSvg = (node) => {
-    const { w, h, shapeType: st } = node;
-    const fill = node.color || 'rgba(99,102,241,.18)';
-    const stroke = node.borderColor || '#6366F1';
-    if (st === 'circle') return <ellipse cx={w/2} cy={h/2} rx={w/2-2} ry={h/2-2} fill={fill} stroke={stroke} strokeWidth={2}/>;
-    if (st === 'diamond') return <polygon points={`${w/2},2 ${w-2},${h/2} ${w/2},${h-2} 2,${h/2}`} fill={fill} stroke={stroke} strokeWidth={2}/>;
-    return <rect x={1} y={1} width={w-2} height={h-2} rx={8} fill={fill} stroke={stroke} strokeWidth={2}/>;
+  // ── Shape SVG ──────────────────────────────────────────────────────────────
+  const renderShapePath = (node) => {
+    const { w, h, shapeType: st, fill, stroke } = node;
+    const f = fill || 'rgba(99,102,241,.15)';
+    const s = stroke || '#6366F1';
+    if (st === 'circle') return <ellipse cx={w/2} cy={h/2} rx={w/2-2} ry={h/2-2} fill={f} stroke={s} strokeWidth={2}/>;
+    if (st === 'diamond') return <polygon points={`${w/2},2 ${w-2},${h/2} ${w/2},${h-2} 2,${h/2}`} fill={f} stroke={s} strokeWidth={2}/>;
+    if (st === 'pill') return <rect x={1} y={1} width={w-2} height={h-2} rx={Math.min(h/2-1, 28)} fill={f} stroke={s} strokeWidth={2}/>;
+    return <rect x={1} y={1} width={w-2} height={h-2} rx={10} fill={f} stroke={s} strokeWidth={2}/>;
   };
 
-  const clearBoard = () => {
-    if (!window.confirm('Clear the entire board? This cannot be undone.')) return;
-    setNodes([]); setConnections([]); setDrawPaths([]); setSelected(new Set());
-    pushHistory([], [], []);
-  };
-
-  const fitView = () => {
-    if (!nodes.length && !drawPaths.length) { setPan({ x: 0, y: 0 }); setZoom(1); return; }
-    const allX = nodes.map(n => [n.x, n.x + n.w]).flat();
-    const allY = nodes.map(n => [n.y, n.y + n.h]).flat();
-    if (!allX.length) return;
-    const pad = 60;
-    const bx = Math.min(...allX) - pad, by = Math.min(...allY) - pad;
-    const bw = Math.max(...allX) - bx + pad, bh = Math.max(...allY) - by + pad;
-    const rect = canvasRef.current?.getBoundingClientRect() || { width: 1100, height: 650 };
-    const z = Math.min(1.5, Math.min(rect.width / bw, rect.height / bh) * 0.88);
-    setZoom(z);
-    setPan({ x: -bx * z + (rect.width - bw * z) / 2, y: -by * z + (rect.height - bh * z) / 2 });
-  };
-
+  // ── Selected node for property panel ──────────────────────────────────────
   const selNode = nodes.find(n => selected.size === 1 && selected.has(n.id));
+  const selConn = connections.find(c => selected.size === 1 && selected.has(c.id));
+
   const TOOLS = [
-    { id: 'select',  label: 'Select  V',    ico: '↖' },
-    { id: 'sticky',  label: 'Sticky  S',    ico: '🗒' },
-    { id: 'text',    label: 'Text  T',      ico: 'T' },
-    { id: 'shape',   label: 'Shape',        ico: '◻' },
-    { id: 'draw',    label: 'Draw  D',      ico: '✏' },
-    { id: 'connect', label: 'Connect',      ico: '⤳' },
+    { id: 'select',  label: 'Select  V',     ico: '↖', shortcut: 'V' },
+    { id: 'sticky',  label: 'Sticky  S',     ico: '🗒', shortcut: 'S' },
+    { id: 'text',    label: 'Text  T',       ico: 'T',  shortcut: 'T' },
+    { id: 'shape',   label: 'Shape  H',      ico: '⬜', shortcut: 'H' },
+    { id: 'draw',    label: 'Pen  D',        ico: '✏',  shortcut: 'D' },
+    { id: 'connect', label: 'Connect  C',    ico: '⤳',  shortcut: 'C' },
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 62px)', borderRadius: 14, overflow: 'hidden', border: `1px solid ${c.bord}`, userSelect: 'none' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 62px)', borderRadius: 14, overflow: 'hidden', border: `1px solid ${c.bord}`, userSelect: 'none', position: 'relative' }}>
 
-      {/* TOP TOOLBAR */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', background: dark ? 'rgba(8,6,22,.97)' : 'rgba(255,255,255,.97)', borderBottom: `1px solid ${c.bord}`, flexShrink: 0, flexWrap: 'wrap', zIndex: 20, backdropFilter: 'blur(20px)' }}>
+      {/* ────────── TOOLBAR ────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: dark ? 'rgba(10,8,28,.98)' : 'rgba(255,255,255,.98)', borderBottom: `1px solid ${c.bord}`, flexShrink: 0, zIndex: 30, flexWrap: 'wrap', backdropFilter: 'blur(20px)' }}>
 
-        {/* Tool group */}
-        <div style={{ display: 'flex', gap: 2, background: c.surf, borderRadius: 10, padding: 3, border: `1px solid ${c.bord}` }}>
+        {/* Mode toggle */}
+        <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', border: `1px solid ${c.bord}`, flexShrink: 0 }}>
+          {['personal','shared'].map(m => (
+            <button key={m} onClick={() => setMode(m)} style={{ padding: '5px 12px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer', background: mode === m ? '#6366F1' : 'transparent', color: mode === m ? '#fff' : c.mut, textTransform: 'capitalize', transition: 'all .15s' }}>{m === 'personal' ? '🔒 Personal' : '👥 Shared'}</button>
+          ))}
+        </div>
+
+        <div style={{ width: 1, height: 24, background: c.bord, flexShrink: 0 }}/>
+
+        {/* Tool buttons */}
+        <div style={{ display: 'flex', gap: 2, background: dark ? 'rgba(255,255,255,.04)' : 'rgba(99,102,241,.05)', borderRadius: 10, padding: 3, border: `1px solid ${c.bord}` }}>
           {TOOLS.map(t => (
-            <button key={t.id} onClick={() => { setTool(t.id); setConnectFrom(null); }} title={t.label}
-              style={{ width: 34, height: 32, borderRadius: 7, border: 'none', background: tool === t.id ? 'rgba(99,102,241,.22)' : 'transparent', color: tool === t.id ? '#818CF8' : c.mut, cursor: 'pointer', fontSize: t.id === 'text' ? 14 : 17, fontWeight: 700, transition: 'all .12s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <button key={t.id} onClick={() => { setTool(t.id); if (t.id !== 'sticky') setShowStickyPicker(false); }} title={t.label}
+              style={{ width: 34, height: 32, borderRadius: 7, border: 'none', background: tool === t.id ? (dark ? 'rgba(99,102,241,.28)' : 'rgba(99,102,241,.18)') : 'transparent', color: tool === t.id ? '#818CF8' : c.mut, cursor: 'pointer', fontSize: t.id === 'text' ? 13 : 17, fontWeight: tool === t.id ? 700 : 400, transition: 'all .12s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {t.ico}
             </button>
           ))}
         </div>
 
-        {/* Shape picker */}
+        {/* Shape type sub-picker */}
         {tool === 'shape' && (
-          <div style={{ display: 'flex', gap: 2, background: c.surf, borderRadius: 10, padding: 3, border: `1px solid ${c.bord}` }}>
-            {[['rect','▭'],['circle','○'],['diamond','◇']].map(([st, ic]) => (
-              <button key={st} onClick={() => setShapeType(st)} style={{ width: 32, height: 32, borderRadius: 7, border: 'none', background: shapeType === st ? 'rgba(99,102,241,.22)' : 'transparent', color: shapeType === st ? '#818CF8' : c.mut, cursor: 'pointer', fontSize: 18 }}>{ic}</button>
+          <div style={{ display: 'flex', gap: 2, background: dark ? 'rgba(255,255,255,.04)' : 'rgba(99,102,241,.05)', borderRadius: 10, padding: 3, border: `1px solid ${c.bord}` }}>
+            {[['rect','▭'],['circle','○'],['diamond','◇'],['pill','⬭']].map(([st, ic]) => (
+              <button key={st} onClick={() => setShapeType(st)} title={st}
+                style={{ width: 32, height: 32, borderRadius: 7, border: 'none', background: shapeType === st ? 'rgba(99,102,241,.22)' : 'transparent', color: shapeType === st ? '#818CF8' : c.mut, cursor: 'pointer', fontSize: 16 }}>{ic}</button>
             ))}
           </div>
         )}
 
-        {/* Sticky color picker */}
+        {/* Sticky color quick-pick */}
         {(tool === 'sticky') && (
-          <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-            {STICKY_COLORS.map(col => (
-              <button key={col} onClick={() => setStickyColor(col)} style={{ width: 20, height: 20, borderRadius: '50%', background: col, border: stickyColor === col ? '2.5px solid #818CF8' : `1.5px solid ${c.bord}`, cursor: 'pointer', flexShrink: 0 }}/>
+          <div style={{ display: 'flex', gap: 3, alignItems: 'center', flexWrap: 'wrap' }}>
+            {BS_STICKY_COLORS.map(col => (
+              <button key={col} onClick={() => setStickyColor(col)} style={{ width: 20, height: 20, borderRadius: '50%', background: col, border: stickyColor === col ? '2.5px solid #818CF8' : `1.5px solid ${c.bord}`, cursor: 'pointer', flexShrink: 0, boxShadow: stickyColor === col ? '0 0 6px rgba(99,102,241,.5)' : 'none', transition: 'all .12s' }}/>
             ))}
           </div>
         )}
 
         {/* Draw options */}
         {tool === 'draw' && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <div style={{ display: 'flex', gap: 3 }}>
-              {DRAW_COLORS.map(col => (
-                <button key={col} onClick={() => setDrawColor(col)} style={{ width: 20, height: 20, borderRadius: '50%', background: col, border: drawColor === col ? '2.5px solid #818CF8' : `1.5px solid ${c.bord}`, cursor: 'pointer' }}/>
+              {BS_DRAW_COLORS.map(col => (
+                <button key={col} onClick={() => setDrawColor(col)} style={{ width: 20, height: 20, borderRadius: '50%', background: col, border: drawColor === col ? '2.5px solid #818CF8' : `1.5px solid ${c.bord}`, cursor: 'pointer', flexShrink: 0 }}/>
               ))}
             </div>
-            <div style={{ width: 1, height: 24, background: c.bord }}/>
+            <div style={{ width: 1, height: 22, background: c.bord }}/>
             {[1, 3, 6, 12].map(w => (
               <button key={w} onClick={() => setDrawWidth(w)} title={`${w}px`}
-                style={{ width: 32, height: 32, borderRadius: 7, background: drawWidth === w ? 'rgba(99,102,241,.2)' : c.surf, border: `1px solid ${c.bord}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ width: Math.min(w * 2, 22), height: Math.min(w, 10), borderRadius: w, background: drawColor, maxWidth: 22 }}/>
+                style={{ width: 32, height: 32, borderRadius: 7, background: drawWidth === w ? 'rgba(99,102,241,.2)' : 'transparent', border: `1px solid ${c.bord}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: Math.min(w * 2, 20), height: Math.min(w, 10), borderRadius: w, background: drawColor }}/>
               </button>
             ))}
           </div>
         )}
 
-        {/* Node formatting (when selected) */}
+        {/* Connect type */}
+        {tool === 'connect' && (
+          <div style={{ display: 'flex', gap: 2, background: dark ? 'rgba(255,255,255,.04)' : 'rgba(99,102,241,.05)', borderRadius: 10, padding: 3, border: `1px solid ${c.bord}` }}>
+            {[['curve','⌒ Curve'],['straight','→ Straight'],['elbow','⌐ Elbow']].map(([ct, lbl]) => (
+              <button key={ct} onClick={() => setConnType(ct)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', background: connType === ct ? 'rgba(99,102,241,.22)' : 'transparent', color: connType === ct ? '#818CF8' : c.mut, cursor: 'pointer', fontSize: 11, fontWeight: connType === ct ? 700 : 400 }}>{lbl}</button>
+            ))}
+          </div>
+        )}
+
+        {/* Node formatting panel (shows when a node is selected) */}
         {selNode && tool === 'select' && (
-          <div style={{ display: 'flex', gap: 4, alignItems: 'center', borderLeft: `1px solid ${c.bord}`, paddingLeft: 8 }}>
-            {[11,13,16,20,28].map(fs => (
-              <button key={fs} onClick={() => updateNode(selNode.id, { fontSize: fs })} style={{ padding: '2px 5px', borderRadius: 5, border: `1px solid ${c.bord}`, background: selNode.fontSize === fs ? 'rgba(99,102,241,.2)' : 'transparent', color: c.text, cursor: 'pointer', fontSize: 11, minWidth: 24, textAlign: 'center' }}>{fs}</button>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center', borderLeft: `1px solid ${c.bord}`, paddingLeft: 8, flexWrap: 'wrap' }}>
+            {/* Font size */}
+            {[10,12,14,16,20,24].map(fs => (
+              <button key={fs} onClick={() => updateNodeAndSave(selNode.id, { fontSize: fs })}
+                style={{ padding: '1px 6px', borderRadius: 5, border: `1px solid ${c.bord}`, background: selNode.fontSize === fs ? 'rgba(99,102,241,.2)' : 'transparent', color: c.text, cursor: 'pointer', fontSize: 11 }}>{fs}</button>
             ))}
             <div style={{ width: 1, height: 20, background: c.bord }}/>
-            <button onClick={() => updateNode(selNode.id, { fontWeight: selNode.fontWeight === 700 ? 400 : 700 })} style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${c.bord}`, background: selNode.fontWeight === 700 ? 'rgba(99,102,241,.2)' : 'transparent', color: c.text, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>B</button>
-            <button onClick={() => updateNode(selNode.id, { fontStyle: selNode.fontStyle === 'italic' ? 'normal' : 'italic' })} style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${c.bord}`, background: selNode.fontStyle === 'italic' ? 'rgba(99,102,241,.2)' : 'transparent', color: c.text, cursor: 'pointer', fontStyle: 'italic', fontSize: 13 }}>I</button>
-            {selNode.type === 'sticky' && (
-              <div style={{ display: 'flex', gap: 3 }}>
-                {STICKY_COLORS.map(col => (
-                  <button key={col} onClick={() => updateNode(selNode.id, { color: col })} style={{ width: 18, height: 18, borderRadius: '50%', background: col, border: selNode.color === col ? '2.5px solid #818CF8' : `1px solid ${c.bord}`, cursor: 'pointer' }}/>
-                ))}
-              </div>
-            )}
+            {/* Bold */}
+            <button onClick={() => updateNodeAndSave(selNode.id, { fontWeight: selNode.fontWeight >= 700 ? 400 : 700 })}
+              style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${c.bord}`, background: selNode.fontWeight >= 700 ? 'rgba(99,102,241,.2)' : 'transparent', color: c.text, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>B</button>
+            {/* Italic */}
+            <button onClick={() => updateNodeAndSave(selNode.id, { fontStyle: selNode.fontStyle === 'italic' ? 'normal' : 'italic' })}
+              style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${c.bord}`, background: selNode.fontStyle === 'italic' ? 'rgba(99,102,241,.2)' : 'transparent', color: c.text, cursor: 'pointer', fontStyle: 'italic', fontSize: 13 }}>I</button>
+            {/* Text align */}
+            {['left','center','right'].map(a => (
+              <button key={a} onClick={() => updateNodeAndSave(selNode.id, { textAlign: a })}
+                style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${c.bord}`, background: selNode.textAlign === a ? 'rgba(99,102,241,.2)' : 'transparent', color: c.text, cursor: 'pointer', fontSize: 12 }}>
+                {a === 'left' ? '≡' : a === 'center' ? '☰' : '≣'}
+              </button>
+            ))}
+            <div style={{ width: 1, height: 20, background: c.bord }}/>
+            {/* Color swatches for sticky */}
+            {selNode.type === 'sticky' && BS_STICKY_COLORS.map(col => (
+              <button key={col} onClick={() => updateNodeAndSave(selNode.id, { color: col })}
+                style={{ width: 18, height: 18, borderRadius: '50%', background: col, border: selNode.color === col ? '2.5px solid #818CF8' : `1px solid ${c.bord}`, cursor: 'pointer', flexShrink: 0 }}/>
+            ))}
+            {/* Color swatches for shape */}
+            {selNode.type === 'shape' && BS_SHAPE_COLORS.map((sc, i) => (
+              <button key={i} onClick={() => updateNodeAndSave(selNode.id, { fill: sc.fill, stroke: sc.stroke })}
+                style={{ width: 18, height: 18, borderRadius: 4, background: sc.fill, border: `2px solid ${sc.stroke}`, cursor: 'pointer', flexShrink: 0 }}/>
+            ))}
             <div style={{ width: 1, height: 20, background: c.bord }}/>
             <button onClick={() => {
               const nn = nodes.filter(n => !selected.has(n.id));
               const nc = connections.filter(c2 => !selected.has(c2.from) && !selected.has(c2.to));
-              const np = drawPaths.filter(p => !selected.has(p.id));
-              setNodes(nn); setConnections(nc); setDrawPaths(np); setSelected(new Set());
-              pushHistory(nn, nc, np);
-            }} style={{ padding: '4px 10px', borderRadius: 6, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.25)', color: '#F87171', cursor: 'pointer', fontSize: 12 }}>Delete</button>
+              setNodes(nn); setConnections(nc); setSelected(new Set());
+              pushHist(nn, nc, drawPaths);
+            }} style={{ padding: '3px 10px', borderRadius: 6, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.22)', color: '#F87171', cursor: 'pointer', fontSize: 11 }}>🗑 Delete</button>
           </div>
         )}
 
-        {connectFrom && <span style={{ fontSize: 12, color: '#34D399', background: 'rgba(52,211,153,.1)', padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(52,211,153,.25)' }}>✓ Click another node to connect · Esc to cancel</span>}
+        {/* Connector formatting */}
+        {selConn && tool === 'select' && (
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center', borderLeft: `1px solid ${c.bord}`, paddingLeft: 8 }}>
+            <span style={{ fontSize: 11, color: c.mut }}>Line:</span>
+            {[['curve','⌒'],['straight','→'],['elbow','⌐']].map(([ct, ic]) => (
+              <button key={ct} onClick={() => { setConnections(cs => cs.map(cc => cc.id === selConn.id ? { ...cc, type: ct } : cc)); saveToStorage(nodes, connections, drawPaths); }}
+                style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${c.bord}`, background: selConn.type === ct ? 'rgba(99,102,241,.2)' : 'transparent', color: c.text, cursor: 'pointer', fontSize: 13 }}>{ic}</button>
+            ))}
+            {BS_DRAW_COLORS.slice(0, 6).map(col => (
+              <button key={col} onClick={() => { setConnections(cs => cs.map(cc => cc.id === selConn.id ? { ...cc, color: col } : cc)); saveToStorage(nodes, connections, drawPaths); }}
+                style={{ width: 18, height: 18, borderRadius: '50%', background: col, border: selConn.color === col ? '2.5px solid #818CF8' : `1px solid ${c.bord}`, cursor: 'pointer' }}/>
+            ))}
+            <button onClick={() => { const nc = connections.filter(c2 => c2.id !== selConn.id); setConnections(nc); setSelected(new Set()); pushHist(nodes, nc, drawPaths); }}
+              style={{ padding: '3px 10px', borderRadius: 6, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.22)', color: '#F87171', cursor: 'pointer', fontSize: 11 }}>🗑</button>
+          </div>
+        )}
 
         <div style={{ flex: 1 }}/>
 
-        {/* Zoom & actions */}
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          <button onClick={() => setZoom(z => Math.max(0.15, z / 1.25))} style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${c.bord}`, background: 'transparent', color: c.text, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-          <button onClick={() => { setZoom(1); }} style={{ fontSize: 12, color: c.mut, width: 48, textAlign: 'center', background: 'transparent', border: `1px solid ${c.bord}`, borderRadius: 7, height: 28, cursor: 'pointer' }}>{Math.round(zoom * 100)}%</button>
-          <button onClick={() => setZoom(z => Math.min(3, z * 1.25))} style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${c.bord}`, background: 'transparent', color: c.text, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
-          <button onClick={fitView} style={{ padding: '4px 10px', borderRadius: 7, border: `1px solid ${c.bord}`, background: 'transparent', color: c.mut, cursor: 'pointer', fontSize: 11 }}>Fit</button>
-          <button onClick={undo} title="Undo Ctrl+Z" style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${c.bord}`, background: 'transparent', color: c.mut, cursor: 'pointer', fontSize: 15 }}>↩</button>
-          <button onClick={redo} title="Redo Ctrl+Y" style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${c.bord}`, background: 'transparent', color: c.mut, cursor: 'pointer', fontSize: 15 }}>↪</button>
-          <button onClick={clearBoard} style={{ padding: '4px 10px', borderRadius: 7, border: '1px solid rgba(239,68,68,.2)', background: 'rgba(239,68,68,.06)', color: '#F87171', cursor: 'pointer', fontSize: 11 }}>Clear</button>
+        {/* Connect hint */}
+        {connectFrom && <span style={{ fontSize: 11, color: '#34D399', background: 'rgba(52,211,153,.1)', padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(52,211,153,.2)', flexShrink: 0 }}>Click another node to connect  ·  Esc to cancel</span>}
+
+        {/* Right: zoom + history + fit + clear */}
+        <div style={{ display: 'flex', gap: 3, alignItems: 'center', flexShrink: 0 }}>
+          <button onClick={undo} title="Undo Ctrl+Z" style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${c.bord}`, background: 'transparent', color: c.mut, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>↩</button>
+          <button onClick={redo} title="Redo Ctrl+Y" style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${c.bord}`, background: 'transparent', color: c.mut, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>↪</button>
+          <div style={{ width: 1, height: 20, background: c.bord }}/>
+          <button onClick={() => setZoom(z => Math.max(0.1, z / 1.2))} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${c.bord}`, background: 'transparent', color: c.text, cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+          <button onClick={() => { setZoom(1); }} style={{ fontSize: 11, color: c.mut, width: 46, textAlign: 'center', background: 'transparent', border: `1px solid ${c.bord}`, borderRadius: 6, height: 26, cursor: 'pointer', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
+          <button onClick={() => setZoom(z => Math.min(4, z * 1.2))} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${c.bord}`, background: 'transparent', color: c.text, cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+          <button onClick={fitView} style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${c.bord}`, background: 'transparent', color: c.mut, cursor: 'pointer', fontSize: 11 }}>Fit</button>
+          <button onClick={() => { if (window.confirm('Clear entire board? Auto-saves persist until you clear.')) { const empty = { nodes: [], connections: [], drawPaths: [] }; setNodes([]); setConnections([]); setDrawPaths([]); setSelected(new Set()); pushHist([], [], []); } }} style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(239,68,68,.2)', background: 'rgba(239,68,68,.05)', color: '#F87171', cursor: 'pointer', fontSize: 11 }}>Clear</button>
         </div>
       </div>
 
-      {/* CANVAS */}
+      {/* ────────── CANVAS ────────── */}
       <div
         ref={canvasRef}
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
-        onMouseLeave={onMouseUp}
+        onMouseDown={onCanvasMouseDown}
+        onMouseMove={onCanvasMouseMove}
+        onMouseUp={onCanvasMouseUp}
+        onMouseLeave={onCanvasMouseUp}
         style={{
           flex: 1, position: 'relative', overflow: 'hidden',
           cursor: isPanning ? 'grabbing' : tool === 'draw' ? 'crosshair' : ['sticky','text','shape'].includes(tool) ? 'cell' : tool === 'connect' ? 'crosshair' : 'default',
-          background: dark ? '#07051A' : '#ECEEFF',
+          background: dark ? '#F5F4F0' : '#F5F4F0',  /* off-white breadboard */
         }}
+        onClick={() => { setCtxMenu(null); }}
       >
-        {/* Dot-grid */}
+        {/* ── Dot grid ── */}
         <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
           <defs>
-            <pattern id="bsdots" x={pan.x % (24 * zoom)} y={pan.y % (24 * zoom)} width={24 * zoom} height={24 * zoom} patternUnits="userSpaceOnUse">
-              <circle cx={1} cy={1} r={0.9} fill={dark ? 'rgba(255,255,255,.1)' : 'rgba(99,102,241,.18)'}/>
+            <pattern id="bsgrid" x={pan.x % (20 * zoom)} y={pan.y % (20 * zoom)} width={20 * zoom} height={20 * zoom} patternUnits="userSpaceOnUse">
+              <circle cx={1} cy={1} r={0.9} fill={dark ? 'rgba(180,174,160,.55)' : 'rgba(140,130,110,.4)'}/>
             </pattern>
           </defs>
-          <rect width="100%" height="100%" fill="url(#bsdots)"/>
+          <rect width="100%" height="100%" fill="#F5F4F0"/>
+          <rect width="100%" height="100%" fill="url(#bsgrid)"/>
         </svg>
 
-        {/* Transform group */}
+        {/* ── Transform group ── */}
         <div style={{ position: 'absolute', left: pan.x, top: pan.y, transform: `scale(${zoom})`, transformOrigin: '0 0', width: 0, height: 0 }}>
 
-          {/* SVG for connections + draw */}
-          <svg style={{ position: 'absolute', left: -8000, top: -8000, width: 24000, height: 24000, overflow: 'visible', pointerEvents: 'none' }}>
+          {/* ── SVG layer: connections + draw ── */}
+          <svg style={{ position: 'absolute', left: -6000, top: -6000, width: 20000, height: 20000, overflow: 'visible', pointerEvents: 'none' }}>
             <defs>
-              <marker id="bsarrow" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
-                <path d="M0,0 L0,7 L9,3.5 z" fill="#818CF8"/>
+              <marker id="bsarrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto">
+                <path d="M0,0 L0,8 L10,4 z" fill="#818CF8"/>
               </marker>
-              <marker id="bsarrow-sel" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
-                <path d="M0,0 L0,7 L9,3.5 z" fill="#A78BFA"/>
+              <marker id="bsarrow-green" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto">
+                <path d="M0,0 L0,8 L10,4 z" fill="#34D399"/>
               </marker>
+              {BS_DRAW_COLORS.map(col => (
+                <marker key={col} id={`bsarrow-${col.replace('#','')}`} markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto">
+                  <path d="M0,0 L0,8 L10,4 z" fill={col}/>
+                </marker>
+              ))}
             </defs>
 
             {/* Connections */}
             {connections.map(conn => {
               const f = getCenter(conn.from), t = getCenter(conn.to);
               const isSel = selected.has(conn.id);
+              const col = conn.color || '#818CF8';
+              const markerId = `bsarrow-${col.replace('#','')}`;
               return (
-                <g key={conn.id}>
-                  <path d={curvePath(f.x, f.y, t.x, t.y)} fill="none" stroke="transparent" strokeWidth={14} style={{ pointerEvents: 'all', cursor: 'pointer' }} onClick={e => { e.stopPropagation(); setSelected(new Set([conn.id])); }}/>
-                  <path d={curvePath(f.x, f.y, t.x, t.y)} fill="none" stroke={isSel ? '#A78BFA' : '#818CF8'} strokeWidth={isSel ? 2.5 : 1.8} markerEnd={`url(#${isSel ? 'bsarrow-sel' : 'bsarrow'})`}/>
-                  {conn.label && <text x={(f.x+t.x)/2} y={(f.y+t.y)/2-8} textAnchor="middle" fill={c.mut} fontSize={11} fontFamily="Inter">{conn.label}</text>}
+                <g key={conn.id} style={{ pointerEvents: 'all' }}>
+                  {/* hit area */}
+                  <path d={connPath(f.x, f.y, t.x, t.y, conn.type || connType)} fill="none" stroke="transparent" strokeWidth={14} style={{ cursor: 'pointer' }}
+                    onClick={e => { e.stopPropagation(); setSelected(new Set([conn.id])); }}/>
+                  {/* visible line */}
+                  <path d={connPath(f.x, f.y, t.x, t.y, conn.type || connType)} fill="none"
+                    stroke={isSel ? '#A78BFA' : col}
+                    strokeWidth={isSel ? conn.strokeWidth + 0.8 || 2.6 : conn.strokeWidth || 1.8}
+                    strokeDasharray={isSel ? '' : ''}
+                    markerEnd={`url(#${isSel ? 'bsarrow' : markerId})`}/>
+                  {/* label */}
+                  {conn.label && (
+                    <text x={(f.x + t.x) / 2} y={(f.y + t.y) / 2 - 7} textAnchor="middle" fontSize={11} fontFamily="Inter" fill="#555">{conn.label}</text>
+                  )}
                 </g>
               );
             })}
 
-            {/* Connect preview */}
-            {connectFrom && connectPreview && (() => {
+            {/* Connect preview line */}
+            {connectFrom && connPreview && (() => {
               const f = getCenter(connectFrom);
-              return <path d={curvePath(f.x, f.y, connectPreview.x, connectPreview.y)} fill="none" stroke="#34D399" strokeWidth={1.8} strokeDasharray="8,4" markerEnd="url(#bsarrow)"/>;
+              return <path d={connPath(f.x, f.y, connPreview.x, connPreview.y, connType)} fill="none" stroke="#34D399" strokeWidth={1.8} strokeDasharray="8,4" markerEnd="url(#bsarrow-green)"/>;
             })()}
 
             {/* Draw paths */}
             {drawPaths.map(p => (
               <path key={p.id} d={pathStr(p.pts)} fill="none" stroke={p.color} strokeWidth={p.width} strokeLinecap="round" strokeLinejoin="round"
-                style={{ pointerEvents: 'all', cursor: 'pointer', opacity: selected.has(p.id) ? 0.6 : 1 }}
+                style={{ pointerEvents: 'all', cursor: 'pointer', opacity: selected.has(p.id) ? 0.55 : 1 }}
                 onClick={e => { e.stopPropagation(); setSelected(new Set([p.id])); }}/>
             ))}
 
-            {/* Active draw */}
+            {/* Live draw path */}
             {currentPath && <path d={pathStr(currentPath.pts)} fill="none" stroke={currentPath.color} strokeWidth={currentPath.width} strokeLinecap="round" strokeLinejoin="round"/>}
           </svg>
 
-          {/* Nodes */}
+          {/* ── Nodes ── */}
           {nodes.map(node => {
             const isSel = selected.has(node.id);
             const isEdit = editingId === node.id;
+
             return (
               <div key={node.id}
                 onMouseDown={e => onNodeMouseDown(e, node)}
-                onDoubleClick={e => { e.stopPropagation(); setEditingId(node.id); setSelected(new Set([node.id])); }}
-                style={{ position: 'absolute', left: node.x, top: node.y, width: node.w, height: node.h, zIndex: isSel ? 10 : 1, cursor: tool === 'connect' ? 'crosshair' : dragging?.id === node.id ? 'grabbing' : 'grab' }}
+                onDoubleClick={e => onNodeDblClick(e, node)}
+                onContextMenu={e => onNodeContextMenu(e, node)}
+                style={{ position: 'absolute', left: node.x, top: node.y, width: node.w, height: node.h, zIndex: isSel ? 20 : 1, cursor: tool === 'connect' ? (connectFrom === node.id ? 'crosshair' : 'pointer') : dragging ? 'grabbing' : 'grab' }}
               >
-                {/* ── STICKY ── */}
+
+                {/* STICKY NOTE */}
                 {node.type === 'sticky' && (
-                  <div style={{ width: '100%', height: '100%', background: node.color || '#FDE68A', borderRadius: 4, boxShadow: isSel ? '0 0 0 2.5px #818CF8, 0 8px 28px rgba(0,0,0,.4)' : '0 4px 18px rgba(0,0,0,.3), 2px 3px 0 rgba(0,0,0,.1)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    <div style={{ height: 26, background: 'rgba(0,0,0,.1)', flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 8px', gap: 4 }}>
-                      {['0.45','0.28','0.16'].map((op,i) => <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: `rgba(0,0,0,${op})` }}/>)}
+                  <div style={{ width: '100%', height: '100%', background: node.color || '#FDE68A', borderRadius: 3, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+                    boxShadow: isSel
+                      ? '0 0 0 2.5px #6366F1, 0 10px 32px rgba(0,0,0,.22)'
+                      : '2px 3px 10px rgba(0,0,0,.13), 1px 1px 0 rgba(0,0,0,.06)',
+                    transition: 'box-shadow .12s' }}>
+                    {/* Top strip */}
+                    <div style={{ height: 28, background: 'rgba(0,0,0,.09)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 9px' }}>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {['0.5','0.3','0.2'].map((o,i) => <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: `rgba(0,0,0,${o})` }}/>)}
+                      </div>
+                      {isSel && <div style={{ fontSize: 9, color: 'rgba(0,0,0,.4)', fontWeight: 600 }}>DBL-CLICK TO EDIT</div>}
                     </div>
-                    <div style={{ flex: 1, padding: 9, overflow: 'hidden' }}>
+                    {/* Content */}
+                    <div style={{ flex: 1, padding: '8px 10px', overflow: 'hidden' }}>
                       {isEdit ? (
-                        <textarea autoFocus value={node.text} onChange={e => updateNodeText(node.id, e.target.value)} onBlur={commitText} onMouseDown={e => e.stopPropagation()}
-                          style={{ width: '100%', height: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontFamily: 'Inter, sans-serif', fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 400, fontStyle: node.fontStyle || 'normal', color: 'rgba(0,0,0,.8)', lineHeight: 1.55 }}/>
+                        <textarea autoFocus value={node.text}
+                          onChange={e => updateNode(node.id, { text: e.target.value })}
+                          onBlur={commitEdit}
+                          onMouseDown={e => e.stopPropagation()}
+                          style={{ width: '100%', height: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontFamily: 'Inter,sans-serif', fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 400, fontStyle: node.fontStyle || 'normal', color: 'rgba(0,0,0,.82)', lineHeight: 1.55, textAlign: node.textAlign || 'left' }}/>
                       ) : (
-                        <div style={{ fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 400, fontStyle: node.fontStyle || 'normal', color: 'rgba(0,0,0,.8)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word', userSelect: 'none' }}>{node.text}</div>
+                        <div style={{ fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 400, fontStyle: node.fontStyle || 'normal', color: 'rgba(0,0,0,.82)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word', userSelect: 'none', textAlign: node.textAlign || 'left', height: '100%', overflow: 'hidden' }}>
+                          {node.text || <span style={{ opacity: 0.4 }}>Double-click to type…</span>}
+                        </div>
                       )}
                     </div>
                   </div>
                 )}
 
-                {/* ── TEXT ── */}
+                {/* TEXT BOX */}
                 {node.type === 'text' && (
-                  <div style={{ width: '100%', height: '100%', border: isSel ? '1.5px solid #818CF8' : isEdit ? '1.5px solid #818CF8' : '1.5px dashed rgba(148,130,255,.3)', borderRadius: 7, padding: '7px 11px', display: 'flex', alignItems: 'center', background: isSel ? 'rgba(99,102,241,.04)' : 'transparent', boxShadow: isSel ? '0 0 0 2px rgba(99,102,241,.3)' : 'none', overflow: 'hidden' }}>
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'flex-start', padding: '4px 6px', overflow: 'hidden',
+                    border: isSel ? '1.5px solid #6366F1' : isEdit ? '1.5px solid #6366F1' : '1.5px dashed rgba(100,90,60,.25)',
+                    borderRadius: 5, background: isSel ? 'rgba(99,102,241,.04)' : 'transparent',
+                    boxShadow: isSel ? '0 0 0 3px rgba(99,102,241,.15)' : 'none' }}>
                     {isEdit ? (
-                      <textarea autoFocus value={node.text} onChange={e => updateNodeText(node.id, e.target.value)} onBlur={commitText} onMouseDown={e => e.stopPropagation()}
-                        style={{ width: '100%', height: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontFamily: 'Inter, sans-serif', fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 400, fontStyle: node.fontStyle || 'normal', color: c.text, lineHeight: 1.55 }}/>
+                      <textarea autoFocus value={node.text}
+                        onChange={e => updateNode(node.id, { text: e.target.value })}
+                        onBlur={commitEdit}
+                        onMouseDown={e => e.stopPropagation()}
+                        style={{ width: '100%', height: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontFamily: 'Inter,sans-serif', fontSize: node.fontSize || 16, fontWeight: node.fontWeight || 400, fontStyle: node.fontStyle || 'normal', color: '#1a1a1a', lineHeight: 1.5, textAlign: node.textAlign || 'left' }}/>
                     ) : (
-                      <div style={{ fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 400, fontStyle: node.fontStyle || 'normal', color: node.text ? c.text : c.mut, whiteSpace: 'pre-wrap', wordBreak: 'break-word', userSelect: 'none', width: '100%' }}>{node.text || 'Text'}</div>
+                      <div style={{ fontSize: node.fontSize || 16, fontWeight: node.fontWeight || 400, fontStyle: node.fontStyle || 'normal', color: node.text ? '#1a1a1a' : 'rgba(100,90,60,.35)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', userSelect: 'none', textAlign: node.textAlign || 'left', lineHeight: 1.5, width: '100%' }}>
+                        {node.text || 'Type here…'}
+                      </div>
                     )}
                   </div>
                 )}
 
-                {/* ── SHAPE ── */}
+                {/* SHAPE */}
                 {node.type === 'shape' && (
-                  <div style={{ width: '100%', height: '100%', position: 'relative', boxShadow: isSel ? '0 0 0 2px #818CF8' : 'none', borderRadius: node.shapeType === 'rect' ? 8 : 0 }}>
-                    <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-                      {renderShapeSvg(node)}
+                  <div style={{ width: '100%', height: '100%', position: 'relative', boxShadow: isSel ? `0 0 0 2.5px #6366F1, 0 6px 20px rgba(0,0,0,.1)` : '0 2px 8px rgba(0,0,0,.08)', borderRadius: node.shapeType === 'rect' ? 10 : 0, transition: 'box-shadow .12s' }}>
+                    <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible' }}>
+                      {renderShapePath(node)}
                     </svg>
-                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 8 }}>
                       {isEdit ? (
-                        <textarea autoFocus value={node.text} onChange={e => updateNodeText(node.id, e.target.value)} onBlur={commitText} onMouseDown={e => e.stopPropagation()}
-                          style={{ background: 'transparent', border: 'none', outline: 'none', resize: 'none', textAlign: 'center', fontFamily: 'Inter, sans-serif', fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 700, color: c.text, width: '80%', height: '60%', lineHeight: 1.4 }}/>
+                        <textarea autoFocus value={node.text}
+                          onChange={e => updateNode(node.id, { text: e.target.value })}
+                          onBlur={commitEdit}
+                          onMouseDown={e => e.stopPropagation()}
+                          style={{ background: 'transparent', border: 'none', outline: 'none', resize: 'none', textAlign: node.textAlign || 'center', fontFamily: 'Inter,sans-serif', fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 700, color: '#1a1a1a', width: '90%', lineHeight: 1.4 }}/>
                       ) : (
-                        <div style={{ fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 700, color: c.text, textAlign: 'center', padding: 8, userSelect: 'none', wordBreak: 'break-word' }}>{node.text}</div>
+                        <div style={{ fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 700, color: '#1a1a1a', textAlign: node.textAlign || 'center', userSelect: 'none', wordBreak: 'break-word', lineHeight: 1.4, width: '100%', padding: '0 6px' }}>
+                          {node.text}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -3171,40 +3480,69 @@ function BrainstormSpace({ team, session }) {
 
                 {/* Resize handle */}
                 {isSel && !isEdit && (
-                  <div onMouseDown={e => onResizeDown(e, node)} style={{ position: 'absolute', right: -5, bottom: -5, width: 12, height: 12, borderRadius: 3, background: '#818CF8', border: '2px solid #fff', cursor: 'se-resize', zIndex: 20 }}/>
+                  <div onMouseDown={e => onResizeMouseDown(e, node)}
+                    style={{ position: 'absolute', right: -5, bottom: -5, width: 13, height: 13, borderRadius: 3, background: '#6366F1', border: '2px solid #fff', cursor: 'se-resize', zIndex: 30, boxShadow: '0 1px 4px rgba(0,0,0,.2)' }}/>
                 )}
 
-                {/* Connect ports */}
-                {tool === 'connect' && (
-                  <>
-                    {[{ left: '50%', top: -6, transform: 'translateX(-50%)' }, { left: '50%', bottom: -6, transform: 'translateX(-50%)' }, { top: '50%', left: -6, transform: 'translateY(-50%)' }, { top: '50%', right: -6, transform: 'translateY(-50%)' }].map((s, i) => (
-                      <div key={i} style={{ position: 'absolute', width: 10, height: 10, borderRadius: '50%', background: connectFrom === node.id ? '#34D399' : '#818CF8', border: '2px solid #fff', zIndex: 30, pointerEvents: 'none', ...s }}/>
-                    ))}
-                  </>
-                )}
+                {/* Connector port dots */}
+                {tool === 'connect' && [
+                  { style: { left: '50%', top: -6, transform: 'translateX(-50%)' }},
+                  { style: { left: '50%', bottom: -6, transform: 'translateX(-50%)' }},
+                  { style: { top: '50%', left: -6, transform: 'translateY(-50%)' }},
+                  { style: { top: '50%', right: -6, transform: 'translateY(-50%)' }},
+                ].map((p, i) => (
+                  <div key={i} style={{ position: 'absolute', width: 11, height: 11, borderRadius: '50%', background: connectFrom === node.id ? '#34D399' : '#6366F1', border: '2px solid #fff', zIndex: 40, boxShadow: '0 0 6px rgba(99,102,241,.5)', pointerEvents: 'none', ...p.style }}/>
+                ))}
               </div>
             );
           })}
 
-          {/* Selection box */}
-          {selectionBox && (() => {
-            const sx = Math.min(selectionBox.x1, selectionBox.x2), sy = Math.min(selectionBox.y1, selectionBox.y2);
-            const sw = Math.abs(selectionBox.x2 - selectionBox.x1), sh = Math.abs(selectionBox.y2 - selectionBox.y1);
-            return <div style={{ position: 'absolute', left: sx, top: sy, width: sw, height: sh, border: '1.5px solid #818CF8', background: 'rgba(99,102,241,.06)', pointerEvents: 'none', borderRadius: 4 }}/>;
+          {/* Selection marquee */}
+          {selBox && (() => {
+            const sx = Math.min(selBox.x1, selBox.x2), sy = Math.min(selBox.y1, selBox.y2);
+            const sw = Math.abs(selBox.x2 - selBox.x1), sh = Math.abs(selBox.y2 - selBox.y1);
+            return <div style={{ position: 'absolute', left: sx, top: sy, width: sw, height: sh, border: '1.5px solid #6366F1', background: 'rgba(99,102,241,.07)', pointerEvents: 'none', borderRadius: 4 }}/>;
           })()}
         </div>
 
-        {/* Mini-map */}
-        <div style={{ position: 'absolute', bottom: 12, right: 12, width: 128, height: 84, background: dark ? 'rgba(8,6,22,.88)' : 'rgba(255,255,255,.88)', border: `1px solid ${c.bord}`, borderRadius: 9, overflow: 'hidden', backdropFilter: 'blur(10px)' }}>
-          <svg width="128" height="84">
-            {nodes.map(n => <rect key={n.id} x={64 + n.x * 0.035} y={42 + n.y * 0.035} width={Math.max(4, n.w * 0.035)} height={Math.max(3, n.h * 0.035)} rx={1} fill={n.color || '#818CF8'} opacity={0.8}/>)}
+        {/* ── Context menu ── */}
+        {ctxMenu && (() => {
+          const ctxNode = nodes.find(n => n.id === ctxMenu.nodeId);
+          return (
+            <div style={{ position: 'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 9999, background: '#fff', border: '1px solid rgba(0,0,0,.1)', borderRadius: 10, padding: 5, boxShadow: '0 8px 28px rgba(0,0,0,.15)', minWidth: 170 }} onMouseDown={e => e.stopPropagation()}>
+              {[
+                { l: '✏️  Edit', a: () => { setEditingId(ctxMenu.nodeId); setCtxMenu(null); } },
+                { l: '📋  Copy (Ctrl+C)', a: () => { const n = nodes.find(x => x.id === ctxMenu.nodeId); if (n) setClipboard({ nodes: [n], connections: [] }); setCtxMenu(null); } },
+                { l: '📄  Duplicate', a: () => { const n = nodes.find(x => x.id === ctxMenu.nodeId); if (!n) return; const nn2 = [...nodes, { ...n, id: nextId.current++, x: n.x + 20, y: n.y + 20 }]; setNodes(nn2); pushHist(nn2, connections, drawPaths); setCtxMenu(null); } },
+                { l: '🔗  Connect from here', a: () => { setTool('connect'); setConnectFrom(ctxMenu.nodeId); setCtxMenu(null); } },
+                { sep: true },
+                { l: '🗑  Delete', danger: true, a: () => { const nn = nodes.filter(n => n.id !== ctxMenu.nodeId); const nc = connections.filter(c => c.from !== ctxMenu.nodeId && c.to !== ctxMenu.nodeId); setNodes(nn); setConnections(nc); pushHist(nn, nc, drawPaths); setCtxMenu(null); } },
+              ].map((item, i) => item.sep
+                ? <div key={i} style={{ height: 1, background: 'rgba(0,0,0,.08)', margin: '3px 0' }}/>
+                : <button key={i} onClick={item.a} style={{ display: 'block', width: '100%', padding: '8px 12px', borderRadius: 7, border: 'none', background: 'transparent', color: item.danger ? '#EF4444' : '#1a1a1a', cursor: 'pointer', fontSize: 13, textAlign: 'left', fontWeight: item.danger ? 600 : 400 }} onMouseEnter={e => e.target.style.background = item.danger ? 'rgba(239,68,68,.08)' : 'rgba(0,0,0,.04)'} onMouseLeave={e => e.target.style.background = 'transparent'}>{item.l}</button>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ── Mini-map ── */}
+        <div style={{ position: 'absolute', bottom: 12, right: 12, width: 130, height: 88, background: 'rgba(245,244,240,.92)', border: '1px solid rgba(0,0,0,.1)', borderRadius: 8, overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,.1)' }}>
+          <svg width="130" height="88" style={{ display: 'block' }}>
+            {drawPaths.map(p => p.pts.length > 1 && <circle key={p.id} cx={65 + p.pts[0][0] * 0.025} cy={44 + p.pts[0][1] * 0.025} r={2} fill={p.color} opacity={0.5}/>)}
+            {nodes.map(n => <rect key={n.id} x={65 + n.x * 0.025} y={44 + n.y * 0.025} width={Math.max(5, n.w * 0.025)} height={Math.max(4, n.h * 0.025)} rx={1} fill={n.type === 'sticky' ? (n.color || '#FDE68A') : n.fill || '#818CF8'} opacity={0.85}/>)}
           </svg>
-          <div style={{ position: 'absolute', bottom: 4, left: 6, fontSize: 9, color: c.mut }}>Map</div>
+          <div style={{ position: 'absolute', bottom: 3, left: 6, fontSize: 9, color: 'rgba(0,0,0,.35)', fontWeight: 600 }}>OVERVIEW</div>
         </div>
 
-        {/* Hint bar */}
-        <div style={{ position: 'absolute', bottom: 12, left: 12, fontSize: 10, color: c.mut, pointerEvents: 'none', lineHeight: 1.6 }}>
-          Scroll to pan · Ctrl+scroll to zoom · Alt+drag to pan<br/>Double-click node to edit · Del to delete · V S T D for tools
+        {/* ── Hint bar ── */}
+        <div style={{ position: 'absolute', bottom: 12, left: 12, fontSize: 10, color: 'rgba(100,90,60,.5)', pointerEvents: 'none', lineHeight: 1.7 }}>
+          Scroll to pan  ·  Ctrl+scroll or pinch to zoom  ·  Alt+drag to pan  ·  Right-click node for options<br/>
+          Ctrl+C copy  ·  Ctrl+V paste  ·  Ctrl+D duplicate  ·  Del to delete  ·  V S T H D C for tools
+        </div>
+
+        {/* ── Auto-save badge ── */}
+        <div style={{ position: 'absolute', top: 10, right: 10, fontSize: 10, color: 'rgba(100,90,60,.45)', background: 'rgba(245,244,240,.8)', padding: '2px 8px', borderRadius: 20, border: '1px solid rgba(0,0,0,.06)' }}>
+          {mode === 'personal' ? '🔒 Personal' : '👥 Shared'}  ·  Auto-saved
         </div>
       </div>
     </div>
@@ -3278,7 +3616,7 @@ var STANDSYNC_MGR_TABS = [{id:'live',l:'Live board',ic:'◉'},{id:'team',l:'Team
         {tab==='chat'&&<RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme} isManager={true}/>}
         {tab==='cal'&&<CalendarPanel team={team} members={members} session={session}/>}
         {tab==='notes'&&<ManagerNotesTab session={session} team={team}/>}
-        {tab==='brain'&&<BrainstormSpace team={team} session={session}/>}
+        {tab==='brain'&&<BrainstormSpace team={team} session={session} members={members}/>}
         {tab==='analysis'&&<TeamAnalysisTab tasks={tasks} members={members}/>}
         {tab==='remind'&&<RemindersPanel team={team} members={members} session={session}/>}
         {tab==='hist'&&<HistTab history={history} members={members}/>}
