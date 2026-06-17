@@ -398,6 +398,11 @@ export async function sendChatMessage(teamId, msg) {
       text: msg.text || '',
       type: msg.type || 'text',
       url: msg.url || null,
+      filename: msg.filename || null,
+      filesize: msg.filesize || null,
+      space: msg.dm_to ? 'dm' : (msg.space || 'general'),
+      dm_to: msg.dm_to || null,
+      reply_to: msg.reply_to ? JSON.stringify(msg.reply_to) : null,
     })
     .select().single();
   return data;
