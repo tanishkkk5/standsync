@@ -1070,10 +1070,38 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
   const addCustomSpace=()=>{
     if(!newSpaceName.trim())return;
     const id='space-'+newSpaceName.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
-    const updated=[...customSpaces,{id,name:newSpaceName.trim(),type:newSpaceType||'collaboration'}];
+    const updated=[...customSpaces,{id,name:newSpaceName.trim(),type:newSpaceType||'collaboration',
+      settings:{access:'organisation',allowRequests:true,whoManages:'members',
+        canModify:'owners',canHistory:'managers',canAtAll:'members',canManageApps:'managers',
+        canManageWebhooks:'managers',members:members.map(m=>({email:m.email,name:m.name||m.email,role:'member'}))
+      }
+    }];
     setCustomSpaces(updated);
     try{localStorage.setItem('ss-spaces',JSON.stringify(updated));}catch{}
     setActiveSpace(id); setShowNewSpace(false); setNewSpaceName(''); setNewSpaceType('collaboration');
+  };
+  const updateSpaceSettings=(spaceId, newSettings)=>{
+    const updated=customSpaces.map(s=>s.id===spaceId?{...s,settings:{...s.settings,...newSettings}}:s);
+    setCustomSpaces(updated);
+    try{localStorage.setItem('ss-spaces',JSON.stringify(updated));}catch{}
+  };
+  const addMemberToSpace=(spaceId, member)=>{
+    const updated=customSpaces.map(s=>{
+      if(s.id!==spaceId)return s;
+      const existing=s.settings?.members||[];
+      if(existing.find(m=>m.email===member.email))return s;
+      return{...s,settings:{...s.settings,members:[...existing,{email:member.email,name:member.name||member.email,role:'member'}]}};
+    });
+    setCustomSpaces(updated);
+    try{localStorage.setItem('ss-spaces',JSON.stringify(updated));}catch{}
+  };
+  const removeMemberFromSpace=(spaceId, email)=>{
+    const updated=customSpaces.map(s=>{
+      if(s.id!==spaceId)return s;
+      return{...s,settings:{...s.settings,members:(s.settings?.members||[]).filter(m=>m.email!==email)}};
+    });
+    setCustomSpaces(updated);
+    try{localStorage.setItem('ss-spaces',JSON.stringify(updated));}catch{}
   };
 
   const deleteCustomSpace=(id)=>{
@@ -1156,12 +1184,18 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
             </div>
           )}
           {[...DEFAULT_SPACES,...customSpaces].map(sp=>(
-            <div key={sp.id} style={{ display:'flex',alignItems:'center',gap:1 }}>
+            <div key={sp.id} style={{ display:'flex',alignItems:'center',gap:1 }}
+              onMouseEnter={e=>e.currentTarget.querySelector('.sp-actions')&&(e.currentTarget.querySelector('.sp-actions').style.opacity='1')}
+              onMouseLeave={e=>e.currentTarget.querySelector('.sp-actions')&&(e.currentTarget.querySelector('.sp-actions').style.opacity='0')}
+            >
               <button onClick={()=>setActiveSpace(sp.id)} style={{ flex:1,display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:9,border:'none',background:activeSpace===sp.id?(c.dark?'rgba(99,102,241,.2)':'rgba(99,102,241,.12)'):'transparent',color:activeSpace===sp.id?'#818CF8':c.sub,cursor:'pointer',fontSize:13,fontWeight:activeSpace===sp.id?600:400,textAlign:'left' }}>
-                <span style={{ fontSize:12,fontWeight:700,color:activeSpace===sp.id?'#818CF8':c.mut,flexShrink:0 }}>#</span>
+                <span style={{ fontSize:12,fontWeight:700,color:activeSpace===sp.id?'#818CF8':c.mut,flexShrink:0 }}>{sp.type==='announcements'?'📢':'#'}</span>
                 <span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{sp.label||sp.name}</span>
               </button>
-              {customSpaces.find(s=>s.id===sp.id)&&isManager&&<button onClick={()=>deleteCustomSpace(sp.id)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:12,padding:'4px',opacity:.5,flexShrink:0 }}>✕</button>}
+              <div className="sp-actions" style={{ display:'flex',gap:1,opacity:0,transition:'opacity .15s',flexShrink:0 }}>
+                <button onClick={()=>setShowSpaceSettings(sp.id)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:11,padding:'4px 3px' }} title="Space settings">⚙</button>
+                {customSpaces.find(s=>s.id===sp.id)&&isManager&&<button onClick={()=>deleteCustomSpace(sp.id)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:12,padding:'4px 3px',opacity:.7 }} title="Delete space">✕</button>}
+              </div>
             </div>
           ))}
 
@@ -1346,7 +1380,151 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
           )}
         </div>
 
-        {/* Context menu */}
+        {/* ── SPACE SETTINGS MODAL ──────────────────────────────────────────── */}
+        {showSpaceSettings&&(()=>{
+          const sp=customSpaces.find(s=>s.id===showSpaceSettings)||DEFAULT_SPACES.find(s=>s.id===showSpaceSettings);
+          const cfg=sp?.settings||{access:'organisation',allowRequests:true,whoManages:'members',canModify:'owners',canHistory:'managers',canAtAll:'members',canManageApps:'managers',canManageWebhooks:'managers',members:[]};
+          const spMembers=cfg.members||[];
+          const [ssTab,setSsTab]=React.useState('members'); // members | settings | permissions
+          const isCustom=!!customSpaces.find(s=>s.id===showSpaceSettings);
+          const [memberSearch,setMemberSearch]=React.useState('');
+          return(
+            <div style={{ position:'fixed',inset:0,zIndex:9999,background:'rgba(0,0,0,.6)',display:'flex',alignItems:'center',justifyContent:'center' }} onClick={()=>setShowSpaceSettings(null)}>
+              <div style={{ width:520,maxHeight:'85vh',background:c.dark?'#0F0D2A':'#fff',borderRadius:16,border:`1px solid ${c.bord}`,overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,.5)' }} onClick={e=>e.stopPropagation()}>
+                {/* Header */}
+                <div style={{ padding:'16px 20px',borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',gap:10 }}>
+                  <span style={{ fontSize:16,fontWeight:700,color:c.text,flex:1 }}>{sp?.type==='announcements'?'📢':'#'} {sp?.name||sp?.label}</span>
+                  <button onClick={()=>setShowSpaceSettings(null)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:20 }}>✕</button>
+                </div>
+                {/* Tabs */}
+                <div style={{ display:'flex',borderBottom:`1px solid ${c.bord}`,padding:'0 12px' }}>
+                  {[{id:'members',l:'Manage members'},{id:'settings',l:'Space settings'},{id:'permissions',l:'Permissions'}].map(t=>(
+                    <button key={t.id} onClick={()=>setSsTab(t.id)} style={{ padding:'10px 14px',border:'none',borderBottom:ssTab===t.id?'2px solid #818CF8':'2px solid transparent',background:'transparent',color:ssTab===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:13,fontWeight:ssTab===t.id?600:400 }}>{t.l}</button>
+                  ))}
+                </div>
+                {/* Content */}
+                <div style={{ flex:1,overflowY:'auto',padding:'16px 20px' }}>
+                  {/* MEMBERS TAB */}
+                  {ssTab==='members'&&(
+                    <div>
+                      <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14 }}>
+                        <div style={{ fontSize:13,color:c.mut }}>{spMembers.length} member{spMembers.length!==1?'s':''}</div>
+                        <div style={{ display:'flex',gap:8 }}>
+                          {isCustom&&isManager&&(
+                            <div style={{ position:'relative' }}>
+                              <input value={memberSearch} onChange={e=>setMemberSearch(e.target.value)} placeholder="Add member..." style={{ background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:8,padding:'6px 10px',color:c.text,fontSize:12,outline:'none',width:160 }}/>
+                              {memberSearch&&(
+                                <div style={{ position:'absolute',top:'100%',right:0,width:200,background:c.dark?'#1A1740':'#fff',border:`1px solid ${c.bord}`,borderRadius:10,zIndex:100,marginTop:4,boxShadow:'0 8px 24px rgba(0,0,0,.2)' }}>
+                                  {members.filter(m=>!spMembers.find(sm=>sm.email===m.email)&&(m.name?.toLowerCase().includes(memberSearch.toLowerCase())||m.email?.toLowerCase().includes(memberSearch.toLowerCase()))).map(m=>(
+                                    <div key={m.email} onClick={()=>{addMemberToSpace(showSpaceSettings,m);setMemberSearch('');}} style={{ padding:'8px 12px',cursor:'pointer',fontSize:12,color:c.text,display:'flex',alignItems:'center',gap:8 }} onMouseEnter={e=>e.currentTarget.style.background='rgba(99,102,241,.1)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                                      <Av member={m} size={22}/><span>{m.name||m.email}</span>
+                                    </div>
+                                  ))}
+                                  {members.filter(m=>!spMembers.find(sm=>sm.email===m.email)).length===0&&<div style={{ padding:'10px 12px',fontSize:12,color:c.mut }}>All members added</div>}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {/* Member list */}
+                      <table style={{ width:'100%',borderCollapse:'collapse' }}>
+                        <thead>
+                          <tr style={{ borderBottom:`1px solid ${c.bord}` }}>
+                            {['Name','Email','Role',''].map(h=><th key={h} style={{ padding:'8px 10px',textAlign:'left',fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.05em' }}>{h}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {spMembers.length===0&&<tr><td colSpan={4} style={{ padding:'16px',textAlign:'center',color:c.mut,fontSize:13 }}>No members yet — add some above</td></tr>}
+                          {spMembers.map((m,i)=>{
+                            const fullM=members.find(tm=>tm.email===m.email)||m;
+                            return(
+                              <tr key={m.email} style={{ borderBottom:`1px solid ${c.bord}` }}>
+                                <td style={{ padding:'10px' }}><div style={{ display:'flex',alignItems:'center',gap:8 }}><Av member={fullM} size={28}/><span style={{ fontSize:13,fontWeight:600,color:c.text }}>{m.name||m.email}</span></div></td>
+                                <td style={{ padding:'10px',fontSize:12,color:c.mut }}>{m.email}</td>
+                                <td style={{ padding:'10px' }}>
+                                  <select value={m.role||'member'} onChange={e=>{const updated=customSpaces.map(s=>s.id===showSpaceSettings?{...s,settings:{...s.settings,members:s.settings.members.map((mb,mi)=>mi===i?{...mb,role:e.target.value}:mb)}}:s);setCustomSpaces(updated);try{localStorage.setItem('ss-spaces',JSON.stringify(updated));}catch{};}} style={{ background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:6,padding:'3px 6px',color:c.text,fontSize:11,cursor:'pointer' }}>
+                                    <option value="member">Member</option>
+                                    <option value="manager">Manager</option>
+                                    <option value="owner">Owner</option>
+                                  </select>
+                                </td>
+                                <td style={{ padding:'10px' }}>{isCustom&&isManager&&<button onClick={()=>removeMemberFromSpace(showSpaceSettings,m.email)} style={{ background:'none',border:'none',color:'#F87171',cursor:'pointer',fontSize:12 }}>Remove</button>}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {/* SETTINGS TAB */}
+                  {ssTab==='settings'&&(
+                    <div style={{ display:'flex',flexDirection:'column',gap:16 }}>
+                      <div>
+                        <div style={{ fontSize:14,fontWeight:700,color:c.text,marginBottom:4 }}>Access</div>
+                        <div style={{ fontSize:12,color:c.mut,marginBottom:10 }}>Anyone in your organisation can find, view and join.</div>
+                        {[{v:'organisation',l:'Anyone in organisation can find, view and join'},{v:'restricted',l:'Only invited members can join'},{v:'request',l:'Anyone can request to join'}].map(opt=>(
+                          <div key={opt.v} onClick={()=>isCustom&&isManager&&updateSpaceSettings(showSpaceSettings,{access:opt.v})} style={{ display:'flex',alignItems:'center',gap:10,padding:'8px',borderRadius:8,cursor:isCustom&&isManager?'pointer':'default',marginBottom:4,background:cfg.access===opt.v?'rgba(99,102,241,.08)':'transparent' }}>
+                            <div style={{ width:14,height:14,borderRadius:'50%',border:`2px solid ${cfg.access===opt.v?'#818CF8':'rgba(128,128,128,.4)'}`,background:cfg.access===opt.v?'#818CF8':'transparent',flexShrink:0 }}/>
+                            <span style={{ fontSize:13,color:c.text }}>{opt.l}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ borderTop:`1px solid ${c.bord}`,paddingTop:14 }}>
+                        <div style={{ fontSize:14,fontWeight:700,color:c.text,marginBottom:10 }}>Who can manage members</div>
+                        {[{v:'all',l:'All members'},{v:'managers',l:'Managers and owners'},{v:'owners',l:'Owners only'}].map(opt=>(
+                          <div key={opt.v} onClick={()=>isCustom&&isManager&&updateSpaceSettings(showSpaceSettings,{whoManages:opt.v})} style={{ display:'flex',alignItems:'center',gap:10,padding:'6px 8px',borderRadius:8,cursor:isCustom&&isManager?'pointer':'default',marginBottom:4 }}>
+                            <div style={{ width:14,height:14,borderRadius:'50%',border:`2px solid ${cfg.whoManages===opt.v?'#818CF8':'rgba(128,128,128,.4)'}`,background:cfg.whoManages===opt.v?'#818CF8':'transparent',flexShrink:0 }}/>
+                            <span style={{ fontSize:13,color:c.text }}>{opt.l}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* PERMISSIONS TAB */}
+                  {ssTab==='permissions'&&(
+                    <div>
+                      <div style={{ fontSize:12,color:c.mut,marginBottom:14 }}>Spaces can be customised for a variety of use cases.</div>
+                      <table style={{ width:'100%',borderCollapse:'collapse' }}>
+                        <thead>
+                          <tr style={{ borderBottom:`1px solid ${c.bord}` }}>
+                            <th style={{ padding:'8px 10px',textAlign:'left',fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase' }}>Who can</th>
+                            {['Owners','Managers','Members'].map(r=><th key={r} style={{ padding:'8px',textAlign:'center',fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase' }}>{r}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            {key:'canModify',l:'Modify space details'},
+                            {key:'canHistory',l:'Turn history on/off'},
+                            {key:'canAtAll',l:'Use @all'},
+                            {key:'canManageApps',l:'Manage apps'},
+                            {key:'canManageWebhooks',l:'Manage webhooks'},
+                          ].map(row=>(
+                            <tr key={row.key} style={{ borderBottom:`1px solid ${c.bord}` }}>
+                              <td style={{ padding:'10px',fontSize:13,color:c.text }}>{row.l}</td>
+                              {['owners','managers','members'].map(role=>{
+                                const levels={owners:3,managers:2,members:1};
+                                const cur=cfg[row.key]||'owners';
+                                const checked=levels[role]>=levels[cur];
+                                return(
+                                  <td key={role} style={{ padding:'10px',textAlign:'center' }}>
+                                    <input type="checkbox" checked={checked} onChange={()=>{if(isCustom&&isManager){const newLevel=checked&&levels[role]===levels[cur]?(['owners','managers','members'].filter(r=>levels[r]<levels[role])[0]||'owners'):(role);updateSpaceSettings(showSpaceSettings,{[row.key]:newLevel});}}} style={{ cursor:'pointer',width:14,height:14 }}/>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+      {/* Context menu */}
         {contextMenu&&(
           <div style={{ position:'fixed',left:contextMenu.x,top:contextMenu.y,zIndex:9999,background:c.dark?'rgba(18,15,50,.98)':'#fff',border:`1px solid ${c.bord}`,borderRadius:12,padding:6,boxShadow:'0 8px 30px rgba(0,0,0,.25)',minWidth:180 }} onClick={e=>e.stopPropagation()}>
             <div style={{ padding:'6px 10px 4px',borderBottom:`1px solid ${c.bord}`,marginBottom:4 }}>
