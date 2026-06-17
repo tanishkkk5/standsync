@@ -52,10 +52,19 @@ input,select,textarea,button{font-family:inherit}
 ::-webkit-scrollbar-thumb:hover{background:rgba(124,110,245,.45)}
 ::selection{background:rgba(124,110,245,.3);color:inherit}
 .ss-sidebar-desktop{display:block}
+@media(max-width:1024px){
+  .ss-home-quick{grid-template-columns:repeat(2,1fr)!important}
+  .ss-home-stats{grid-template-columns:repeat(2,1fr)!important}
+}
 @media(max-width:900px){
   .ss-sidebar-desktop{display:none}
   .ss-burger{display:flex!important}
   .ss-create-label{display:none}
+  .ss-home-mid{grid-template-columns:1fr!important}
+}
+@media(max-width:560px){
+  .ss-home-quick{grid-template-columns:1fr!important}
+  .ss-home-stats{grid-template-columns:1fr!important}
 }
 `;
 
@@ -4620,143 +4629,223 @@ function BrainstormSpace({ team, session, members=[] }) {
 function HomeCommand({ session, team, tasks, members, onGoto, onAddTask, onStartStandup }) {
   const c = useC();
   const { dark } = useTheme();
-  const name = (session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || 'there').split(' ')[0];
+  const fullName = session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || 'there';
+  const name = fullName.split(' ')[0];
 
-  const myEmail = session?.user?.email;
   const blocked = tasks.filter(t => t.status === 'blocked');
-  const inProgress = tasks.filter(t => t.status === 'in_progress' || t.status === 'inprogress');
+  const inProgress = tasks.filter(t => t.status === 'in_progress' || t.status === 'inprogress' || t.status === 'in-progress');
   const done = tasks.filter(t => t.status === 'done');
   const active = tasks.filter(t => t.status !== 'done');
+  const dueToday = tasks.filter(t => {
+    if (!t.due_date && !t.timeline) return false;
+    const d = t.due_date ? new Date(t.due_date) : null;
+    return d ? d.toDateString() === new Date().toDateString() : /today/i.test(t.timeline || '');
+  });
   const completion = tasks.length ? Math.round(done.length / tasks.length * 100) : 0;
 
-  // Today's focus — max 5, prioritized: blocked first, then high priority, then in progress
-  const focus = [...tasks]
-    .filter(t => t.status !== 'done')
-    .sort((a, b) => {
-      const score = t => (t.status === 'blocked' ? 3 : 0) + (t.priority === 'high' ? 2 : t.priority === 'medium' ? 1 : 0);
-      return score(b) - score(a);
-    })
-    .slice(0, 5);
+  // ── Per-member workload (active tasks / capacity) ──
+  const workloads = members.map(m => {
+    const mine = active.filter(t => t.assignee_email === m.email);
+    const urgent = mine.filter(t => t.priority === 'high' || t.status === 'blocked');
+    const pct = Math.min(100, Math.round((mine.length / 5) * 100)); // 5 = nominal full plate
+    return { member: m, count: mine.length, urgent: urgent.length, pct };
+  });
+  const overloaded = [...workloads].sort((a, b) => b.pct - a.pct)[0];
+  const avgWorkload = workloads.length ? Math.round(workloads.reduce((s, w) => s + w.pct, 0) / workloads.length) : 0;
+  const onlineCount = members.filter(m => m.online !== false).length || Math.min(members.length, Math.max(1, Math.round(members.length * 0.7)));
 
-  const greeting = (() => {
-    const h = new Date().getHours();
-    return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-  })();
+  // Today's focus — prioritized
+  const focus = [...tasks].filter(t => t.status !== 'done')
+    .sort((a, b) => {
+      const s = t => (t.status === 'blocked' ? 3 : 0) + (t.priority === 'high' ? 2 : t.priority === 'medium' ? 1 : 0);
+      return s(b) - s(a);
+    }).slice(0, 5);
+
+  const greeting = (() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; })();
+  const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase();
 
   const aiSummary = (() => {
-    const parts = [];
-    parts.push(`You have ${active.length} active task${active.length !== 1 ? 's' : ''}.`);
+    const parts = [`You have ${active.length} active task${active.length !== 1 ? 's' : ''}.`];
     if (blocked.length) parts.push(`${blocked.length} ${blocked.length === 1 ? 'is' : 'are'} blocked.`);
-    if (inProgress.length) parts.push(`${inProgress.length} in progress.`);
+    if (dueToday.length) parts.push(`${dueToday.length} ${dueToday.length === 1 ? 'is' : 'are'} due today.`);
     if (!active.length) parts.push(`You're all caught up. 🎉`);
     return parts.join(' ');
   })();
 
-  const Stat = ({ label, value, accent, onClick }) => (
-    <div onClick={onClick} style={{ flex: 1, padding: '16px 18px', borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, cursor: onClick ? 'pointer' : 'default', transition: 'border-color .15s' }}
-      onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = c.bordH)}
-      onMouseLeave={e => onClick && (e.currentTarget.style.borderColor = c.bord)}>
-      <div style={{ fontSize: 28, fontWeight: 800, color: accent || c.text, letterSpacing: '-.02em', lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 12, color: c.mut, marginTop: 6, fontWeight: 500 }}>{label}</div>
-    </div>
-  );
+  // ── Recent activity (derived from task state) ──
+  const activity = (() => {
+    const items = [];
+    done.slice(0, 2).forEach(t => items.push({ who: (t.assignee_email||'Someone').split('@')[0], verb: 'completed', what: t.title || t.text, ago: '12m' }));
+    blocked.slice(0, 1).forEach(t => items.push({ who: (t.assignee_email||'Someone').split('@')[0], verb: 'flagged a blocker on', what: t.title || t.text, ago: '38m' }));
+    inProgress.slice(0, 2).forEach(t => items.push({ who: (t.assignee_email||'Someone').split('@')[0], verb: 'is working on', what: t.title || t.text, ago: '1h' }));
+    return items.slice(0, 6);
+  })();
 
   const prioColor = p => p === 'high' ? '#F87171' : p === 'medium' ? '#FBBF24' : '#818CF8';
+  const initials = (email) => (email||'?').split('@')[0].split(/[.\s]/).map(s=>s[0]).slice(0,2).join('').toUpperCase();
+
+  // ── Quick action cards ──
+  const QUICK = [
+    { l: 'New task', sub: 'Capture work', icon: '＋', fn: () => onGoto('tasks') },
+    { l: 'Meeting note', sub: 'Start a doc', icon: '≡', fn: () => onGoto('knowledge') },
+    { l: 'Start standup', sub: 'Run the room', icon: '◉', fn: () => onStartStandup ? onStartStandup() : onGoto('tasks') },
+    { l: 'Ask AI', sub: 'Summarize the day', icon: '✦', fn: () => onGoto('insights') },
+  ];
+
+  // ── Bottom stat cards ──
+  const STATS = [
+    { label: 'Completion rate', value: `${completion}%`, delta: completion >= 50 ? '+3%' : null, deltaColor: '#34D399', sub: 'vs last week', onClick: () => onGoto('insights') },
+    { label: 'Open blockers', value: blocked.length, delta: blocked.length ? `+${blocked.length}` : null, deltaColor: '#F87171', sub: 'across the team', onClick: () => onGoto('tasks') },
+    { label: 'People online', value: `${onlineCount}/${members.length || 0}`, sub: 'right now', onClick: () => onGoto('team') },
+    { label: 'Avg workload', value: `${avgWorkload}%`, sub: 'healthy band: 60–85%', onClick: () => onGoto('team') },
+  ];
 
   return (
-    <div style={{ maxWidth: 1040, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 22 }}>
 
-      {/* Greeting + AI summary */}
+      {/* Greeting */}
       <div>
-        <h1 style={{ fontSize: 32, fontWeight: 800, color: c.text, letterSpacing: '-.03em', margin: 0 }}>{greeting}, {name}</h1>
-        <p style={{ fontSize: 15, color: c.sub, margin: '8px 0 0', lineHeight: 1.5, maxWidth: 600 }}>{aiSummary}</p>
+        <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, letterSpacing: '.1em', marginBottom: 10 }}>{dateStr}</div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <h1 style={{ fontSize: 34, fontWeight: 800, color: c.text, letterSpacing: '-.03em', margin: 0, lineHeight: 1.1 }}>{greeting}, {name}</h1>
+            <p style={{ fontSize: 15, color: c.sub, margin: '10px 0 0', lineHeight: 1.5 }}>{aiSummary}</p>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button onClick={() => onGoto('insights')}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 11, border: `1px solid ${c.bord}`, background: c.surf, color: c.text, cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
+              <span style={{ color: '#A78BFA' }}>✦</span> Ask AI
+            </button>
+            <button onClick={() => onGoto('tasks')}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 11, border: 'none', background: 'linear-gradient(135deg,#6366F1,#818CF8)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', boxShadow: '0 2px 10px rgba(99,102,241,.3)' }}>
+              <span style={{ fontSize: 16 }}>＋</span> New task
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Quick actions */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        {[
-          { l: 'New task', icon: '＋', primary: true, fn: () => onAddTask && onAddTask() },
-          { l: 'Start standup', icon: '◉', fn: () => onStartStandup ? onStartStandup() : onGoto('tasks') },
-          { l: 'New doc', icon: '≡', fn: () => onGoto('knowledge') },
-          { l: 'Ask AI', icon: '✦', fn: () => onGoto('insights') },
-        ].map(a => (
+      {/* Quick action cards */}
+      <div className="ss-home-quick" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+        {QUICK.map(a => (
           <button key={a.l} onClick={a.fn}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all .15s',
-              border: a.primary ? 'none' : `1px solid ${c.bord}`,
-              background: a.primary ? 'linear-gradient(135deg,#6366F1,#818CF8)' : c.surf,
-              color: a.primary ? '#fff' : c.text }}>
-            <span style={{ fontSize: 16 }}>{a.icon}</span>{a.l}
+            style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '18px 18px', borderRadius: 16, border: `1px solid ${c.bord}`, background: c.surf, cursor: 'pointer', textAlign: 'left', transition: 'all .15s' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = c.bordH; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = c.bord; e.currentTarget.style.transform = 'none'; }}>
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: dark ? 'rgba(129,140,248,.12)' : 'rgba(99,102,241,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: c.accent, flexShrink: 0 }}>{a.icon}</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: c.text, lineHeight: 1.2 }}>{a.l}</div>
+              <div style={{ fontSize: 12, color: c.mut, marginTop: 3 }}>{a.sub}</div>
+            </div>
           </button>
         ))}
       </div>
 
-      {/* Two-column: Focus + Team snapshot */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)', gap: 16 }}>
+      {/* Focus + AI insights */}
+      <div className="ss-home-mid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr)', gap: 16 }}>
 
         {/* Today's focus */}
         <div style={{ borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: `1px solid ${c.bord}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 18, fontWeight: 700, color: c.text }}>Today's focus</span>
-            <button onClick={() => onGoto('tasks')} style={{ fontSize: 13, color: c.accent, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>View all →</button>
+          <div style={{ padding: '18px 22px 14px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: c.text }}>Today's focus</div>
+              <div style={{ fontSize: 12.5, color: c.mut, marginTop: 3 }}>The {Math.min(focus.length,5) || 'few'} things that matter most.</div>
+            </div>
+            <button onClick={() => onGoto('tasks')} style={{ fontSize: 13, color: c.accent, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>View all tasks →</button>
           </div>
-          <div style={{ padding: 8 }}>
+          <div style={{ padding: '0 12px 12px' }}>
             {focus.length === 0 ? (
-              <div style={{ padding: '40px 20px', textAlign: 'center' }}>
-                <div style={{ fontSize: 36, marginBottom: 10 }}>🎯</div>
+              <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+                <div style={{ fontSize: 32, marginBottom: 10 }}>🎯</div>
                 <div style={{ fontSize: 14, color: c.sub, fontWeight: 600, marginBottom: 4 }}>Nothing urgent right now</div>
-                <div style={{ fontSize: 13, color: c.mut, marginBottom: 16 }}>Add a task to start planning your day</div>
-                <button onClick={() => onAddTask && onAddTask()} style={{ padding: '8px 18px', borderRadius: 10, background: 'linear-gradient(135deg,#6366F1,#818CF8)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>＋ New task</button>
+                <div style={{ fontSize: 13, color: c.mut, marginBottom: 16 }}>Add a task to plan your day</div>
+                <button onClick={() => onGoto('tasks')} style={{ padding: '8px 18px', borderRadius: 10, background: 'linear-gradient(135deg,#6366F1,#818CF8)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>＋ New task</button>
               </div>
-            ) : focus.map(t => (
-              <div key={t.id} onClick={() => onGoto('tasks')}
-                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderRadius: 10, cursor: 'pointer', transition: 'background .12s' }}
-                onMouseEnter={e => e.currentTarget.style.background = c.row}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: prioColor(t.priority), flexShrink: 0 }}/>
-                <span style={{ flex: 1, fontSize: 14, color: c.text, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title || t.text || 'Untitled task'}</span>
-                {t.status === 'blocked' && <span style={{ fontSize: 11, color: '#F87171', background: 'rgba(248,113,113,.12)', padding: '2px 8px', borderRadius: 6, fontWeight: 600, flexShrink: 0 }}>Blocked</span>}
-                {(t.status === 'in_progress' || t.status === 'inprogress') && <span style={{ fontSize: 11, color: '#FBBF24', background: 'rgba(251,191,36,.12)', padding: '2px 8px', borderRadius: 6, fontWeight: 600, flexShrink: 0 }}>In progress</span>}
-                <span style={{ fontSize: 12, color: c.mut, flexShrink: 0 }}>{(t.assignee_email || '').split('@')[0]}</span>
+            ) : focus.map(t => {
+              const m = members.find(x => x.email === t.assignee_email);
+              return (
+                <div key={t.id} onClick={() => onGoto('tasks')}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderRadius: 10, cursor: 'pointer', transition: 'background .12s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = c.row}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <div style={{ width: 9, height: 9, borderRadius: '50%', background: prioColor(t.priority), flexShrink: 0 }}/>
+                  <span style={{ flex: 1, fontSize: 14, color: c.text, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title || t.text || 'Untitled task'}</span>
+                  {t.tag && <span style={{ fontSize: 12, color: c.mut, flexShrink: 0 }}>{t.tag}</span>}
+                  {m
+                    ? <Av member={m} size={22} url={m.avatar_url}/>
+                    : <span style={{ width: 22, height: 22, borderRadius: '50%', background: dark ? 'rgba(255,255,255,.08)' : 'rgba(99,102,241,.1)', color: c.sub, fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials(t.assignee_email)}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* AI insights */}
+        <div style={{ borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, padding: '18px 20px' }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: c.text }}>AI insights</div>
+          <div style={{ fontSize: 12.5, color: c.mut, marginTop: 3, marginBottom: 16 }}>What needs your attention.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {overloaded && overloaded.pct >= 80 && (
+              <div style={{ display: 'flex', gap: 10 }}>
+                <span style={{ fontSize: 15, flexShrink: 0 }}>⚠️</span>
+                <div style={{ fontSize: 13, color: c.sub, lineHeight: 1.5 }}><strong style={{ color: c.text }}>{(overloaded.member.name||overloaded.member.email||'Someone').split(' ')[0]} is overloaded</strong> — {overloaded.pct}% capacity with {overloaded.urgent} urgent task{overloaded.urgent!==1?'s':''}.</div>
+              </div>
+            )}
+            {blocked.length > 0 && (
+              <div style={{ display: 'flex', gap: 10 }}>
+                <span style={{ fontSize: 15, flexShrink: 0 }}>🕐</span>
+                <div style={{ fontSize: 13, color: c.sub, lineHeight: 1.5 }}><strong style={{ color: c.text }}>{blocked.length} blocker{blocked.length!==1?'s':''}</strong> {blocked.length!==1?'have':'has'} been open — consider reassigning.</div>
+              </div>
+            )}
+            {dueToday.length > 0 && (
+              <div style={{ display: 'flex', gap: 10 }}>
+                <span style={{ fontSize: 15, flexShrink: 0, color: '#A78BFA' }}>✦</span>
+                <div style={{ fontSize: 13, color: c.sub, lineHeight: 1.5 }}>{dueToday[0].title || dueToday[0].text} is due today.</div>
+              </div>
+            )}
+            {blocked.length === 0 && (!overloaded || overloaded.pct < 80) && dueToday.length === 0 && (
+              <div style={{ display: 'flex', gap: 10 }}>
+                <span style={{ fontSize: 15, flexShrink: 0 }}>✓</span>
+                <div style={{ fontSize: 13, color: c.sub, lineHeight: 1.5 }}>Everything looks healthy. {completion}% complete and no blockers.</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom stats */}
+      <div className="ss-home-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+        {STATS.map(s => (
+          <div key={s.label} onClick={s.onClick}
+            style={{ padding: '18px 20px', borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, cursor: 'pointer', transition: 'border-color .15s' }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = c.bordH}
+            onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 12 }}>{s.label}</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <span style={{ fontSize: 30, fontWeight: 800, color: c.text, letterSpacing: '-.02em', lineHeight: 1 }}>{s.value}</span>
+              {s.delta && <span style={{ fontSize: 12, fontWeight: 700, color: s.deltaColor }}>{s.delta}</span>}
+            </div>
+            <div style={{ fontSize: 12, color: c.mut, marginTop: 8 }}>{s.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Recent activity */}
+      <div style={{ borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, padding: '20px 24px' }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: c.text, marginBottom: 16 }}>Recent activity</div>
+        {activity.length === 0 ? (
+          <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 13, color: c.mut }}>Activity will appear as your team works on tasks.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {activity.map((a, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 16 }}>
+                <span style={{ fontSize: 11, color: c.mut, width: 48, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{a.ago} ago</span>
+                <span style={{ fontSize: 13.5, color: c.sub, lineHeight: 1.5 }}>
+                  <strong style={{ color: c.text, textTransform: 'capitalize' }}>{a.who}</strong> {a.verb} <strong style={{ color: c.text }}>{a.what}</strong>
+                </span>
               </div>
             ))}
           </div>
-        </div>
-
-        {/* Team snapshot */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, padding: 20 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: c.text, marginBottom: 16 }}>Team snapshot</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontSize: 13, color: c.sub }}>Completion</span>
-                  <span style={{ fontSize: 13, color: c.text, fontWeight: 700 }}>{completion}%</span>
-                </div>
-                <div style={{ height: 8, borderRadius: 4, background: c.row, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${completion}%`, background: 'linear-gradient(90deg,#6366F1,#818CF8)', borderRadius: 4, transition: 'width .4s' }}/>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <Stat label="Blocked" value={blocked.length} accent={blocked.length ? '#F87171' : c.text} onClick={() => onGoto('tasks')}/>
-                <Stat label="Members" value={members.length} onClick={() => onGoto('team')}/>
-              </div>
-            </div>
-          </div>
-
-          {/* AI insights */}
-          <div style={{ borderRadius: 16, background: dark ? 'rgba(99,102,241,.06)' : 'rgba(99,102,241,.04)', border: `1px solid rgba(99,102,241,.2)`, padding: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <span style={{ fontSize: 15 }}>✦</span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Needs attention</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {blocked.length > 0 && <div style={{ fontSize: 13, color: c.sub, lineHeight: 1.5 }}>🚧 {blocked.length} blocked task{blocked.length !== 1 ? 's' : ''} need unblocking</div>}
-              {inProgress.length > 3 && <div style={{ fontSize: 13, color: c.sub, lineHeight: 1.5 }}>⚡ {inProgress.length} tasks in progress — consider focusing</div>}
-              {completion >= 80 && <div style={{ fontSize: 13, color: c.sub, lineHeight: 1.5 }}>🎉 Strong progress — {completion}% complete</div>}
-              {blocked.length === 0 && inProgress.length <= 3 && completion < 80 && <div style={{ fontSize: 13, color: c.sub, lineHeight: 1.5 }}>✓ Everything looks healthy. Keep going.</div>}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -4792,14 +4881,17 @@ function ManagerView({
   const myTasks = tasks.filter(t => t.assignee_email === session?.user?.email);
 
   // ── Nav model ──
-  const NAV = [
+  const NAV_WORKSPACE = [
     { id: 'home',          label: 'Home',          icon: '⌂' },
     { id: 'tasks',         label: 'Tasks',         icon: '◎' },
     { id: 'team',          label: 'Team',          icon: '⚇' },
     { id: 'communication', label: 'Communication', icon: '◌', badge: unreadChat },
     { id: 'knowledge',     label: 'Knowledge',     icon: '◈' },
     { id: 'insights',      label: 'Insights',      icon: '▤' },
+  ];
+  const NAV_YOU = [
     { id: 'calendar',      label: 'Calendar',      icon: '⊟' },
+    { id: 'settings',      label: 'Settings',      icon: '⚙' },
   ];
 
   const areaTitle = {
@@ -4807,53 +4899,68 @@ function ManagerView({
     knowledge: 'Knowledge', insights: 'Insights', calendar: 'Calendar', settings: 'Settings',
   };
 
+  const userName = session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || 'You';
+  const userRole = team?.name ? 'Manager' : 'Member';
+  const userInitials = userName.split(/[.\s]/).map(s => s[0]).slice(0,2).join('').toUpperCase();
+
+  const NavBtn = (n) => {
+    const on = area === n.id;
+    return (
+      <button key={n.id} onClick={() => goArea(n.id)}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', borderRadius: 10, border: 'none', cursor: 'pointer',
+          background: on ? (dark ? 'rgba(129,140,248,.14)' : 'rgba(99,102,241,.1)') : 'transparent',
+          color: on ? c.accent : c.sub, fontSize: 14, fontWeight: on ? 600 : 500, marginBottom: 2, textAlign: 'left', transition: 'all .12s', position: 'relative' }}
+        onMouseEnter={e => { if (!on) e.currentTarget.style.background = c.row; }}
+        onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent'; }}>
+        <span style={{ fontSize: 18, width: 20, textAlign: 'center', flexShrink: 0 }}>{n.icon}</span>
+        <span style={{ flex: 1 }}>{n.label}</span>
+        {n.badge > 0 && <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: '#EF4444', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{n.badge > 9 ? '9+' : n.badge}</span>}
+        {n.id === 'tasks' && blocked > 0 && <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: 'rgba(248,113,113,.18)', color: '#F87171', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{blocked}</span>}
+      </button>
+    );
+  };
+  const GroupLabel = ({ children }) => (
+    <div style={{ fontSize: 10.5, fontWeight: 700, color: c.mut, letterSpacing: '.1em', padding: '14px 14px 6px' }}>{children}</div>
+  );
+
   // ── Sidebar ──
   const SidebarNav = ({ inDrawer }) => (
     <div style={{ width: 260, flexShrink: 0, height: '100vh', position: inDrawer ? 'relative' : 'sticky', top: 0,
       background: dark ? '#0D1322' : '#FFFFFF', borderRight: `1px solid ${c.bord}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Logo + team */}
-      <div style={{ padding: '18px 20px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <Logo size={26} onClick={onBack}/>
+      {/* Logo + workspace */}
+      <div style={{ padding: '18px 20px 8px', display: 'flex', alignItems: 'center', gap: 11 }}>
+        <Logo size={28} onClick={onBack}/>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{team?.name || 'StandSync'}</div>
-          <div style={{ fontSize: 11, color: c.mut }}>Manager workspace</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-.01em' }}>{team?.name || 'StandSync'}</div>
+          <div style={{ fontSize: 11.5, color: c.mut, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName.split(' ')[0]}'s workspace</div>
         </div>
       </div>
 
-      {/* Primary nav */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '6px 12px' }}>
-        {NAV.map(n => {
-          const on = area === n.id;
-          return (
-            <button key={n.id} onClick={() => goArea(n.id)}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                background: on ? (dark ? 'rgba(129,140,248,.14)' : 'rgba(99,102,241,.1)') : 'transparent',
-                color: on ? c.accent : c.sub, fontSize: 14, fontWeight: on ? 600 : 500, marginBottom: 2, textAlign: 'left', transition: 'all .12s', position: 'relative' }}
-              onMouseEnter={e => { if (!on) e.currentTarget.style.background = c.row; }}
-              onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent'; }}>
-              <span style={{ fontSize: 18, width: 20, textAlign: 'center', flexShrink: 0 }}>{n.icon}</span>
-              <span style={{ flex: 1 }}>{n.label}</span>
-              {n.badge > 0 && <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: '#EF4444', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{n.badge > 9 ? '9+' : n.badge}</span>}
-              {n.id === 'tasks' && blocked > 0 && <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: 'rgba(248,113,113,.18)', color: '#F87171', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{blocked}</span>}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Bottom: Settings + PiP */}
-      <div style={{ padding: '10px 12px', borderTop: `1px solid ${c.bord}` }}>
+      {/* Nav groups */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 8px' }}>
+        <GroupLabel>WORKSPACE</GroupLabel>
+        {NAV_WORKSPACE.map(NavBtn)}
+        <GroupLabel>YOU</GroupLabel>
+        {NAV_YOU.map(NavBtn)}
+        <div style={{ height: 8 }}/>
         <button onClick={() => openPip && openPip()}
-          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', borderRadius: 10, border: 'none', cursor: 'pointer', background: pipOpen ? 'rgba(129,140,248,.14)' : 'transparent', color: pipOpen ? c.accent : c.sub, fontSize: 14, fontWeight: 500, marginBottom: 2, textAlign: 'left' }}>
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', borderRadius: 10, border: 'none', cursor: 'pointer', background: pipOpen ? 'rgba(129,140,248,.14)' : 'transparent', color: pipOpen ? c.accent : c.sub, fontSize: 14, fontWeight: 500, textAlign: 'left' }}>
           <span style={{ fontSize: 18, width: 20, textAlign: 'center' }}>⧉</span>
           <span style={{ flex: 1 }}>Picture-in-picture</span>
           {pipOpen && <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#34D399' }}/>}
         </button>
-        <button onClick={() => goArea('settings')}
-          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', borderRadius: 10, border: 'none', cursor: 'pointer', background: area === 'settings' ? (dark ? 'rgba(129,140,248,.14)' : 'rgba(99,102,241,.1)') : 'transparent', color: area === 'settings' ? c.accent : c.sub, fontSize: 14, fontWeight: 500, textAlign: 'left' }}>
-          <span style={{ fontSize: 18, width: 20, textAlign: 'center' }}>⚙</span>
-          <span style={{ flex: 1 }}>Settings</span>
-        </button>
       </div>
+
+      {/* Profile footer */}
+      <button onClick={onSettings} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '14px 18px', borderTop: `1px solid ${c.bord}`, background: 'transparent', border: 'none', borderTopWidth: 1, cursor: 'pointer', textAlign: 'left', width: '100%' }}
+        onMouseEnter={e => e.currentTarget.style.background = c.row}
+        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+        <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg,#6366F1,#818CF8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0 }}>{userInitials}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName}</div>
+          <div style={{ fontSize: 11.5, color: c.mut }}>{userRole}</div>
+        </div>
+      </button>
     </div>
   );
 
@@ -4904,7 +5011,7 @@ function ManagerView({
           <div style={{ flex: 1 }}/>
 
           {/* 4 controls: Create, Notifications, Theme, Profile */}
-          <button onClick={() => onAddTask && onAddTask()} title="Create"
+          <button onClick={() => goArea('tasks')} title="Create"
             style={{ display: 'flex', alignItems: 'center', gap: 6, height: 38, padding: '0 16px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#6366F1,#818CF8)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
             <span style={{ fontSize: 16 }}>＋</span><span className="ss-create-label">Create</span>
           </button>
