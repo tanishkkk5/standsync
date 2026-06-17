@@ -183,10 +183,7 @@ function ProfileMenu({ session, onSettings, onLogout }) {
 
 // ─── AUTH PAGE ────────────────────────────────────────────────────────────────
 function AuthPage({ onLogin, inviteToken }) {
-  const c=useC();
-  // If coming via invite link always start on signup. Otherwise detect: if no session exists anywhere, default to signup.
-  const hasExistingAccount=()=>{ try{ const raw=localStorage.getItem('ss-auth'); return !!(raw&&JSON.parse(raw)?.currentSession); }catch{return false;} };
-  const [mode,setMode]=useState(inviteToken?'signup':hasExistingAccount()?'login':'signup');
+  const c=useC(); const [mode,setMode]=useState(inviteToken?'signup':'login');
   const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); const [name,setName]=useState('');
   const [loading,setLoading]=useState(false); const [gLoading,setGLoading]=useState(false);
   const [error,setError]=useState(''); const [info,setInfo]=useState(''); const [gError,setGError]=useState('');
@@ -595,7 +592,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
           <p style={{ fontSize:13,color:c.mut }}>Get the Room ID and password from your manager</p>
         </div>
         <Inp label="Room ID" value={roomId} onChange={e=>setRoomId(e.target.value.toUpperCase())} placeholder="e.g. AB3K9M" style={{ marginBottom:14,letterSpacing:'.12em',textTransform:'uppercase',fontSize:18,textAlign:'center',fontWeight:700 }} autoFocus/>
-        <Inp label="Room password" value={roomPass} onChange={e=>setRoomPass(e.target.value.toUpperCase())} placeholder="e.g. MXR-4KP" style={{ marginBottom:18,textAlign:'center',fontSize:18,letterSpacing:'.15em',fontFamily:'monospace' }} onKeyDown={e=>e.key==='Enter'&&joinTeam()}/>
+        <Inp label="Room password" type="password" value={roomPass} onChange={e=>setRoomPass(e.target.value.toUpperCase())} placeholder="4-digit PIN" style={{ marginBottom:18,textAlign:'center',fontSize:18,letterSpacing:'.15em' }} onKeyDown={e=>e.key==='Enter'&&joinTeam()}/>
         {joinError&&<div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#F87171',marginBottom:14 }}>{joinError}</div>}
         <Btn onClick={joinTeam} loading={joinLoading} disabled={!roomId.trim()||!roomPass.trim()} style={{ width:'100%',justifyContent:'center',padding:'12px',fontSize:15 }}>Join team →</Btn>
         <div style={{ marginTop:16,fontSize:12,color:c.mut,textAlign:'center' }}>Don't have a Room ID? Ask your manager to share it from Team Settings</div>
@@ -2057,19 +2054,6 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
             {weekDays.map((day,i)=>{
               const dayEvts=getEventsForDay(day);
               const isToday=day.toDateString()===today.toDateString();
-              // Split all-day vs timed, assign overlap columns
-              const timedEvts=dayEvts.filter(ev=>ev.start?.dateTime);
-              const allDayEvts=dayEvts.filter(ev=>!ev.start?.dateTime);
-              const cols=[];
-              const evCols=timedEvts.map(ev=>{
-                const s=new Date(ev.start.dateTime).getTime();
-                const e=new Date(ev.end?.dateTime||ev.start.dateTime).getTime();
-                let col=0;
-                while(cols[col]&&cols[col]>s) col++;
-                cols[col]=e;
-                return col;
-              });
-              const maxCol=evCols.length?Math.max(...evCols)+1:1;
               return(
                 <div key={i} style={{ borderLeft:`1px solid ${c.bord}`,position:'relative',background:isToday?'rgba(99,102,241,.02)':'transparent' }}>
                   {/* Hour lines */}
@@ -2082,25 +2066,26 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
                     const top=(now.getHours()*60+now.getMinutes())/60*48;
                     return <div style={{ position:'absolute',left:0,right:0,top:top,height:2,background:'#EF4444',zIndex:10 }}><div style={{ width:8,height:8,borderRadius:'50%',background:'#EF4444',position:'absolute',left:-4,top:-3 }}/></div>;
                   })()}
-                  {/* All-day events stacked at top */}
-                  {allDayEvts.map((ev,ai)=>(
-                    <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ position:'absolute',top:2+ai*18,left:2,right:2,padding:'2px 5px',borderRadius:4,background:eventColor(ev)+'33',border:`1px solid ${eventColor(ev)}66`,color:eventColor(ev),fontSize:10,fontWeight:600,cursor:'pointer',zIndex:5,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>
-                      {ev.summary}
-                    </div>
-                  ))}
-                  {/* Timed events with column layout to avoid overlap */}
-                  {timedEvts.map((ev,ei)=>{
+                  {/* Events */}
+                  {dayEvts.map(ev=>{
+                    if(!ev.start?.dateTime){
+                      // All-day event — show at top
+                      return(
+                        <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ position:'absolute',top:2,left:2,right:2,padding:'2px 5px',borderRadius:4,background:eventColor(ev)+'33',border:`1px solid ${eventColor(ev)}66`,color:eventColor(ev),fontSize:10,fontWeight:600,cursor:'pointer',zIndex:5,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>
+                          {ev.summary}
+                        </div>
+                      );
+                    }
                     const start=new Date(ev.start.dateTime);
                     const end=new Date(ev.end?.dateTime||ev.start.dateTime);
                     const startMin=start.getHours()*60+start.getMinutes();
                     const duration=Math.max(30,(end-start)/60000);
                     const top=startMin/60*48;
                     const height=Math.max(20,duration/60*48-2);
-                    const col=evCols[ei], colW=100/maxCol;
                     return(
-                      <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ position:'absolute',left:`calc(${col*colW}% + 2px)`,width:`calc(${colW}% - 4px)`,top,height,padding:'2px 4px',borderRadius:5,background:eventColor(ev)+'33',borderLeft:`3px solid ${eventColor(ev)}`,color:eventColor(ev),fontSize:10,fontWeight:600,cursor:'pointer',zIndex:5,overflow:'hidden',boxSizing:'border-box' }}>
-                        <div style={{ fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:9 }}>{ev.summary}</div>
-                        {height>28&&<div style={{ opacity:.7,fontSize:9 }}>{fmtTime(ev.start.dateTime)}</div>}
+                      <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ position:'absolute',left:2,right:2,top:top,height:height,padding:'2px 5px',borderRadius:5,background:eventColor(ev)+'33',borderLeft:`3px solid ${eventColor(ev)}`,color:eventColor(ev),fontSize:10,fontWeight:600,cursor:'pointer',zIndex:5,overflow:'hidden',boxSizing:'border-box' }}>
+                        <div style={{ fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{ev.summary}</div>
+                        {height>28&&<div style={{ opacity:.7 }}>{fmtTime(ev.start.dateTime)}</div>}
                       </div>
                     );
                   })}
@@ -2291,7 +2276,7 @@ function MemberTaskCard({ task, user, onStatus, onBlocker }) {
 }
 
 // ─── MEMBER VIEW ──────────────────────────────────────────────────────────────
-function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack, onSettings, session, members, messages, onSendMessage, chatTheme, onChangeTheme, history=[], team }) {
+function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack, onSettings, session, members, messages, onSendMessage, chatTheme, onChangeTheme }) {
   const c=useC();
   const mine=tasks.filter(t=>t.assignee_email===user.email);
   const done=mine.filter(t=>t.status==='done').length; const pct=mine.length?Math.round(done/mine.length*100):0;
@@ -2309,9 +2294,7 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
     {id:'notes',   l:'Meeting notes', ic:'≡'},
     {id:'chat',    l:'Team chat',     ic:'◌'},
     {id:'cal',     l:'Calendar',      ic:'⊟'},
-    {id:'perf',    l:'Performance',   ic:'↗'},
-    {id:'hist',    l:'History',       ic:'↺'},
-    {id:'remind',  l:'Reminders',     ic:'◔'},
+    {id:'brain',   l:'Brainstorm',    ic:'⬡'},
     {id:'ai',      l:'AI assistant',  ic:'◉'},
   ];
   // meetingNotes moved to NotesTab component
@@ -2379,10 +2362,8 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
         )}
         {activeTab==='chat'&&<RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme}/>}
         {activeTab==='cal'&&<CalendarPanel team={null} session={session} members={members}/>}
+        {activeTab==='brain'&&<BrainstormSpace team={team} session={session}/>}
         {activeTab==='ai'&&<AIAssistant tasks={tasks} members={members} history={[]} session={session} myTasks={mine} teamName="Team"/>}
-        {activeTab==='perf'&&<PerfTab tasks={tasks} history={[]} members={members}/>}
-        {activeTab==='hist'&&<HistTab history={[]} members={members}/>}
-        {activeTab==='remind'&&<RemindersPanel/>}
 
         {/* ── SELF TASKS (personal, not team) ── */}
         {activeTab==='self'&&(
@@ -2461,65 +2442,13 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
         })()}
 
         {/* ── MEETING NOTES ── */}
-        {activeTab==='notes'&&<NotesTab session={session} team={team||{id:user?.team_id||'t1'}} role={'member-'+user?.email}/>}
+        {activeTab==='notes'&&<NotesTab session={session} team={{id:user?.team_id||'t1'}} role={'member-'+user?.email}/>}
       </div>
     </div>
   );
 }
 
 // ─── MANAGER TABS ─────────────────────────────────────────────────────────────
-// ─── AI SUMMARY BANNER (FIX 2) ───────────────────────────────────────────────
-function AISummaryBanner({ tasks, members }) {
-  const c=useC();
-  const [summary,setSummary]=useState('');
-  const [loading,setLoading]=useState(false);
-  const [open,setOpen]=useState(false);
-  const generate=async()=>{
-    setLoading(true); setOpen(true);
-    try{
-      const done=tasks.filter(t=>t.status==='done').length;
-      const inProg=tasks.filter(t=>t.status==='in-progress').length;
-      const blocked=tasks.filter(t=>t.status==='blocked');
-      const perMember=members.map(m=>{
-        const mt=tasks.filter(t=>t.assignee_email===m.email);
-        const md=mt.filter(t=>t.status==='done').length;
-        const mb=mt.filter(t=>t.status==='blocked').length;
-        return (m.name||m.email)+': '+md+'/'+mt.length+' done'+(mb?' (blocked)':'');
-      }).join('; ');
-      const prompt=`You are a standup facilitator. Generate a concise standup summary.
-Team: ${members.length} members. Tasks: ${tasks.length} total, ${done} done, ${inProg} in progress, ${blocked.length} blocked.
-Blocked: ${blocked.map(t=>t.title+(t.blocker?' — '+t.blocker:'')).join(', ')||'none'}.
-Members: ${perMember}.
-Write exactly 4 bullet points covering: overall progress, who is on track, blockers/risks, recommended action.`;
-      const reply=await askAI(prompt,{tasks,members,teamName:'Team'});
-      setSummary(reply);
-    }catch(e){
-      setSummary('Could not generate summary. Check REACT_APP_GEMINI_KEY in Vercel env vars.');
-    }
-    setLoading(false);
-  };
-  return(
-    <Card style={{ padding:'14px 18px',marginBottom:16,border:'1px solid rgba(124,110,245,.2)' }}>
-      <div style={{ display:'flex',alignItems:'center',gap:10 }}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0 }}>
-          <path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z" fill="#A78BFA"/>
-        </svg>
-        <span style={{ fontSize:13,fontWeight:700,color:c.text,flex:1 }}>AI Standup Summary</span>
-        {summary&&<button onClick={()=>setOpen(o=>!o)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:18,lineHeight:1,padding:0 }}>{open?'−':'+'}</button>}
-        <Btn onClick={generate} loading={loading} style={{ padding:'6px 14px',fontSize:12,flexShrink:0 }}>{summary?'Regenerate ✦':'Generate ✦'}</Btn>
-      </div>
-      {!process.env.REACT_APP_GEMINI_KEY&&(
-        <div style={{ marginTop:8,fontSize:11,color:c.mut }}>⚠️ Add REACT_APP_GEMINI_KEY to Vercel to enable AI summaries</div>
-      )}
-      {open&&summary&&(
-        <div style={{ marginTop:12,padding:'12px 14px',background:'rgba(124,110,245,.07)',borderRadius:10,border:'1px solid rgba(124,110,245,.15)',fontSize:13,color:c.sub,lineHeight:1.75,whiteSpace:'pre-wrap' }}>
-          {summary}
-        </div>
-      )}
-    </Card>
-  );
-}
-
 function LiveTab({ tasks, members, onStatus, onPriority, onNote, onAddTask, session }) {
   const c=useC(); const [fu,setFu]=useState('all'); const [fs,setFs]=useState('all'); const [showModal,setShowModal]=useState(false);
   const filtered=tasks.filter(t=>fu==='all'||t.assignee_email===fu).filter(t=>fs==='all'||t.status===fs);
@@ -2530,7 +2459,6 @@ function LiveTab({ tasks, members, onStatus, onPriority, onNote, onAddTask, sess
         <StatCard label="Total" value={total} color="#818CF8" icon="📋"/><StatCard label="To do" value={todo} color="#94A3B8" icon="⭕"/><StatCard label="In progress" value={inProg} color="#38BDF8" icon="⚡"/><StatCard label="Done" value={done} color="#34D399" icon="✅"/><StatCard label="Blocked" value={blocked} color={blocked>0?'#EF4444':'#34D399'} icon="⚠️" sub={blocked>0?'needs attention':'all clear'}/>
       </div>
       {total>0&&<Card style={{ padding:'14px 18px',marginBottom:16 }}><div style={{ display:'flex',justifyContent:'space-between',marginBottom:8 }}><span style={{ fontSize:13,color:c.mut }}>Team progress</span><span style={{ fontSize:13,fontWeight:700,color:'#818CF8' }}>{pct}% · {done}/{total}</span></div><Bar pct={pct} h={8} color="linear-gradient(90deg,#6366F1,#34D399)"/></Card>}
-      <AISummaryBanner tasks={tasks} members={members}/>
       <Card style={{ overflow:'hidden' }}>
         <div style={{ padding:'12px 16px',borderBottom:`1px solid ${c.bord}`,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center' }}>
           <div style={{ display:'flex',gap:5,flex:1,flexWrap:'wrap' }}>{[{v:'all',l:'All'},...members.map(m=>({v:m.email,l:(m.name||m.email).split(' ')[0]}))].map(f=><button key={f.v} onClick={()=>setFu(f.v)} style={{ fontSize:12,padding:'5px 12px',borderRadius:20,border:`1px solid ${c.bord}`,background:fu===f.v?'rgba(129,140,248,.2)':'transparent',color:fu===f.v?'#818CF8':c.mut,cursor:'pointer',fontWeight:fu===f.v?700:400,transition:'all .15s' }}>{f.l}</button>)}</div>
@@ -2618,18 +2546,13 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
     try{
       if(SB.IS_LIVE){
         const myName=session?.user?.user_metadata?.name||session?.user?.email;
-        const {link,error:invErr}=await SB.inviteMember(team.id,team.name,invEmail.trim(),myName);
-        if(invErr){ console.error('inviteMember error:',invErr); }
-        if(link) setLastInviteLink(link);
-        if(link&&process.env.REACT_APP_RESEND_KEY){
-          try{
-            await Promise.race([Email.sendInvite(invEmail.trim(),myName,team.name,link),new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),6000))]);
-          }catch(e){ console.warn('Email send failed (will show copy link):',e.message); }
-        }
+        const {link}=await SB.inviteMember(team.id,team.name,invEmail.trim(),myName);
+        setLastInviteLink(link); // Always show link so manager can share manually
+        try{ await Promise.race([Email.sendInvite(invEmail.trim(),myName,team.name,link),new Promise(r=>setTimeout(r,5000))]); }catch(e){}
       }
-    }catch(e){ console.error('sendInv error:',e); }
-    setSent(true); setSending(false);
-    setTimeout(()=>setSent(false),3000);
+    }catch(e){ console.error('invite error:',e); }
+    setSent(true);setSending(false);
+    setTimeout(()=>{setSent(false);},3000);
   };
 
   const addRoom=async()=>{
@@ -2770,6 +2693,524 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
     </div>
   );
 }
+// ─── BRAINSTORM SPACE ─────────────────────────────────────────────────────────
+// Full infinite canvas: sticky notes, text boxes, shapes, free draw, connectors
+function BrainstormSpace({ team, session }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const canvasRef = useRef();
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [nodes, setNodes] = useState([]);
+  const [connections, setConnections] = useState([]);
+  const [selected, setSelected] = useState(new Set());
+  const [tool, setTool] = useState('select');
+  const [drawColor, setDrawColor] = useState('#818CF8');
+  const [drawWidth, setDrawWidth] = useState(3);
+  const [stickyColor, setStickyColor] = useState('#FDE68A');
+  const [shapeType, setShapeType] = useState('rect');
+  const [drawPaths, setDrawPaths] = useState([]);
+  const [currentPath, setCurrentPath] = useState(null);
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [connectFrom, setConnectFrom] = useState(null);
+  const [connectPreview, setConnectPreview] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [dragging, setDragging] = useState(null);
+  const [resizing, setResizing] = useState(null);
+  const [selectionBox, setSelectionBox] = useState(null);
+  const [bsHistory, setBsHistory] = useState([]);
+  const [bsHistIdx, setBsHistIdx] = useState(-1);
+  const nextId = useRef(100);
+  const BOARD_KEY = 'ss-board-' + (team?.id || 'demo');
+  const STICKY_COLORS = ['#FDE68A','#A7F3D0','#BAE6FD','#DDD6FE','#FBCFE8','#FED7AA','#F9A8D4','#6EE7B7'];
+  const DRAW_COLORS = ['#818CF8','#34D399','#F87171','#FBBF24','#60A5FA','#F472B6','#A78BFA','#F0ECFF','#06040F'];
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(BOARD_KEY);
+      if (saved) {
+        const d = JSON.parse(saved);
+        if (d.nodes) { setNodes(d.nodes); if (d.nodes.length) nextId.current = Math.max(...d.nodes.map(n => n.id)) + 1; }
+        if (d.connections) setConnections(d.connections);
+        if (d.drawPaths) setDrawPaths(d.drawPaths);
+      }
+    } catch(e) {}
+  }, [BOARD_KEY]);
+
+  const saveBoard = useCallback((n, co, dp) => {
+    try { localStorage.setItem(BOARD_KEY, JSON.stringify({ nodes: n, connections: co, drawPaths: dp })); } catch(e) {}
+  }, [BOARD_KEY]);
+
+  const pushHistory = useCallback((n, co, dp) => {
+    setBsHistory(h => [...h.slice(0, bsHistIdx + 1), { nodes: n, connections: co, drawPaths: dp }]);
+    setBsHistIdx(i => i + 1);
+    saveBoard(n, co, dp);
+  }, [bsHistIdx, saveBoard]);
+
+  const undo = useCallback(() => {
+    if (bsHistIdx < 1) return;
+    const prev = bsHistory[bsHistIdx - 1];
+    setNodes(prev.nodes); setConnections(prev.connections); setDrawPaths(prev.drawPaths);
+    setBsHistIdx(i => i - 1);
+  }, [bsHistory, bsHistIdx]);
+
+  const redo = useCallback(() => {
+    if (bsHistIdx >= bsHistory.length - 1) return;
+    const next = bsHistory[bsHistIdx + 1];
+    setNodes(next.nodes); setConnections(next.connections); setDrawPaths(next.drawPaths);
+    setBsHistIdx(i => i + 1);
+  }, [bsHistory, bsHistIdx]);
+
+  const toCanvas = useCallback((cx, cy) => {
+    const rect = canvasRef.current?.getBoundingClientRect() || { left: 0, top: 0 };
+    return { x: (cx - rect.left - pan.x) / zoom, y: (cy - rect.top - pan.y) / zoom };
+  }, [pan, zoom]);
+
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) {
+        const factor = e.deltaY > 0 ? 0.92 : 1.08;
+        setZoom(z => Math.min(3, Math.max(0.15, z * factor)));
+      } else {
+        setPan(p => ({ x: p.x - e.deltaX * 0.8, y: p.y - e.deltaY * 0.8 }));
+      }
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (editingId) return;
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) { undo(); return; }
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { redo(); return; }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selected.size > 0) {
+          const nn = nodes.filter(n => !selected.has(n.id));
+          const nc = connections.filter(c => !selected.has(c.id) && !selected.has(c.from) && !selected.has(c.to));
+          const np = drawPaths.filter(p => !selected.has(p.id));
+          setNodes(nn); setConnections(nc); setDrawPaths(np); setSelected(new Set());
+          pushHistory(nn, nc, np);
+        }
+      }
+      if (e.key === 'Escape') { setSelected(new Set()); setConnectFrom(null); setTool('select'); }
+      if (e.key === 'v' && !e.metaKey && !e.ctrlKey) setTool('select');
+      if (e.key === 's' && !e.metaKey && !e.ctrlKey) setTool('sticky');
+      if (e.key === 't' && !e.metaKey && !e.ctrlKey) setTool('text');
+      if (e.key === 'd' && !e.metaKey && !e.ctrlKey) setTool('draw');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editingId, selected, nodes, connections, drawPaths, undo, redo, pushHistory]);
+
+  const addNode = useCallback((type, x, y, extra = {}) => {
+    const id = nextId.current++;
+    const node = {
+      id, type, x, y,
+      text: type === 'sticky' ? 'Double-click to edit' : type === 'text' ? 'Text' : type === 'shape' ? '' : '',
+      color: type === 'sticky' ? stickyColor : undefined,
+      w: type === 'sticky' ? 160 : type === 'text' ? 200 : 140,
+      h: type === 'sticky' ? 140 : type === 'text' ? 64 : 100,
+      fontSize: 13, fontWeight: type === 'shape' ? 700 : 400, fontStyle: 'normal',
+      shapeType: extra.shapeType || 'rect', ...extra,
+    };
+    const nn = [...nodes, node];
+    setNodes(nn); pushHistory(nn, connections, drawPaths);
+    setSelected(new Set([id]));
+    return id;
+  }, [nodes, connections, drawPaths, stickyColor, pushHistory]);
+
+  const onMouseDown = useCallback((e) => {
+    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+      setIsPanning(true); setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y }); return;
+    }
+    if (e.button !== 0) return;
+    const pt = toCanvas(e.clientX, e.clientY);
+    if (tool === 'sticky') { addNode('sticky', pt.x - 80, pt.y - 70); setTool('select'); return; }
+    if (tool === 'text') { addNode('text', pt.x - 100, pt.y - 32); setTool('select'); return; }
+    if (tool === 'shape') { addNode('shape', pt.x - 70, pt.y - 50, { shapeType }); setTool('select'); return; }
+    if (tool === 'draw') { setCurrentPath({ id: nextId.current++, color: drawColor, width: drawWidth, pts: [[pt.x, pt.y]] }); return; }
+    if (tool === 'select') { setSelectionBox({ x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y }); if (!e.shiftKey) setSelected(new Set()); }
+  }, [tool, pan, toCanvas, addNode, drawColor, drawWidth, shapeType]);
+
+  const onMouseMove = useCallback((e) => {
+    if (isPanning) { setPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y }); return; }
+    const pt = toCanvas(e.clientX, e.clientY);
+    if (currentPath) { setCurrentPath(p => ({ ...p, pts: [...p.pts, [pt.x, pt.y]] })); return; }
+    if (dragging) {
+      const dx = pt.x - dragging.startX, dy = pt.y - dragging.startY;
+      setNodes(ns => ns.map(n => selected.has(n.id) ? { ...n, x: (n._ox || n.x) + dx, y: (n._oy || n.y) + dy } : n));
+      return;
+    }
+    if (resizing) {
+      setNodes(ns => ns.map(n => n.id === resizing.id ? { ...n, w: Math.max(80, resizing.origW + (pt.x - resizing.startX)), h: Math.max(40, resizing.origH + (pt.y - resizing.startY)) } : n));
+      return;
+    }
+    if (selectionBox) {
+      const sb = { ...selectionBox, x2: pt.x, y2: pt.y };
+      setSelectionBox(sb);
+      const x1 = Math.min(sb.x1, sb.x2), x2 = Math.max(sb.x1, sb.x2);
+      const y1 = Math.min(sb.y1, sb.y2), y2 = Math.max(sb.y1, sb.y2);
+      setSelected(new Set(nodes.filter(n => n.x < x2 && n.x + n.w > x1 && n.y < y2 && n.y + n.h > y1).map(n => n.id)));
+    }
+    if (connectFrom) setConnectPreview(pt);
+  }, [isPanning, panStart, currentPath, dragging, resizing, selectionBox, connectFrom, toCanvas, nodes, selected]);
+
+  const onMouseUp = useCallback(() => {
+    setIsPanning(false);
+    if (currentPath?.pts?.length > 1) {
+      const np = [...drawPaths, currentPath];
+      setDrawPaths(np); pushHistory(nodes, connections, np);
+    }
+    setCurrentPath(null);
+    if (dragging) pushHistory(nodes, connections, drawPaths);
+    setDragging(null); setResizing(null); setSelectionBox(null);
+  }, [currentPath, drawPaths, dragging, nodes, connections, pushHistory]);
+
+  const onNodeMouseDown = useCallback((e, node) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    if (tool === 'connect') {
+      if (!connectFrom) { setConnectFrom(node.id); }
+      else if (connectFrom !== node.id) {
+        const id = nextId.current++;
+        const nc = [...connections, { id, from: connectFrom, to: node.id, label: '' }];
+        setConnections(nc); pushHistory(nodes, nc, drawPaths);
+        setConnectFrom(null); setConnectPreview(null);
+      }
+      return;
+    }
+    const newSel = e.shiftKey ? new Set([...selected, node.id]) : (selected.has(node.id) ? selected : new Set([node.id]));
+    setSelected(newSel);
+    const pt = toCanvas(e.clientX, e.clientY);
+    setNodes(ns => ns.map(n => newSel.has(n.id) ? { ...n, _ox: n.x, _oy: n.y } : n));
+    setDragging({ id: node.id, startX: pt.x, startY: pt.y });
+  }, [tool, connectFrom, connections, nodes, drawPaths, selected, toCanvas, pushHistory]);
+
+  const onResizeDown = useCallback((e, node) => {
+    e.stopPropagation();
+    const pt = toCanvas(e.clientX, e.clientY);
+    setResizing({ id: node.id, startX: pt.x, startY: pt.y, origW: node.w, origH: node.h });
+  }, [toCanvas]);
+
+  const updateNodeText = useCallback((id, text) => setNodes(ns => ns.map(n => n.id === id ? { ...n, text } : n)), []);
+  const updateNode = useCallback((id, props) => setNodes(ns => ns.map(n => n.id === id ? { ...n, ...props } : n)), []);
+
+  const commitText = useCallback(() => {
+    if (editingId) { pushHistory(nodes, connections, drawPaths); setEditingId(null); }
+  }, [editingId, nodes, connections, drawPaths, pushHistory]);
+
+  const getCenter = useCallback((id) => {
+    const n = nodes.find(x => x.id === id);
+    return n ? { x: n.x + n.w / 2, y: n.y + n.h / 2 } : { x: 0, y: 0 };
+  }, [nodes]);
+
+  const curvePath = (x1, y1, x2, y2) => `M${x1},${y1} C${(x1+x2)/2},${y1} ${(x1+x2)/2},${y2} ${x2},${y2}`;
+  const pathStr = (pts) => pts.length < 2 ? '' : 'M' + pts.map(([x, y]) => `${x},${y}`).join(' L');
+
+  const renderShapeSvg = (node) => {
+    const { w, h, shapeType: st } = node;
+    const fill = node.color || 'rgba(99,102,241,.18)';
+    const stroke = node.borderColor || '#6366F1';
+    if (st === 'circle') return <ellipse cx={w/2} cy={h/2} rx={w/2-2} ry={h/2-2} fill={fill} stroke={stroke} strokeWidth={2}/>;
+    if (st === 'diamond') return <polygon points={`${w/2},2 ${w-2},${h/2} ${w/2},${h-2} 2,${h/2}`} fill={fill} stroke={stroke} strokeWidth={2}/>;
+    return <rect x={1} y={1} width={w-2} height={h-2} rx={8} fill={fill} stroke={stroke} strokeWidth={2}/>;
+  };
+
+  const clearBoard = () => {
+    if (!window.confirm('Clear the entire board? This cannot be undone.')) return;
+    setNodes([]); setConnections([]); setDrawPaths([]); setSelected(new Set());
+    pushHistory([], [], []);
+  };
+
+  const fitView = () => {
+    if (!nodes.length && !drawPaths.length) { setPan({ x: 0, y: 0 }); setZoom(1); return; }
+    const allX = nodes.map(n => [n.x, n.x + n.w]).flat();
+    const allY = nodes.map(n => [n.y, n.y + n.h]).flat();
+    if (!allX.length) return;
+    const pad = 60;
+    const bx = Math.min(...allX) - pad, by = Math.min(...allY) - pad;
+    const bw = Math.max(...allX) - bx + pad, bh = Math.max(...allY) - by + pad;
+    const rect = canvasRef.current?.getBoundingClientRect() || { width: 1100, height: 650 };
+    const z = Math.min(1.5, Math.min(rect.width / bw, rect.height / bh) * 0.88);
+    setZoom(z);
+    setPan({ x: -bx * z + (rect.width - bw * z) / 2, y: -by * z + (rect.height - bh * z) / 2 });
+  };
+
+  const selNode = nodes.find(n => selected.size === 1 && selected.has(n.id));
+  const TOOLS = [
+    { id: 'select',  label: 'Select  V',    ico: '↖' },
+    { id: 'sticky',  label: 'Sticky  S',    ico: '🗒' },
+    { id: 'text',    label: 'Text  T',      ico: 'T' },
+    { id: 'shape',   label: 'Shape',        ico: '◻' },
+    { id: 'draw',    label: 'Draw  D',      ico: '✏' },
+    { id: 'connect', label: 'Connect',      ico: '⤳' },
+  ];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 62px)', borderRadius: 14, overflow: 'hidden', border: `1px solid ${c.bord}`, userSelect: 'none' }}>
+
+      {/* TOP TOOLBAR */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', background: dark ? 'rgba(8,6,22,.97)' : 'rgba(255,255,255,.97)', borderBottom: `1px solid ${c.bord}`, flexShrink: 0, flexWrap: 'wrap', zIndex: 20, backdropFilter: 'blur(20px)' }}>
+
+        {/* Tool group */}
+        <div style={{ display: 'flex', gap: 2, background: c.surf, borderRadius: 10, padding: 3, border: `1px solid ${c.bord}` }}>
+          {TOOLS.map(t => (
+            <button key={t.id} onClick={() => { setTool(t.id); setConnectFrom(null); }} title={t.label}
+              style={{ width: 34, height: 32, borderRadius: 7, border: 'none', background: tool === t.id ? 'rgba(99,102,241,.22)' : 'transparent', color: tool === t.id ? '#818CF8' : c.mut, cursor: 'pointer', fontSize: t.id === 'text' ? 14 : 17, fontWeight: 700, transition: 'all .12s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {t.ico}
+            </button>
+          ))}
+        </div>
+
+        {/* Shape picker */}
+        {tool === 'shape' && (
+          <div style={{ display: 'flex', gap: 2, background: c.surf, borderRadius: 10, padding: 3, border: `1px solid ${c.bord}` }}>
+            {[['rect','▭'],['circle','○'],['diamond','◇']].map(([st, ic]) => (
+              <button key={st} onClick={() => setShapeType(st)} style={{ width: 32, height: 32, borderRadius: 7, border: 'none', background: shapeType === st ? 'rgba(99,102,241,.22)' : 'transparent', color: shapeType === st ? '#818CF8' : c.mut, cursor: 'pointer', fontSize: 18 }}>{ic}</button>
+            ))}
+          </div>
+        )}
+
+        {/* Sticky color picker */}
+        {(tool === 'sticky') && (
+          <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+            {STICKY_COLORS.map(col => (
+              <button key={col} onClick={() => setStickyColor(col)} style={{ width: 20, height: 20, borderRadius: '50%', background: col, border: stickyColor === col ? '2.5px solid #818CF8' : `1.5px solid ${c.bord}`, cursor: 'pointer', flexShrink: 0 }}/>
+            ))}
+          </div>
+        )}
+
+        {/* Draw options */}
+        {tool === 'draw' && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 3 }}>
+              {DRAW_COLORS.map(col => (
+                <button key={col} onClick={() => setDrawColor(col)} style={{ width: 20, height: 20, borderRadius: '50%', background: col, border: drawColor === col ? '2.5px solid #818CF8' : `1.5px solid ${c.bord}`, cursor: 'pointer' }}/>
+              ))}
+            </div>
+            <div style={{ width: 1, height: 24, background: c.bord }}/>
+            {[1, 3, 6, 12].map(w => (
+              <button key={w} onClick={() => setDrawWidth(w)} title={`${w}px`}
+                style={{ width: 32, height: 32, borderRadius: 7, background: drawWidth === w ? 'rgba(99,102,241,.2)' : c.surf, border: `1px solid ${c.bord}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: Math.min(w * 2, 22), height: Math.min(w, 10), borderRadius: w, background: drawColor, maxWidth: 22 }}/>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Node formatting (when selected) */}
+        {selNode && tool === 'select' && (
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center', borderLeft: `1px solid ${c.bord}`, paddingLeft: 8 }}>
+            {[11,13,16,20,28].map(fs => (
+              <button key={fs} onClick={() => updateNode(selNode.id, { fontSize: fs })} style={{ padding: '2px 5px', borderRadius: 5, border: `1px solid ${c.bord}`, background: selNode.fontSize === fs ? 'rgba(99,102,241,.2)' : 'transparent', color: c.text, cursor: 'pointer', fontSize: 11, minWidth: 24, textAlign: 'center' }}>{fs}</button>
+            ))}
+            <div style={{ width: 1, height: 20, background: c.bord }}/>
+            <button onClick={() => updateNode(selNode.id, { fontWeight: selNode.fontWeight === 700 ? 400 : 700 })} style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${c.bord}`, background: selNode.fontWeight === 700 ? 'rgba(99,102,241,.2)' : 'transparent', color: c.text, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>B</button>
+            <button onClick={() => updateNode(selNode.id, { fontStyle: selNode.fontStyle === 'italic' ? 'normal' : 'italic' })} style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${c.bord}`, background: selNode.fontStyle === 'italic' ? 'rgba(99,102,241,.2)' : 'transparent', color: c.text, cursor: 'pointer', fontStyle: 'italic', fontSize: 13 }}>I</button>
+            {selNode.type === 'sticky' && (
+              <div style={{ display: 'flex', gap: 3 }}>
+                {STICKY_COLORS.map(col => (
+                  <button key={col} onClick={() => updateNode(selNode.id, { color: col })} style={{ width: 18, height: 18, borderRadius: '50%', background: col, border: selNode.color === col ? '2.5px solid #818CF8' : `1px solid ${c.bord}`, cursor: 'pointer' }}/>
+                ))}
+              </div>
+            )}
+            <div style={{ width: 1, height: 20, background: c.bord }}/>
+            <button onClick={() => {
+              const nn = nodes.filter(n => !selected.has(n.id));
+              const nc = connections.filter(c2 => !selected.has(c2.from) && !selected.has(c2.to));
+              const np = drawPaths.filter(p => !selected.has(p.id));
+              setNodes(nn); setConnections(nc); setDrawPaths(np); setSelected(new Set());
+              pushHistory(nn, nc, np);
+            }} style={{ padding: '4px 10px', borderRadius: 6, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.25)', color: '#F87171', cursor: 'pointer', fontSize: 12 }}>Delete</button>
+          </div>
+        )}
+
+        {connectFrom && <span style={{ fontSize: 12, color: '#34D399', background: 'rgba(52,211,153,.1)', padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(52,211,153,.25)' }}>✓ Click another node to connect · Esc to cancel</span>}
+
+        <div style={{ flex: 1 }}/>
+
+        {/* Zoom & actions */}
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <button onClick={() => setZoom(z => Math.max(0.15, z / 1.25))} style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${c.bord}`, background: 'transparent', color: c.text, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+          <button onClick={() => { setZoom(1); }} style={{ fontSize: 12, color: c.mut, width: 48, textAlign: 'center', background: 'transparent', border: `1px solid ${c.bord}`, borderRadius: 7, height: 28, cursor: 'pointer' }}>{Math.round(zoom * 100)}%</button>
+          <button onClick={() => setZoom(z => Math.min(3, z * 1.25))} style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${c.bord}`, background: 'transparent', color: c.text, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+          <button onClick={fitView} style={{ padding: '4px 10px', borderRadius: 7, border: `1px solid ${c.bord}`, background: 'transparent', color: c.mut, cursor: 'pointer', fontSize: 11 }}>Fit</button>
+          <button onClick={undo} title="Undo Ctrl+Z" style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${c.bord}`, background: 'transparent', color: c.mut, cursor: 'pointer', fontSize: 15 }}>↩</button>
+          <button onClick={redo} title="Redo Ctrl+Y" style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${c.bord}`, background: 'transparent', color: c.mut, cursor: 'pointer', fontSize: 15 }}>↪</button>
+          <button onClick={clearBoard} style={{ padding: '4px 10px', borderRadius: 7, border: '1px solid rgba(239,68,68,.2)', background: 'rgba(239,68,68,.06)', color: '#F87171', cursor: 'pointer', fontSize: 11 }}>Clear</button>
+        </div>
+      </div>
+
+      {/* CANVAS */}
+      <div
+        ref={canvasRef}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+        style={{
+          flex: 1, position: 'relative', overflow: 'hidden',
+          cursor: isPanning ? 'grabbing' : tool === 'draw' ? 'crosshair' : ['sticky','text','shape'].includes(tool) ? 'cell' : tool === 'connect' ? 'crosshair' : 'default',
+          background: dark ? '#07051A' : '#ECEEFF',
+        }}
+      >
+        {/* Dot-grid */}
+        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+          <defs>
+            <pattern id="bsdots" x={pan.x % (24 * zoom)} y={pan.y % (24 * zoom)} width={24 * zoom} height={24 * zoom} patternUnits="userSpaceOnUse">
+              <circle cx={1} cy={1} r={0.9} fill={dark ? 'rgba(255,255,255,.1)' : 'rgba(99,102,241,.18)'}/>
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#bsdots)"/>
+        </svg>
+
+        {/* Transform group */}
+        <div style={{ position: 'absolute', left: pan.x, top: pan.y, transform: `scale(${zoom})`, transformOrigin: '0 0', width: 0, height: 0 }}>
+
+          {/* SVG for connections + draw */}
+          <svg style={{ position: 'absolute', left: -8000, top: -8000, width: 24000, height: 24000, overflow: 'visible', pointerEvents: 'none' }}>
+            <defs>
+              <marker id="bsarrow" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+                <path d="M0,0 L0,7 L9,3.5 z" fill="#818CF8"/>
+              </marker>
+              <marker id="bsarrow-sel" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+                <path d="M0,0 L0,7 L9,3.5 z" fill="#A78BFA"/>
+              </marker>
+            </defs>
+
+            {/* Connections */}
+            {connections.map(conn => {
+              const f = getCenter(conn.from), t = getCenter(conn.to);
+              const isSel = selected.has(conn.id);
+              return (
+                <g key={conn.id}>
+                  <path d={curvePath(f.x, f.y, t.x, t.y)} fill="none" stroke="transparent" strokeWidth={14} style={{ pointerEvents: 'all', cursor: 'pointer' }} onClick={e => { e.stopPropagation(); setSelected(new Set([conn.id])); }}/>
+                  <path d={curvePath(f.x, f.y, t.x, t.y)} fill="none" stroke={isSel ? '#A78BFA' : '#818CF8'} strokeWidth={isSel ? 2.5 : 1.8} markerEnd={`url(#${isSel ? 'bsarrow-sel' : 'bsarrow'})`}/>
+                  {conn.label && <text x={(f.x+t.x)/2} y={(f.y+t.y)/2-8} textAnchor="middle" fill={c.mut} fontSize={11} fontFamily="Inter">{conn.label}</text>}
+                </g>
+              );
+            })}
+
+            {/* Connect preview */}
+            {connectFrom && connectPreview && (() => {
+              const f = getCenter(connectFrom);
+              return <path d={curvePath(f.x, f.y, connectPreview.x, connectPreview.y)} fill="none" stroke="#34D399" strokeWidth={1.8} strokeDasharray="8,4" markerEnd="url(#bsarrow)"/>;
+            })()}
+
+            {/* Draw paths */}
+            {drawPaths.map(p => (
+              <path key={p.id} d={pathStr(p.pts)} fill="none" stroke={p.color} strokeWidth={p.width} strokeLinecap="round" strokeLinejoin="round"
+                style={{ pointerEvents: 'all', cursor: 'pointer', opacity: selected.has(p.id) ? 0.6 : 1 }}
+                onClick={e => { e.stopPropagation(); setSelected(new Set([p.id])); }}/>
+            ))}
+
+            {/* Active draw */}
+            {currentPath && <path d={pathStr(currentPath.pts)} fill="none" stroke={currentPath.color} strokeWidth={currentPath.width} strokeLinecap="round" strokeLinejoin="round"/>}
+          </svg>
+
+          {/* Nodes */}
+          {nodes.map(node => {
+            const isSel = selected.has(node.id);
+            const isEdit = editingId === node.id;
+            return (
+              <div key={node.id}
+                onMouseDown={e => onNodeMouseDown(e, node)}
+                onDoubleClick={e => { e.stopPropagation(); setEditingId(node.id); setSelected(new Set([node.id])); }}
+                style={{ position: 'absolute', left: node.x, top: node.y, width: node.w, height: node.h, zIndex: isSel ? 10 : 1, cursor: tool === 'connect' ? 'crosshair' : dragging?.id === node.id ? 'grabbing' : 'grab' }}
+              >
+                {/* ── STICKY ── */}
+                {node.type === 'sticky' && (
+                  <div style={{ width: '100%', height: '100%', background: node.color || '#FDE68A', borderRadius: 4, boxShadow: isSel ? '0 0 0 2.5px #818CF8, 0 8px 28px rgba(0,0,0,.4)' : '0 4px 18px rgba(0,0,0,.3), 2px 3px 0 rgba(0,0,0,.1)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <div style={{ height: 26, background: 'rgba(0,0,0,.1)', flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 8px', gap: 4 }}>
+                      {['0.45','0.28','0.16'].map((op,i) => <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: `rgba(0,0,0,${op})` }}/>)}
+                    </div>
+                    <div style={{ flex: 1, padding: 9, overflow: 'hidden' }}>
+                      {isEdit ? (
+                        <textarea autoFocus value={node.text} onChange={e => updateNodeText(node.id, e.target.value)} onBlur={commitText} onMouseDown={e => e.stopPropagation()}
+                          style={{ width: '100%', height: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontFamily: 'Inter, sans-serif', fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 400, fontStyle: node.fontStyle || 'normal', color: 'rgba(0,0,0,.8)', lineHeight: 1.55 }}/>
+                      ) : (
+                        <div style={{ fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 400, fontStyle: node.fontStyle || 'normal', color: 'rgba(0,0,0,.8)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word', userSelect: 'none' }}>{node.text}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── TEXT ── */}
+                {node.type === 'text' && (
+                  <div style={{ width: '100%', height: '100%', border: isSel ? '1.5px solid #818CF8' : isEdit ? '1.5px solid #818CF8' : '1.5px dashed rgba(148,130,255,.3)', borderRadius: 7, padding: '7px 11px', display: 'flex', alignItems: 'center', background: isSel ? 'rgba(99,102,241,.04)' : 'transparent', boxShadow: isSel ? '0 0 0 2px rgba(99,102,241,.3)' : 'none', overflow: 'hidden' }}>
+                    {isEdit ? (
+                      <textarea autoFocus value={node.text} onChange={e => updateNodeText(node.id, e.target.value)} onBlur={commitText} onMouseDown={e => e.stopPropagation()}
+                        style={{ width: '100%', height: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontFamily: 'Inter, sans-serif', fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 400, fontStyle: node.fontStyle || 'normal', color: c.text, lineHeight: 1.55 }}/>
+                    ) : (
+                      <div style={{ fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 400, fontStyle: node.fontStyle || 'normal', color: node.text ? c.text : c.mut, whiteSpace: 'pre-wrap', wordBreak: 'break-word', userSelect: 'none', width: '100%' }}>{node.text || 'Text'}</div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── SHAPE ── */}
+                {node.type === 'shape' && (
+                  <div style={{ width: '100%', height: '100%', position: 'relative', boxShadow: isSel ? '0 0 0 2px #818CF8' : 'none', borderRadius: node.shapeType === 'rect' ? 8 : 0 }}>
+                    <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+                      {renderShapeSvg(node)}
+                    </svg>
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {isEdit ? (
+                        <textarea autoFocus value={node.text} onChange={e => updateNodeText(node.id, e.target.value)} onBlur={commitText} onMouseDown={e => e.stopPropagation()}
+                          style={{ background: 'transparent', border: 'none', outline: 'none', resize: 'none', textAlign: 'center', fontFamily: 'Inter, sans-serif', fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 700, color: c.text, width: '80%', height: '60%', lineHeight: 1.4 }}/>
+                      ) : (
+                        <div style={{ fontSize: node.fontSize || 13, fontWeight: node.fontWeight || 700, color: c.text, textAlign: 'center', padding: 8, userSelect: 'none', wordBreak: 'break-word' }}>{node.text}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Resize handle */}
+                {isSel && !isEdit && (
+                  <div onMouseDown={e => onResizeDown(e, node)} style={{ position: 'absolute', right: -5, bottom: -5, width: 12, height: 12, borderRadius: 3, background: '#818CF8', border: '2px solid #fff', cursor: 'se-resize', zIndex: 20 }}/>
+                )}
+
+                {/* Connect ports */}
+                {tool === 'connect' && (
+                  <>
+                    {[{ left: '50%', top: -6, transform: 'translateX(-50%)' }, { left: '50%', bottom: -6, transform: 'translateX(-50%)' }, { top: '50%', left: -6, transform: 'translateY(-50%)' }, { top: '50%', right: -6, transform: 'translateY(-50%)' }].map((s, i) => (
+                      <div key={i} style={{ position: 'absolute', width: 10, height: 10, borderRadius: '50%', background: connectFrom === node.id ? '#34D399' : '#818CF8', border: '2px solid #fff', zIndex: 30, pointerEvents: 'none', ...s }}/>
+                    ))}
+                  </>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Selection box */}
+          {selectionBox && (() => {
+            const sx = Math.min(selectionBox.x1, selectionBox.x2), sy = Math.min(selectionBox.y1, selectionBox.y2);
+            const sw = Math.abs(selectionBox.x2 - selectionBox.x1), sh = Math.abs(selectionBox.y2 - selectionBox.y1);
+            return <div style={{ position: 'absolute', left: sx, top: sy, width: sw, height: sh, border: '1.5px solid #818CF8', background: 'rgba(99,102,241,.06)', pointerEvents: 'none', borderRadius: 4 }}/>;
+          })()}
+        </div>
+
+        {/* Mini-map */}
+        <div style={{ position: 'absolute', bottom: 12, right: 12, width: 128, height: 84, background: dark ? 'rgba(8,6,22,.88)' : 'rgba(255,255,255,.88)', border: `1px solid ${c.bord}`, borderRadius: 9, overflow: 'hidden', backdropFilter: 'blur(10px)' }}>
+          <svg width="128" height="84">
+            {nodes.map(n => <rect key={n.id} x={64 + n.x * 0.035} y={42 + n.y * 0.035} width={Math.max(4, n.w * 0.035)} height={Math.max(3, n.h * 0.035)} rx={1} fill={n.color || '#818CF8'} opacity={0.8}/>)}
+          </svg>
+          <div style={{ position: 'absolute', bottom: 4, left: 6, fontSize: 9, color: c.mut }}>Map</div>
+        </div>
+
+        {/* Hint bar */}
+        <div style={{ position: 'absolute', bottom: 12, left: 12, fontSize: 10, color: c.mut, pointerEvents: 'none', lineHeight: 1.6 }}>
+          Scroll to pan · Ctrl+scroll to zoom · Alt+drag to pan<br/>Double-click node to edit · Del to delete · V S T D for tools
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── MANAGER VIEW ─────────────────────────────────────────────────────────────
 
 function ManagerView({
@@ -2778,7 +3219,7 @@ function ManagerView({
 // Icons and tabs - inline object literals (not const, so no Terser TDZ)
 var STANDSYNC_ICONS_MAP = {live:'◉',team:'⚇',perf:'↗',analysis:'▤',ai:'✦',chat:'◌',cal:'⊟',notes:'≡',remind:'◔',hist:'↺',tset:'⚙',pip:'⧉'};
 var I = STANDSYNC_ICONS_MAP;
-var STANDSYNC_MGR_TABS = [{id:'live',l:'Live board',ic:'◉'},{id:'team',l:'Team',ic:'⚇'},{id:'perf',l:'Performance',ic:'↗'},{id:'analysis',l:'Analysis',ic:'▤'},{id:'ai',l:'AI',ic:'✦'},{id:'chat',l:'Chat',ic:'◌'},{id:'cal',l:'Calendar',ic:'⊟'},{id:'notes',l:'Notes',ic:'≡'},{id:'remind',l:'Reminders',ic:'◔'},{id:'hist',l:'History',ic:'↺'},{id:'tset',l:'Settings',ic:'⚙'}];
+var STANDSYNC_MGR_TABS = [{id:'live',l:'Live board',ic:'◉'},{id:'team',l:'Team',ic:'⚇'},{id:'perf',l:'Performance',ic:'↗'},{id:'analysis',l:'Analysis',ic:'▤'},{id:'ai',l:'AI',ic:'✦'},{id:'chat',l:'Chat',ic:'◌'},{id:'cal',l:'Calendar',ic:'⊟'},{id:'notes',l:'Notes',ic:'≡'},{id:'brain',l:'Brainstorm',ic:'⬡'},{id:'remind',l:'Reminders',ic:'◔'},{id:'hist',l:'History',ic:'↺'},{id:'tset',l:'Settings',ic:'⚙'}];
 
   const c=useC(); const [tab,setTab]=useState('live');
   const [unreadChat,setUnreadChat]=useState(0);
@@ -2837,6 +3278,7 @@ var STANDSYNC_MGR_TABS = [{id:'live',l:'Live board',ic:'◉'},{id:'team',l:'Team
         {tab==='chat'&&<RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme} isManager={true}/>}
         {tab==='cal'&&<CalendarPanel team={team} members={members} session={session}/>}
         {tab==='notes'&&<ManagerNotesTab session={session} team={team}/>}
+        {tab==='brain'&&<BrainstormSpace team={team} session={session}/>}
         {tab==='analysis'&&<TeamAnalysisTab tasks={tasks} members={members}/>}
         {tab==='remind'&&<RemindersPanel team={team} members={members} session={session}/>}
         {tab==='hist'&&<HistTab history={history} members={members}/>}
@@ -3114,19 +3556,17 @@ export default function App() {
   const handleDigest=useCallback(async()=>{
     setEmailBusy(true);
     if(!process.env.REACT_APP_RESEND_KEY){ showToast('⚠️ Add REACT_APP_RESEND_KEY to Vercel to send emails','error'); setEmailBusy(false); return; }
-    let sent=0, failed=0;
+    let sent=0;
     const nonManagers=members.filter(x=>x.role!=='manager');
     if(nonManagers.length===0){ showToast('No team members to send digest to — invite members first','error'); setEmailBusy(false); return; }
     for(const m of nonManagers){
-      try{
-        const mt=tasks.filter(t=>t.assignee_email===m.email);
-        await Email.sendMorningDigest(m,mt,team?.name||'Team');
-        sent++;
-      }catch(e){ console.error('Digest failed for',m.email,e); failed++; }
+      const mt=tasks.filter(t=>t.assignee_email===m.email);
+      // Send digest even if no tasks — member should know standup started
+      await Email.sendMorningDigest(m,mt,team?.name||'Team');
+      sent++;
     }
     setEmailBusy(false);
-    if(failed>0) showToast(`📧 Sent ${sent}, failed ${failed} — check console for details`,'error');
-    else showToast('📧 Digest sent to '+sent+' member'+(sent!==1?'s':''));
+    showToast('📧 Digest sent to '+sent+' member'+(sent!==1?'s':''));
   },[tasks,members,team,showToast]);
   const handleEOD=useCallback(async()=>{ setEmailBusy(true); try{ for(const m of members.filter(x=>x.role!=='manager')){const p=tasks.filter(t=>t.assignee_email===m.email&&t.status!=='done');if(p.length>0)await Email.sendEODBacklog(m,p,team?.name||'Team');} const mg=members.find(m=>m.role==='manager'); if(mg)await Email.sendManagerSummary(mg.email,tasks,members,team?.name||'Team'); showToast('🕕 EOD summary sent'); }catch(e){showToast('Failed to send EOD','error');} setEmailBusy(false); },[tasks,members,team,showToast]);
   const handleLogin=useCallback(async(sess)=>{ setSession(sess); if(inviteToken&&SB.IS_LIVE){const r=await SB.acceptInvite(inviteToken,sess.user.id,sess.user.email,sess.user.user_metadata?.name||sess.user.email);if(r.teamId)showToast(`✅ Joined: ${r.teamName}`);window.history.replaceState({},'',window.location.pathname);setInviteToken(null);} setView('home'); },[inviteToken,showToast]);
@@ -3191,18 +3631,7 @@ export default function App() {
       {(session||!SB.IS_LIVE)&&view==='settings'&&<SettingsPage session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onBack={()=>setView(team?'standup':'home')} onSaved={d=>showToast('Profile saved')}/>}
       {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
       {/* PiP is a real popup window — no DOM element needed */}
-      {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<MemberView user={userForView} myMember={myMember} tasks={tasks} onAdd={handleAddTask} onStatus={handleStatus} onBlocker={handleBlocker} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} members={members} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} history={history} team={team}/>}
-      {/* FIX 1: draggable AI bubble — shown for both manager and member in standup view */}
-      {(session||!SB.IS_LIVE)&&view==='standup'&&(
-        <AIBubble
-          tasks={tasks}
-          members={members}
-          history={history}
-          session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}}
-          myTasks={tasks.filter(t=>t.assignee_email===(session?.user?.email||userForView.email))}
-          teamName={team?.name||'Team'}
-        />
-      )}
+      {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<MemberView user={userForView} myMember={myMember} tasks={tasks} onAdd={handleAddTask} onStatus={handleStatus} onBlocker={handleBlocker} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} members={members} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme}/>}
     </ThemeCtx.Provider>
   );
 }
