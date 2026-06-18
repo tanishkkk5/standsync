@@ -1,82 +1,38 @@
-// src/lib/email.js — Resend via Supabase Edge Function (avoids CORS)
-// The Edge Function proxies email requests server-side where CORS doesn't apply
+// src/lib/email.js — sends through the Vercel serverless function /api/send
+// (server-side Resend call: no CORS, API key never exposed to the browser).
+//
+// Set RESEND_API_KEY in Vercel (server-side env, NOT REACT_APP_). The frontend
+// no longer needs REACT_APP_RESEND_KEY for delivery — it just POSTs here.
 
-const RESEND_KEY = process.env.REACT_APP_RESEND_KEY;
-const SUPA_URL   = process.env.REACT_APP_SUPABASE_URL || '';
-const SUPA_KEY   = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
-const APP        = process.env.REACT_APP_URL || 'https://standsync-olive.vercel.app';
-const FROM       = 'StandSync <onboarding@resend.dev>';
+const APP  = process.env.REACT_APP_URL || 'https://standsync-olive.vercel.app';
+const FROM = 'StandSync <onboarding@resend.dev>';
+// Where the serverless function lives. Same-origin in production.
+const SEND_ENDPOINT = '/api/send';
 
-// Send via Supabase Edge Function (server-side, no CORS issues)
-// Falls back to direct fetch if edge function not deployed
+// Returns { ok, id? , error? , demo? }
 async function send({ to, subject, html }) {
-  if (!RESEND_KEY) {
-    console.log('[Email demo] Would send to:', to, '|', subject);
-    return { ok: false, demo: true };
-  }
-
   const toArr = Array.isArray(to) ? to : [to];
-  const body  = JSON.stringify({ from: FROM, to: toArr, subject, html });
-
-  // Try Supabase Edge Function first (no CORS issues)
-  if (SUPA_URL) {
-    try {
-      const r = await fetch(SUPA_URL + '/functions/v1/send-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + SUPA_KEY,
-        },
-        body: JSON.stringify({ resend_key: RESEND_KEY, from: FROM, to: toArr, subject, html }),
-      });
-      if (r.ok) {
-        const d = await r.json().catch(() => ({}));
-        console.log('[Email] Sent via Edge Function to:', toArr.join(', '));
-        return { ok: true, id: d.id };
-      }
-    } catch(e) {
-      console.log('[Email] Edge function not available, trying direct...');
-    }
-  }
-
-  // Direct fetch fallback (works if Resend enables CORS for your domain)
   try {
-    const r = await fetch('https://api.resend.com/emails', {
+    const r = await fetch(SEND_ENDPOINT, {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + RESEND_KEY, 'Content-Type': 'application/json' },
-      body,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: FROM, to: toArr, subject, html }),
     });
-    if (r.ok) {
-      const d = await r.json();
-      console.log('[Email] Sent directly to:', toArr.join(', '));
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d.ok) {
+      console.log('[Email] sent to', toArr.join(', '), d.id ? '(' + d.id + ')' : '');
       return { ok: true, id: d.id };
     }
-    const err = await r.text().catch(() => '');
-    console.warn('[Email] Resend error:', r.status, err.slice(0, 100));
-    // CORS block — try no-cors as last resort (sends but can't confirm)
-    if (r.status === 0 || err.includes('CORS') || err === '') {
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST', mode: 'no-cors',
-        headers: { 'Authorization': 'Bearer ' + RESEND_KEY, 'Content-Type': 'application/json' },
-        body,
-      });
-      console.log('[Email] Sent via no-cors to:', toArr.join(', '));
-      return { ok: true };
+    // 500 with "RESEND_API_KEY not set" → behave like demo so the UI still works
+    if (d.error && /RESEND_API_KEY/.test(d.error)) {
+      console.warn('[Email] server key not set — running in demo mode (no real email).');
+      return { ok: false, demo: true, error: d.error };
     }
-    return { ok: false, status: r.status };
-  } catch(e) {
-    // Final fallback: no-cors
-    try {
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST', mode: 'no-cors',
-        headers: { 'Authorization': 'Bearer ' + RESEND_KEY, 'Content-Type': 'application/json' },
-        body,
-      });
-      return { ok: true };
-    } catch(e2) {
-      console.error('[Email] All methods failed:', e2.message);
-      return { ok: false };
-    }
+    console.warn('[Email] send failed:', r.status, d.error || '');
+    return { ok: false, error: d.error || ('HTTP ' + r.status) };
+  } catch (e) {
+    console.error('[Email] request failed:', e.message);
+    return { ok: false, error: e.message };
   }
 }
 
