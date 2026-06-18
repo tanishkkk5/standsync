@@ -234,22 +234,18 @@ function SplashScreen({ onDone }) {
     const t1 = setTimeout(() => onDone && onDone(), 2500);
     return () => { clearTimeout(t0); clearTimeout(t1); };
   }, [onDone]);
-  const word = 'StandSync';
+  const tagline = 'Run standups. Stay aligned.';
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 22,
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18,
       background: 'radial-gradient(ellipse at 50% 40%, #1A1450 0%, #0B0A2E 45%, #050816 100%)' }}>
       {/* glow pulse */}
       <div style={{ position: 'absolute', width: 320, height: 320, borderRadius: '50%', background: 'radial-gradient(circle, rgba(124,92,255,.35), transparent 70%)', filter: 'blur(40px)', animation: 'ssGlow 2.4s ease-in-out infinite' }}/>
       <div style={{ position: 'relative', transform: show ? 'scale(1)' : 'scale(.8)', opacity: show ? 1 : 0, transition: 'transform .7s cubic-bezier(.2,.8,.2,1), opacity .7s ease' }}>
         <Logo size={64}/>
       </div>
-      <div style={{ position: 'relative', display: 'flex', gap: 1 }}>
-        {word.split('').map((ch, i) => (
-          <span key={i} style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.02em', color: '#fff',
-            opacity: show ? 1 : 0, transform: show ? 'translateY(0)' : 'translateY(8px)',
-            transition: `opacity .5s ease ${0.5 + i * 0.06}s, transform .5s ease ${0.5 + i * 0.06}s` }}>{ch}</span>
-        ))}
-      </div>
+      <div style={{ position: 'relative', fontSize: 15, fontWeight: 500, letterSpacing: '.04em', color: 'rgba(255,255,255,.62)',
+        opacity: show ? 1 : 0, transform: show ? 'translateY(0)' : 'translateY(8px)',
+        transition: 'opacity .6s ease .7s, transform .6s ease .7s' }}>{tagline}</div>
     </div>
   );
 }
@@ -6502,8 +6498,15 @@ export default function App() {
       <style>{CSS+`select option{background:${dark?'#0D0B24':'#fff'}!important;color:${dark?'#fff':'#1E1B4B'}}input::placeholder,textarea::placeholder{color:${dark?'rgba(255,255,255,.28)':'rgba(0,0,0,.35)'}}`}</style>
       <BgEl/>
       {toast&&<ToastEl msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
-      {view==='splash'&&<SplashScreen onDone={()=>setView(SB.IS_LIVE?'auth':'home')}/>}
+      {view==='splash'&&<SplashScreen onDone={()=>setView(v=>{
+        if(v!=='splash') return v;
+        if(session) return 'home';
+        if(!SB.IS_LIVE) return 'home';
+        return 'auth';
+      })}/>}
       {view==='auth'&&<AuthPage onLogin={handleLogin} inviteToken={inviteToken}/>}
+      {/* Safety net: logged-out live user on a non-auth/splash view would otherwise see a blank screen */}
+      {SB.IS_LIVE && !session && view!=='auth' && view!=='splash' && <AuthPage onLogin={handleLogin} inviteToken={inviteToken}/>}
       {/* App views */}
       {(session||!SB.IS_LIVE)&&view==='home'&&<HomeView key={homeKey} session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onSelectTeam={handleSelectTeam} onLogout={handleLogout} onSettings={()=>setView('settings')}/>}
       {(session||!SB.IS_LIVE)&&view==='settings'&&<SettingsPage session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onBack={()=>setView(team?'standup':'home')} onSaved={d=>showToast('Profile saved')}/>}
