@@ -4688,7 +4688,6 @@ function HomeCommand({ session, team, tasks, members, onGoto, onAddTask, onStart
   const QUICK = [
     { l: 'Meeting note', sub: 'Notes & project notes', icon: '≡', fn: () => onNewNote && onNewNote() },
     { l: 'Start standup', sub: 'Run the room', icon: '◉', fn: () => onStandupOptions && onStandupOptions() },
-    { l: 'Ask AI', sub: 'Summarize the day', icon: '✦', fn: () => onGoto('insights') },
   ];
 
   // ── Bottom stat cards ──
@@ -4724,7 +4723,7 @@ function HomeCommand({ session, team, tasks, members, onGoto, onAddTask, onStart
       </div>
 
       {/* Quick action cards */}
-      <div className="ss-home-quick" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
+      <div className="ss-home-quick" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 14 }}>
         {QUICK.map(a => (
           <button key={a.l} onClick={a.fn}
             style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '18px 18px', borderRadius: 16, border: `1px solid ${c.bord}`, background: c.surf, cursor: 'pointer', textAlign: 'left', transition: 'all .15s' }}
@@ -5091,9 +5090,7 @@ function ManagerView({
       {noteModal && <QuickNoteModal session={session} team={team} onClose={() => setNoteModal(false)} onOpenKnowledge={() => { setNoteModal(false); setKnowledgeSub('meetings'); goArea('knowledge'); }}/>}
       {standupModal && <StandupOptionsModal team={team} onClose={() => setStandupModal(false)}
         onJoin={() => { setStandupModal(false); goArea('tasks'); }}
-        onPip={(mode) => { setStandupModal(false); openPip && openPip(mode); }}
-        onNotes={() => { setStandupModal(false); setKnowledgeSub('meetings'); goArea('knowledge'); }}
-        onTasks={() => { setStandupModal(false); goArea('tasks'); }}/>}
+        onPip={(mode) => { setStandupModal(false); openPip && openPip(mode); }}/>}
     </div>
   );
 }
@@ -5200,25 +5197,56 @@ function QuickNoteModal({ session, team, onClose, onOpenKnowledge }) {
 }
 
 // ─── STANDUP OPTIONS MODAL ────────────────────────────────────────────────────
-function StandupOptionsModal({ team, onClose, onJoin, onPip, onNotes, onTasks }) {
+function StandupOptionsModal({ team, onClose, onJoin, onPip }) {
   const c = useC();
   const { dark } = useTheme();
-  // Pull detected standups / events from the calendar session cache
+  const [view, setView] = useState('main'); // main | join | pip
+
+  // Pull events from the calendar session cache
   const calEvents = (() => { try { return JSON.parse(sessionStorage.getItem('ss-cal-events') || '[]'); } catch { return []; } })();
   const standupKeywords = ['standup', 'stand-up', 'stand up', 'daily', 'dsu', 'scrum', 'sync'];
   const now = new Date();
   const upcoming = calEvents
     .map(ev => ({ ...ev, _start: new Date(ev.start?.dateTime || ev.start?.date || 0) }))
-    .filter(ev => ev._start >= new Date(now.getTime() - 60*60*1000)) // include ones that started within last hour
-    .filter(ev => standupKeywords.some(k => (ev.summary || '').toLowerCase().includes(k)) || true)
+    .filter(ev => ev._start >= new Date(now.getTime() - 60*60*1000))
     .sort((a, b) => a._start - b._start)
-    .slice(0, 6);
+    .slice(0, 12);
   const standupsOnly = upcoming.filter(ev => standupKeywords.some(k => (ev.summary || '').toLowerCase().includes(k)));
-  const list = standupsOnly.length ? standupsOnly : upcoming;
+  const joinList = standupsOnly.length ? standupsOnly : upcoming;
 
   const fmtTime = (d) => d && !isNaN(d) ? d.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
 
-  const [pipStep, setPipStep] = useState(false);
+  // Find a usable meeting link from any provider
+  const getMeetLink = (ev) => {
+    if (ev.hangoutLink) return ev.hangoutLink;
+    // Google conferenceData
+    const cd = ev.conferenceData?.entryPoints?.find(e => e.entryPointType === 'video');
+    if (cd?.uri) return cd.uri;
+    // Scan location + description for any zoom/teams/skype/meet/webex url
+    const text = `${ev.location || ''} ${ev.description || ''}`;
+    const m = text.match(/https?:\/\/[^\s"'<>]+(zoom\.us|teams\.microsoft|teams\.live|meet\.google|skype\.com|webex\.com|whereby\.com|meet\.jit\.si)[^\s"'<>]*/i);
+    if (m) return m[0];
+    // Any url at all as last resort
+    const any = text.match(/https?:\/\/[^\s"'<>]+/);
+    return any ? any[0] : null;
+  };
+  const providerOf = (link) => {
+    if (!link) return null;
+    if (/zoom\.us/i.test(link)) return 'Zoom';
+    if (/teams\.(microsoft|live)/i.test(link)) return 'Teams';
+    if (/meet\.google/i.test(link)) return 'Meet';
+    if (/skype/i.test(link)) return 'Skype';
+    if (/webex/i.test(link)) return 'Webex';
+    if (/whereby/i.test(link)) return 'Whereby';
+    if (/jit\.si/i.test(link)) return 'Jitsi';
+    return 'Link';
+  };
+
+  const joinMeeting = (ev) => {
+    const link = getMeetLink(ev);
+    if (link) { window.open(link, '_blank', 'noopener'); onClose(); }
+    else { onJoin(); } // no link found — fall back to live board
+  };
 
   const Action = ({ icon, title, desc, onClick, accent }) => (
     <button onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 12, border: `1px solid ${c.bord}`, background: c.surf, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all .15s' }}
@@ -5229,54 +5257,65 @@ function StandupOptionsModal({ team, onClose, onJoin, onPip, onNotes, onTasks })
         <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>{title}</div>
         <div style={{ fontSize: 12, color: c.mut, marginTop: 2 }}>{desc}</div>
       </div>
-      <span style={{ color: c.mut, fontSize: 16 }}>→</span>
+      <span style={{ color: c.mut, fontSize: 16 }}>\u2192</span>
     </button>
   );
 
-  // ── PiP sub-choice: notes / tasks / both ──
-  if (pipStep) {
+  // ── JOIN: calendar list ──
+  if (view === 'join') {
     return (
-      <Modal onClose={onClose} title="Picture-in-picture" width={460}>
+      <Modal onClose={onClose} title="Join a standup" width={520}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <button onClick={() => setPipStep(false)} style={{ alignSelf: 'flex-start', fontSize: 12, color: c.mut, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 2 }}>← Back</button>
-          <Action icon="≡" title="PiP — Meeting notes" desc="Floating notes pad over your call" accent="#FBBF24" onClick={() => onPip('notes')}/>
-          <Action icon="◎" title="PiP — Tasks" desc="Floating task board over your call" accent="#60A5FA" onClick={() => onPip('tasks')}/>
-          <Action icon="⧉" title="PiP — Both" desc="Notes and tasks together in one window" accent="#818CF8" onClick={() => onPip('both')}/>
+          <button onClick={() => setView('main')} style={{ alignSelf: 'flex-start', fontSize: 12, color: c.mut, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 2 }}>\u2190 Back</button>
+          <div style={{ fontSize: 12.5, color: c.mut, lineHeight: 1.5, marginBottom: 4 }}>Pick a meeting to jump straight into its video call.</div>
+          {joinList.length === 0 ? (
+            <div style={{ fontSize: 13, color: c.mut, padding: '20px 2px', lineHeight: 1.6, textAlign: 'center' }}>
+              No upcoming meetings found.<br/>Connect Google Calendar in the Calendar tab to see and join your standups here.
+            </div>
+          ) : joinList.map(ev => {
+            const link = getMeetLink(ev);
+            const prov = providerOf(link);
+            return (
+              <button key={ev.id} onClick={() => joinMeeting(ev)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 11, border: `1px solid ${c.bord}`, background: c.surf, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all .15s' }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = c.bordH}
+                onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: link ? '#34D399' : '#64748B', flexShrink: 0 }}/>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.summary || 'Untitled meeting'}</div>
+                  <div style={{ fontSize: 11, color: c.mut, marginTop: 2 }}>{fmtTime(ev._start)}</div>
+                </div>
+                {prov
+                  ? <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: 'linear-gradient(135deg,#6366F1,#818CF8)', padding: '4px 12px', borderRadius: 20, flexShrink: 0 }}>Join {prov}</span>
+                  : <span style={{ fontSize: 11, color: c.mut, flexShrink: 0 }}>No link</span>}
+              </button>
+            );
+          })}
+          <button onClick={onJoin} style={{ marginTop: 4, fontSize: 13, color: c.accent, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Or open the live board \u2192</button>
         </div>
       </Modal>
     );
   }
 
+  // ── PIP: notes / tasks / both ──
+  if (view === 'pip') {
+    return (
+      <Modal onClose={onClose} title="Picture-in-picture" width={460}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <button onClick={() => setView('main')} style={{ alignSelf: 'flex-start', fontSize: 12, color: c.mut, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 2 }}>\u2190 Back</button>
+          <Action icon="\u2261" title="Meeting notes" desc="Floating notes pad over your call" accent="#FBBF24" onClick={() => onPip('notes')}/>
+          <Action icon="\u25CE" title="Create tasks" desc="Floating task board over your call" accent="#60A5FA" onClick={() => onPip('tasks')}/>
+          <Action icon="\u29C9" title="Both" desc="Notes and tasks together in one window" accent="#818CF8" onClick={() => onPip('both')}/>
+        </div>
+      </Modal>
+    );
+  }
+
+  // ── MAIN: two options ──
   return (
     <Modal onClose={onClose} title="Start standup" width={520}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <Action icon="◉" title="Join the standup" desc="Open the live board to track tasks in real time" onClick={onJoin} accent="#34D399"/>
-        <Action icon="⧉" title="PiP mode" desc="Floating window that stays over your video call" onClick={() => setPipStep(true)} accent="#818CF8"/>
-        <Action icon="≡" title="Meeting notes" desc="Capture notes while the standup runs" onClick={onNotes} accent="#FBBF24"/>
-        <Action icon="◎" title="Task board" desc="Go straight to assigning and updating tasks" onClick={onTasks} accent="#60A5FA"/>
-
-        {/* Standups from calendar */}
-        <div style={{ marginTop: 8, paddingTop: 14, borderTop: `1px solid ${c.bord}` }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, letterSpacing: '.08em', marginBottom: 10 }}>FROM YOUR CALENDAR</div>
-          {list.length === 0 ? (
-            <div style={{ fontSize: 13, color: c.mut, padding: '8px 2px', lineHeight: 1.5 }}>
-              No upcoming standups detected. Connect Google Calendar in the Calendar tab to see and join your scheduled standups here.
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {list.map(ev => (
-                <button key={ev.id} onClick={onJoin} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10, border: `1px solid ${c.bord}`, background: 'transparent', cursor: 'pointer', textAlign: 'left', width: '100%' }}
-                  onMouseEnter={e => e.currentTarget.style.background = c.row}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#34D399', flexShrink: 0 }}/>
-                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.summary || 'Untitled event'}</span>
-                  <span style={{ fontSize: 11, color: c.mut, flexShrink: 0 }}>{fmtTime(ev._start)}</span>
-                  {ev.hangoutLink && <span style={{ fontSize: 11, color: '#818CF8', flexShrink: 0 }}>Meet</span>}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <Action icon="\u25C9" title="Join the standup" desc="Pick a meeting from your calendar and jump in" onClick={() => setView('join')} accent="#34D399"/>
+        <Action icon="\u29C9" title="PiP mode" desc="Floating window that stays over your video call" onClick={() => setView('pip')} accent="#818CF8"/>
       </div>
     </Modal>
   );
