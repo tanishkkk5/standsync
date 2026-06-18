@@ -2716,8 +2716,27 @@ function AssignModal({ members, onClose, onAdd }) {
   return <Modal onClose={onClose} title="Assign a task"><Inp value={title} onChange={e=>setTitle(e.target.value)} placeholder="Task description..." style={{ marginBottom:12 }} autoFocus/><div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10 }}><Sel label="Assign to" value={assignee} onChange={e=>setAssignee(e.target.value)}>{members.map(m=><option key={m.id||m.email} value={m.email}>{m.name||m.email}</option>)}</Sel><Sel label="Priority" value={priority} onChange={e=>setPriority(e.target.value)}>{['critical','high','medium','low'].map(v=><option key={v} value={v}>{v.charAt(0).toUpperCase()+v.slice(1)}</option>)}</Sel></div><Sel label="Timeline" value={timeline} onChange={e=>setTimeline(e.target.value)} style={{ marginBottom:10 }}>{['Today noon (12 PM)','Today 3 PM','Today EOD (6 PM)','Tomorrow morning','Tomorrow EOD','This week'].map(t=><option key={t} value={t}>{t}</option>)}</Sel><Inp value={note} onChange={e=>setNote(e.target.value)} placeholder="Note to team member (optional)" style={{ marginBottom:18 }}/><div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}><Btn v="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={submit} disabled={!title.trim()}>Assign task</Btn></div></Modal>;
 }
 
-function TeamTab({ tasks, members }) {
+function TeamTab({ tasks, members, isManager = true }) {
   const c=useC();
+  if (!isManager) {
+    // Read-only directory for members: names, roles, no performance/tracking
+    return (
+      <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:14 }}>
+        {members.map(member=>(
+          <Card key={member.id||member.email} style={{ padding:'18px 20px' }}>
+            <div style={{ display:'flex',alignItems:'center',gap:12 }}>
+              <Av member={member} size={44} url={member.avatar_url}/>
+              <div style={{ flex:1,minWidth:0 }}>
+                <div style={{ fontSize:14,fontWeight:700,color:c.text,marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{member.name||member.email}</div>
+                <div style={{ fontSize:11.5,color:c.mut,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{member.email}</div>
+                <div style={{ display:'inline-block',marginTop:7,fontSize:10.5,fontWeight:700,color:member.role==='manager'?'#A78BFA':c.sub,background:member.role==='manager'?'rgba(124,92,255,.14)':'rgba(128,128,128,.1)',padding:'2px 9px',borderRadius:20,textTransform:'capitalize' }}>{member.designation||member.role||'Member'}</div>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    );
+  }
   return <div style={{ display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:14 }}>{members.map(member=>{ const mt=tasks.filter(t=>t.assignee_email===member.email); const done=mt.filter(t=>t.status==='done').length,inProg=mt.filter(t=>t.status==='in-progress').length,blocked=mt.filter(t=>t.status==='blocked').length; const pct=mt.length?Math.round(done/mt.length*100):0,pc=pct===100?'#34D399':pct>=50?'#818CF8':'#F97316'; return(<Card key={member.id||member.email} style={{ padding:'20px 22px',border:blocked>0?'1px solid rgba(239,68,68,.3)':`1px solid ${c.bord}` }}><div style={{ display:'flex',alignItems:'center',gap:12,marginBottom:14 }}><Av member={member} size={44} url={member.avatar_url}/><div style={{ flex:1 }}><div style={{ fontSize:14,fontWeight:700,color:c.text,marginBottom:2 }}>{member.name||member.email}</div><div style={{ fontSize:11,color:c.mut }}>{member.email}</div></div><div style={{ textAlign:'right' }}><div style={{ fontSize:22,fontWeight:800,color:pc }}>{pct}%</div><div style={{ fontSize:10,color:c.mut }}>{done}/{mt.length}</div></div></div><Bar pct={pct} color={`linear-gradient(90deg,${member.color||'#818CF8'}80,${member.color||'#818CF8'})`} h={5} style={{ marginBottom:12 }}/><div style={{ display:'flex',gap:8,marginBottom:12 }}>{[{l:'In prog',v:inProg,col:'#38BDF8'},{l:'Done',v:done,col:'#34D399'},{l:'Blocked',v:blocked,col:'#EF4444'}].map(s=><div key={s.l} style={{ flex:1,background:s.v>0?s.col+'15':'rgba(128,128,128,.07)',border:`1px solid ${s.v>0?s.col+'30':c.bord}`,borderRadius:8,padding:'8px 6px',textAlign:'center' }}><div style={{ fontSize:16,fontWeight:700,color:s.v>0?s.col:c.mut }}>{s.v}</div><div style={{ fontSize:9,color:c.mut,textTransform:'uppercase',letterSpacing:'.05em',marginTop:2 }}>{s.l}</div></div>)}</div>{mt.length===0?<div style={{ fontSize:12,color:c.mut,textAlign:'center',padding:'8px 0' }}>No tasks yet</div>:mt.slice(0,3).map(t=><div key={t.id} style={{ display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderTop:`1px solid ${c.bord}` }}><div style={{ width:6,height:6,borderRadius:'50%',background:getPriority(t.priority).color,flexShrink:0 }}/><span style={{ flex:1,fontSize:12,color:t.status==='done'?c.mut:c.sub,textDecoration:t.status==='done'?'line-through':'none' }}>{t.title}</span><SBadge status={t.status}/></div>)}{mt.length>3&&<div style={{ fontSize:11,color:c.mut,textAlign:'center',marginTop:8 }}>+{mt.length-3} more</div>}{blocked>0&&<div style={{ marginTop:10,padding:'8px 12px',background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:8,fontSize:12,color:'#F87171' }}>⚠️ {blocked} blocked</div>}</Card>);})}</div>;
 }
 
@@ -4763,7 +4782,10 @@ function BrainstormSpace({ team, session, members=[] }) {
 
 // ─── HOME COMMAND CENTER ──────────────────────────────────────────────────────
 // Daily landing page. Focus, not clutter. Replaces the "everything exposed" dashboard.
-function HomeCommand({ session, team, tasks, members, onGoto, onAddTask, onStartStandup, onNewTask, onNewNote, onStandupOptions }) {
+function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTask, onStartStandup, onNewTask, onNewNote, onStandupOptions, isManager = true }) {
+  // Members see only their own tasks across home metrics; managers see the whole team's.
+  const myEmail0 = session?.user?.email;
+  const tasks = isManager ? allTasks : allTasks.filter(t => t.assignee_email === myEmail0);
   const c = useC();
   const { dark } = useTheme();
   const fullName = session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || 'there';
@@ -5554,6 +5576,38 @@ function NewWorkItemModal({ space, members, myEmail, onClose, onAdd }) {
   );
 }
 
+// ─── MEMBER SETTINGS ──────────────────────────────────────────────────────────
+function MemberSettings({ session, team, myRole }) {
+  const c = useC();
+  const name = session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || 'You';
+  const email = session?.user?.email || '';
+  const Row = ({ label, value }) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: `1px solid ${c.bord}` }}>
+      <span style={{ fontSize: 13, color: c.mut }}>{label}</span>
+      <span style={{ fontSize: 13.5, color: c.text, fontWeight: 600 }}>{value}</span>
+    </div>
+  );
+  return (
+    <div style={{ maxWidth: 560, margin: '0 auto' }}>
+      <Card style={{ padding: '22px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
+          <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'linear-gradient(135deg,#6366F1,#818CF8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: '#fff' }}>{name.split(/[.\s]/).map(s => s[0]).slice(0, 2).join('').toUpperCase()}</div>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: c.text }}>{name}</div>
+            <div style={{ fontSize: 13, color: c.mut }}>{email}</div>
+          </div>
+        </div>
+        <Row label="Role" value={myRole}/>
+        <Row label="Team" value={team?.name || '—'}/>
+        <Row label="Email" value={email}/>
+        <div style={{ marginTop: 18, fontSize: 12.5, color: c.mut, lineHeight: 1.6 }}>
+          Need to change team settings, invites, or reminders? Those are managed by your team's manager.
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 // ─── NOTIFICATION PANEL ───────────────────────────────────────────────────────
 function NotificationPanel({ notifs, onClose, onAction, onDigest, emailBusy }) {
   const c = useC();
@@ -5588,14 +5642,16 @@ function NotificationPanel({ notifs, onClose, onAction, onDigest, emailBusy }) {
         ))}
       </div>
       <div style={{ padding: '10px 16px', borderTop: `1px solid ${c.bord}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <button onClick={() => { onDigest && onDigest(); }} disabled={emailBusy} style={{ fontSize: 12, color: c.accent, background: 'none', border: 'none', cursor: emailBusy ? 'wait' : 'pointer', fontWeight: 600 }}>{emailBusy ? 'Sending…' : '✉ Send team digest'}</button>
+        {onDigest
+          ? <button onClick={() => { onDigest && onDigest(); }} disabled={emailBusy} style={{ fontSize: 12, color: c.accent, background: 'none', border: 'none', cursor: emailBusy ? 'wait' : 'pointer', fontWeight: 600 }}>{emailBusy ? 'Sending…' : '✉ Send team digest'}</button>
+          : <span style={{ fontSize: 11, color: c.mut }}>Stay on top of your work</span>}
       </div>
     </div>
   );
 }
 
 function ManagerView({
- session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers, openPip, pipOpen }) {
+ session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers, openPip, pipOpen, isManager = true }) {
 
   const c = useC();
   const { dark } = useTheme();
@@ -5688,7 +5744,7 @@ function ManagerView({
     { id: 'team',          label: 'Team',          icon: '⚇' },
     { id: 'communication', label: 'Communication', icon: '◌', badge: unreadChat },
     { id: 'knowledge',     label: 'Knowledge',     icon: '◈' },
-    { id: 'insights',      label: 'Insights',      icon: '▤' },
+    ...(isManager ? [{ id: 'insights', label: 'Insights', icon: '▤' }] : []),
   ];
   const NAV_YOU = [
     { id: 'calendar',      label: 'Calendar',      icon: '⊟' },
@@ -5701,7 +5757,7 @@ function ManagerView({
   };
 
   const userName = session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || 'You';
-  const userRole = team?.name ? 'Manager' : 'Member';
+  const userRole = isManager ? 'Manager' : 'Member';
   const userInitials = userName.split(/[.\s]/).map(s => s[0]).slice(0,2).join('').toUpperCase();
 
   const NavBtn = (n) => {
@@ -5819,7 +5875,7 @@ function ManagerView({
           <ThemeToggle/>
           <ProfileMenu session={session} onSettings={onSettings} onLogout={onLogout}/>
 
-          {notifOpen && <NotificationPanel notifs={notifs} onClose={() => setNotifOpen(false)} onAction={handleNotifAction} onDigest={onDigest} emailBusy={emailBusy}/>}
+          {notifOpen && <NotificationPanel notifs={notifs} onClose={() => setNotifOpen(false)} onAction={handleNotifAction} onDigest={isManager ? onDigest : null} emailBusy={emailBusy}/>}
         </div>
 
         {/* Live status strip (only on Home/Tasks) */}
@@ -5842,7 +5898,7 @@ function ManagerView({
             <LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} session={session}/>
           )}
 
-          {area === 'team' && <TeamTab tasks={tasks} members={members}/>}
+          {area === 'team' && <TeamTab tasks={tasks} members={members} isManager={isManager}/>}
 
           {area === 'communication' && (
             <RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme} isManager={true}/>
@@ -5860,7 +5916,7 @@ function ManagerView({
             </>
           )}
 
-          {area === 'insights' && (
+          {area === 'insights' && isManager && (
             <>
               <SubTabs value={insightsSub} onChange={setInsightsSub}
                 tabs={[{ id: 'overview', label: 'Overview' }, { id: 'performance', label: 'Performance' }, { id: 'ai', label: 'Ask AI' }, { id: 'history', label: 'History' }]}/>
@@ -5875,10 +5931,16 @@ function ManagerView({
 
           {area === 'settings' && (
             <>
-              <SubTabs value={insightsSub === 'reminders' ? 'reminders' : 'team'} onChange={(v) => setInsightsSub(v)}
-                tabs={[{ id: 'team', label: 'Team settings' }, { id: 'reminders', label: 'Reminders' }]}/>
-              {insightsSub !== 'reminders' && <TeamSettingsTab team={team} members={members} session={session} onMembersUpdate={() => { if (setMembers && SB.IS_LIVE) SB.getTeamMembers(team.id).then(m => setMembers(m || [])); }}/>}
-              {insightsSub === 'reminders' && <RemindersPanel team={team} members={members} session={session}/>}
+              {isManager ? (
+                <>
+                  <SubTabs value={insightsSub === 'reminders' ? 'reminders' : 'team'} onChange={(v) => setInsightsSub(v)}
+                    tabs={[{ id: 'team', label: 'Team settings' }, { id: 'reminders', label: 'Reminders' }]}/>
+                  {insightsSub !== 'reminders' && <TeamSettingsTab team={team} members={members} session={session} onMembersUpdate={() => { if (setMembers && SB.IS_LIVE) SB.getTeamMembers(team.id).then(m => setMembers(m || [])); }}/>}
+                  {insightsSub === 'reminders' && <RemindersPanel team={team} members={members} session={session}/>}
+                </>
+              ) : (
+                <MemberSettings session={session} team={team} myRole={userRole}/>
+              )}
             </>
           )}
         </div>
@@ -6512,7 +6574,7 @@ export default function App() {
       {(session||!SB.IS_LIVE)&&view==='settings'&&<SettingsPage session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onBack={()=>setView(team?'standup':'home')} onSaved={d=>showToast('Profile saved')}/>}
       {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
       {/* PiP is a real popup window — no DOM element needed */}
-      {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<MemberView user={userForView} myMember={myMember} tasks={tasks} onAdd={handleAddTask} onStatus={handleStatus} onBlocker={handleBlocker} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} members={members} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme}/>}
+      {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<ManagerView isManager={false} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
     </ThemeCtx.Provider>
   );
 }
