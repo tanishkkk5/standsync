@@ -4686,8 +4686,7 @@ function HomeCommand({ session, team, tasks, members, onGoto, onAddTask, onStart
 
   // ── Quick action cards ──
   const QUICK = [
-    { l: 'New task', sub: 'Capture work', icon: '＋', fn: () => onNewTask && onNewTask() },
-    { l: 'Meeting note', sub: 'Start a doc', icon: '≡', fn: () => onNewNote && onNewNote() },
+    { l: 'Meeting note', sub: 'Notes & project notes', icon: '≡', fn: () => onNewNote && onNewNote() },
     { l: 'Start standup', sub: 'Run the room', icon: '◉', fn: () => onStandupOptions && onStandupOptions() },
     { l: 'Ask AI', sub: 'Summarize the day', icon: '✦', fn: () => onGoto('insights') },
   ];
@@ -4725,7 +4724,7 @@ function HomeCommand({ session, team, tasks, members, onGoto, onAddTask, onStart
       </div>
 
       {/* Quick action cards */}
-      <div className="ss-home-quick" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+      <div className="ss-home-quick" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
         {QUICK.map(a => (
           <button key={a.l} onClick={a.fn}
             style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '18px 18px', borderRadius: 16, border: `1px solid ${c.bord}`, background: c.surf, cursor: 'pointer', textAlign: 'left', transition: 'all .15s' }}
@@ -4757,8 +4756,7 @@ function HomeCommand({ session, team, tasks, members, onGoto, onAddTask, onStart
               <div style={{ padding: '32px 20px', textAlign: 'center' }}>
                 <div style={{ fontSize: 32, marginBottom: 10 }}>🎯</div>
                 <div style={{ fontSize: 14, color: c.sub, fontWeight: 600, marginBottom: 4 }}>Nothing urgent right now</div>
-                <div style={{ fontSize: 13, color: c.mut, marginBottom: 16 }}>Add a task to plan your day</div>
-                <button onClick={() => onNewTask && onNewTask()} style={{ padding: '8px 18px', borderRadius: 10, background: 'linear-gradient(135deg,#6366F1,#818CF8)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>＋ New task</button>
+                <div style={{ fontSize: 13, color: c.mut }}>Use <strong style={{ color: c.sub }}>New task</strong> above to plan your day</div>
               </div>
             ) : focus.map(t => {
               const m = members.find(x => x.email === t.assignee_email);
@@ -5093,7 +5091,7 @@ function ManagerView({
       {noteModal && <QuickNoteModal session={session} team={team} onClose={() => setNoteModal(false)} onOpenKnowledge={() => { setNoteModal(false); setKnowledgeSub('meetings'); goArea('knowledge'); }}/>}
       {standupModal && <StandupOptionsModal team={team} onClose={() => setStandupModal(false)}
         onJoin={() => { setStandupModal(false); goArea('tasks'); }}
-        onPip={() => { setStandupModal(false); openPip && openPip(); }}
+        onPip={(mode) => { setStandupModal(false); openPip && openPip(mode); }}
         onNotes={() => { setStandupModal(false); setKnowledgeSub('meetings'); goArea('knowledge'); }}
         onTasks={() => { setStandupModal(false); goArea('tasks'); }}/>}
     </div>
@@ -5140,6 +5138,8 @@ function QuickTaskModal({ members, session, onClose, onAdd, onOpenBoard }) {
 // ─── QUICK NOTE MODAL ─────────────────────────────────────────────────────────
 function QuickNoteModal({ session, team, onClose, onOpenKnowledge }) {
   const c = useC();
+  const { dark } = useTheme();
+  const [noteType, setNoteType] = useState(null); // null = choose; 'meeting' | 'project'
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [saved, setSaved] = useState(false);
@@ -5149,17 +5149,44 @@ function QuickNoteModal({ session, team, onClose, onOpenKnowledge }) {
     try {
       const key = 'ss-quicknotes-' + teamId;
       const list = JSON.parse(localStorage.getItem(key) || '[]');
-      list.unshift({ id: 'qn' + Date.now(), title: title.trim() || 'Untitled note', body: body.trim(), at: Date.now(), by: session?.user?.email });
+      list.unshift({ id: 'qn' + Date.now(), type: noteType, title: title.trim() || 'Untitled note', body: body.trim(), at: Date.now(), by: session?.user?.email });
       localStorage.setItem(key, JSON.stringify(list));
     } catch(e) {}
     setSaved(true);
     setTimeout(() => onClose(), 700);
   };
+
+  // Step 1 — choose note type
+  if (!noteType) {
+    const Choice = ({ icon, title, desc, onClick, accent }) => (
+      <button onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 18px', borderRadius: 12, border: `1px solid ${c.bord}`, background: c.surf, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all .15s' }}
+        onMouseEnter={e => e.currentTarget.style.borderColor = c.bordH}
+        onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
+        <div style={{ width: 42, height: 42, borderRadius: 11, background: accent + '1f', color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{icon}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>{title}</div>
+          <div style={{ fontSize: 12, color: c.mut, marginTop: 2 }}>{desc}</div>
+        </div>
+        <span style={{ color: c.mut, fontSize: 16 }}>→</span>
+      </button>
+    );
+    return (
+      <Modal onClose={onClose} title="New note" width={460}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <Choice icon="≡" title="Meeting notes" desc="Capture decisions and action items from a meeting" accent="#FBBF24" onClick={() => { setNoteType('meeting'); setTitle('Meeting notes — ' + new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})); }}/>
+          <Choice icon="◈" title="Project notes" desc="Docs, SOPs, and project knowledge" accent="#818CF8" onClick={() => { setNoteType('project'); }}/>
+        </div>
+      </Modal>
+    );
+  }
+
+  // Step 2 — quick editor
   return (
-    <Modal onClose={onClose} title="Quick meeting note" width={520}>
+    <Modal onClose={onClose} title={noteType === 'meeting' ? 'Quick meeting note' : 'Quick project note'} width={520}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Inp value={title} onChange={e => setTitle(e.target.value)} placeholder="Note title" autoFocus/>
-        <Textarea value={body} onChange={e => setBody(e.target.value)} placeholder="Jot down decisions, action items, anything from the meeting…" style={{ minHeight: 160 }}/>
+        <button onClick={() => { setNoteType(null); setBody(''); }} style={{ alignSelf: 'flex-start', fontSize: 12, color: c.mut, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← Back</button>
+        <Inp value={title} onChange={e => setTitle(e.target.value)} placeholder={noteType === 'meeting' ? 'Meeting title' : 'Note / doc title'} autoFocus/>
+        <Textarea value={body} onChange={e => setBody(e.target.value)} placeholder={noteType === 'meeting' ? 'Jot down decisions, action items, anything from the meeting…' : 'Write your project notes, SOP, or doc…'} style={{ minHeight: 160 }}/>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
           <button onClick={onOpenKnowledge} style={{ fontSize: 13, color: c.mut, background: 'none', border: 'none', cursor: 'pointer' }}>Open full editor →</button>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -5191,6 +5218,8 @@ function StandupOptionsModal({ team, onClose, onJoin, onPip, onNotes, onTasks })
 
   const fmtTime = (d) => d && !isNaN(d) ? d.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
 
+  const [pipStep, setPipStep] = useState(false);
+
   const Action = ({ icon, title, desc, onClick, accent }) => (
     <button onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 12, border: `1px solid ${c.bord}`, background: c.surf, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all .15s' }}
       onMouseEnter={e => e.currentTarget.style.borderColor = c.bordH}
@@ -5204,11 +5233,25 @@ function StandupOptionsModal({ team, onClose, onJoin, onPip, onNotes, onTasks })
     </button>
   );
 
+  // ── PiP sub-choice: notes / tasks / both ──
+  if (pipStep) {
+    return (
+      <Modal onClose={onClose} title="Picture-in-picture" width={460}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <button onClick={() => setPipStep(false)} style={{ alignSelf: 'flex-start', fontSize: 12, color: c.mut, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 2 }}>← Back</button>
+          <Action icon="≡" title="PiP — Meeting notes" desc="Floating notes pad over your call" accent="#FBBF24" onClick={() => onPip('notes')}/>
+          <Action icon="◎" title="PiP — Tasks" desc="Floating task board over your call" accent="#60A5FA" onClick={() => onPip('tasks')}/>
+          <Action icon="⧉" title="PiP — Both" desc="Notes and tasks together in one window" accent="#818CF8" onClick={() => onPip('both')}/>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal onClose={onClose} title="Start standup" width={520}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <Action icon="◉" title="Join the standup" desc="Open the live board to track tasks in real time" onClick={onJoin} accent="#34D399"/>
-        <Action icon="⧉" title="PiP mode" desc="Floating window that stays over your video call" onClick={onPip} accent="#818CF8"/>
+        <Action icon="⧉" title="PiP mode" desc="Floating window that stays over your video call" onClick={() => setPipStep(true)} accent="#818CF8"/>
         <Action icon="≡" title="Meeting notes" desc="Capture notes while the standup runs" onClick={onNotes} accent="#FBBF24"/>
         <Action icon="◎" title="Task board" desc="Go straight to assigning and updating tasks" onClick={onTasks} accent="#60A5FA"/>
 
@@ -5256,7 +5299,7 @@ function usePip({ tasks, onAdd, onStatus, session, team, standup }) {
     }
   }, [tasks, myEmail]);
 
-  const openPip = () => {
+  const openPip = (mode = 'both') => {
     if (winRef.current && !winRef.current.closed) { winRef.current.focus(); return; }
     // Open as a proper popup window — stays visible when switching tabs or minimizing
     // NOTE: Browser must allow popups for standsync-olive.vercel.app
@@ -5281,7 +5324,7 @@ function usePip({ tasks, onAdd, onStatus, session, team, standup }) {
 
     // Send init data once window loads
     win.addEventListener('load', function() {
-      win.postMessage({ type:'init', tasks, myEmail, myName, teamName: team ? team.name : 'Team' }, '*');
+      win.postMessage({ type:'init', mode, tasks, myEmail, myName, teamName: team ? team.name : 'Team' }, '*');
     });
 
     // Listen for messages from pip window
