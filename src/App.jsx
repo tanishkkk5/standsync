@@ -5610,6 +5610,235 @@ function MemberSettings({ session, team, myRole }) {
 }
 
 // ─── NOTIFICATION PANEL ───────────────────────────────────────────────────────
+// ─── ATTENDANCE & BREAK TRACKING ──────────────────────────────────────────────
+// Manual logging works fully offline (localStorage). Auto-presence is wired to
+// Supabase when available (SB.upsertPresence / SB.getTeamPresence) and otherwise
+// gracefully reflects only the current user's own session.
+const SHIFT_START = 9;   // 9 AM
+const SHIFT_END   = 19;  // 7 PM
+const BREAK_TYPES = [
+  { id: 'lunch',  label: 'Lunch',     mins: 45, icon: '🍱' },
+  { id: 'short20',label: '20 min',    mins: 20, icon: '☕' },
+  { id: 'short15',label: '15 min',    mins: 15, icon: '☕' },
+  { id: 'short10',label: '10 min',    mins: 10, icon: '🚶' },
+  { id: 'custom', label: 'Custom',    mins: 0,  icon: '⏱️' },
+];
+
+function fmtClock(ts) { return ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—'; }
+function fmtDur(ms) { const m = Math.round(ms / 60000); if (m < 60) return m + 'm'; return Math.floor(m / 60) + 'h ' + (m % 60) + 'm'; }
+
+function AttendancePanel({ team, members, session, isManager }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const teamId = team?.id || 'demo';
+  const myEmail = session?.user?.email || 'me@demo';
+  const dayKey = new Date().toISOString().slice(0, 10);
+  const KEY = `ss-attendance-${teamId}-${dayKey}`;
+
+  // record shape: { [email]: { clockIn, clockOut, breaks:[{id,type,label,start,end,mins}], lastSeen } }
+  const [log, setLog] = useState(() => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { return {}; } });
+  const [now, setNow] = useState(Date.now());
+  const [customMin, setCustomMin] = useState('');
+
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(t); }, []);
+
+  const save = (next) => { setLog(next); try { localStorage.setItem(KEY, JSON.stringify(next)); } catch {} };
+  const myRec = log[myEmail] || {};
+  const activeBreak = (myRec.breaks || []).find(b => !b.end);
+
+  // ── Heartbeat / presence: write own lastSeen; pull team presence if backend present ──
+  useEffect(() => {
+    const beat = () => {
+      const next = { ...log }; const r = { ...(next[myEmail] || {}) }; r.lastSeen = Date.now(); next[myEmail] = r; save(next);
+      try { if (SB.IS_LIVE && SB.upsertPresence) SB.upsertPresence(teamId, myEmail, Date.now()); } catch {}
+    };
+    beat();
+    const t = setInterval(beat, 60000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line
+  }, [KEY]);
+
+  // Pull cross-user presence from backend when available (manager view benefits most)
+  useEffect(() => {
+    if (!(SB.IS_LIVE && SB.getTeamPresence)) return;
+    let alive = true;
+    const pull = async () => {
+      try { const rows = await SB.getTeamPresence(teamId); if (!alive || !rows) return;
+        setLog(prev => { const next = { ...prev }; rows.forEach(r => { next[r.email] = { ...(next[r.email] || {}), lastSeen: new Date(r.last_seen).getTime() }; }); return next; });
+      } catch {}
+    };
+    pull(); const t = setInterval(pull, 60000); return () => { alive = false; clearInterval(t); };
+  }, [teamId]);
+
+  // ── Actions (self) ──
+  const clockIn = () => { const next = { ...log }; next[myEmail] = { ...(next[myEmail] || {}), clockIn: Date.now(), lastSeen: Date.now() }; save(next); };
+  const clockOut = () => { const next = { ...log }; next[myEmail] = { ...(next[myEmail] || {}), clockOut: Date.now() }; save(next); };
+  const startBreak = (bt) => {
+    const mins = bt.id === 'custom' ? (parseInt(customMin) || 0) : bt.mins;
+    const next = { ...log }; const r = { ...(next[myEmail] || {}) }; r.breaks = [...(r.breaks || []), { id: 'b' + Date.now(), type: bt.id, label: bt.id === 'custom' ? `${mins} min` : bt.label, plannedMins: mins, start: Date.now(), end: null }]; next[myEmail] = r; save(next); setCustomMin('');
+  };
+  const endBreak = () => { const next = { ...log }; const r = { ...(next[myEmail] || {}) }; r.breaks = (r.breaks || []).map(b => b.end ? b : { ...b, end: Date.now(), mins: Math.round((Date.now() - b.start) / 60000) }); next[myEmail] = r; save(next); };
+
+  const isOnline = (rec) => rec?.lastSeen && (now - rec.lastSeen) < 3 * 60000; // seen in last 3 min
+  const totalBreakMins = (rec) => (rec?.breaks || []).reduce((s, b) => s + (b.end ? (b.mins || Math.round((b.end - b.start) / 60000)) : Math.round((now - b.start) / 60000)), 0);
+
+  // ── Warnings (manager) ──
+  const warningsFor = (rec) => {
+    const w = [];
+    const hour = new Date().getHours();
+    const inShift = hour >= SHIFT_START && hour < SHIFT_END;
+    // Late start: no clock-in by 9:15
+    if (inShift && !rec?.clockIn && hour >= SHIFT_START) w.push({ t: 'Not clocked in', sev: 'warn' });
+    else if (rec?.clockIn) { const ci = new Date(rec.clockIn); if (ci.getHours() > SHIFT_START || (ci.getHours() === SHIFT_START && ci.getMinutes() > 15)) w.push({ t: `Late start (${fmtClock(rec.clockIn)})`, sev: 'warn' }); }
+    // Over-break: total > 70 min (45 lunch + 2x short)
+    if (totalBreakMins(rec) > 70) w.push({ t: `Over break (${totalBreakMins(rec)}m)`, sev: 'danger' });
+    // Active break running long
+    const ab = (rec?.breaks || []).find(b => !b.end);
+    if (ab && ab.plannedMins && (now - ab.start) / 60000 > ab.plannedMins + 5) w.push({ t: `Break overrun (${ab.label})`, sev: 'danger' });
+    // Offline during shift
+    if (inShift && rec?.clockIn && !rec?.clockOut && !isOnline(rec)) w.push({ t: `Offline since ${fmtClock(rec.lastSeen)}`, sev: 'warn' });
+    return w;
+  };
+
+  // ════ SELF VIEW (members + manager's own row) ════
+  const SelfCard = () => (
+    <div style={{ borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, padding: 22, marginBottom: isManager ? 24 : 0, maxWidth: isManager ? '100%' : 560 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: c.text }}>My shift today</div>
+          <div style={{ fontSize: 12, color: c.mut, marginTop: 2 }}>Shift {SHIFT_START}:00 AM – {SHIFT_END - 12}:00 PM · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {!myRec.clockIn && <Btn onClick={clockIn}>🟢 Clock in</Btn>}
+          {myRec.clockIn && !myRec.clockOut && <Btn v="ghost" onClick={clockOut}>🔴 Clock out</Btn>}
+          {myRec.clockOut && <span style={{ fontSize: 13, color: '#34D399', fontWeight: 600, alignSelf: 'center' }}>✓ Shift ended</span>}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 20, marginBottom: 18, flexWrap: 'wrap' }}>
+        <div><div style={{ fontSize: 11, color: c.mut, marginBottom: 3 }}>Clocked in</div><div style={{ fontSize: 15, fontWeight: 700, color: c.text }}>{fmtClock(myRec.clockIn)}</div></div>
+        <div><div style={{ fontSize: 11, color: c.mut, marginBottom: 3 }}>Clocked out</div><div style={{ fontSize: 15, fontWeight: 700, color: c.text }}>{fmtClock(myRec.clockOut)}</div></div>
+        <div><div style={{ fontSize: 11, color: c.mut, marginBottom: 3 }}>Total break</div><div style={{ fontSize: 15, fontWeight: 700, color: totalBreakMins(myRec) > 70 ? '#F87171' : c.text }}>{totalBreakMins(myRec)}m</div></div>
+      </div>
+
+      {/* Active break banner */}
+      {activeBreak ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 12, background: 'rgba(251,191,36,.1)', border: '1px solid rgba(251,191,36,.3)', marginBottom: 14 }}>
+          <span style={{ fontSize: 18 }}>⏸️</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#FBBF24' }}>On {activeBreak.label} break</div>
+            <div style={{ fontSize: 12, color: c.sub }}>Since {fmtClock(activeBreak.start)} · {fmtDur(now - activeBreak.start)} elapsed</div>
+          </div>
+          <Btn onClick={endBreak}>End break</Btn>
+        </div>
+      ) : myRec.clockIn && !myRec.clockOut && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 8 }}>Log a break</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {BREAK_TYPES.filter(b => b.id !== 'custom').map(bt => (
+              <button key={bt.id} onClick={() => startBreak(bt)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: `1px solid ${c.bord}`, background: c.surf, color: c.text, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                {bt.icon} {bt.label}
+              </button>
+            ))}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <input value={customMin} onChange={e => setCustomMin(e.target.value.replace(/\D/g, ''))} placeholder="min" style={{ width: 56, background: c.inp, border: `1px solid ${c.inpB}`, borderRadius: 8, padding: '7px 9px', color: c.text, fontSize: 13, outline: 'none' }}/>
+              <button onClick={() => customMin && startBreak({ id: 'custom' })} disabled={!customMin} style={{ padding: '8px 12px', borderRadius: 10, border: `1px solid ${c.bord}`, background: c.surf, color: customMin ? c.text : c.mut, cursor: customMin ? 'pointer' : 'default', fontSize: 13, fontWeight: 600 }}>⏱️ Custom</button>
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Break log */}
+      {(myRec.breaks || []).length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 8 }}>Today's breaks</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {myRec.breaks.map(b => (
+              <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: c.sub, padding: '6px 0' }}>
+                <span>{BREAK_TYPES.find(t => t.id === b.type)?.icon || '⏱️'}</span>
+                <span style={{ fontWeight: 600, color: c.text }}>{b.label}</span>
+                <span>{fmtClock(b.start)} → {b.end ? fmtClock(b.end) : 'ongoing'}</span>
+                {b.end && <span style={{ marginLeft: 'auto', color: (b.mins > (b.plannedMins || 999) + 5) ? '#F87171' : c.mut }}>{b.mins}m</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  if (!isManager) return <SelfCard/>;
+
+  // ════ MANAGER VIEW: roster ════
+  const roster = members.map(m => ({ m, rec: log[m.email] || {} }));
+  const onlineNum = roster.filter(r => isOnline(r.rec)).length;
+  const onBreakNum = roster.filter(r => (r.rec.breaks || []).some(b => !b.end)).length;
+  const warnNum = roster.reduce((s, r) => s + warningsFor(r.rec).length, 0);
+
+  return (
+    <div>
+      <SelfCard/>
+
+      {/* Summary */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 18 }}>
+        {[
+          { l: 'Online now', v: `${onlineNum}/${members.length}`, col: '#34D399', icon: '🟢' },
+          { l: 'On break', v: onBreakNum, col: '#FBBF24', icon: '⏸️' },
+          { l: 'Warnings', v: warnNum, col: warnNum ? '#F87171' : c.text, icon: '⚠️' },
+          { l: 'Shift', v: `${SHIFT_START}–${SHIFT_END - 12}`, col: '#818CF8', icon: '🕘' },
+        ].map(s => (
+          <div key={s.l} style={{ padding: '14px 16px', borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}` }}>
+            <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: s.col }}>{s.v}</div>
+            <div style={{ fontSize: 11, color: c.mut, marginTop: 2 }}>{s.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Backend note */}
+      {!(SB.IS_LIVE) && (
+        <div style={{ fontSize: 12, color: c.mut, background: 'rgba(99,102,241,.06)', border: `1px solid ${c.bord}`, borderRadius: 10, padding: '10px 14px', marginBottom: 16, lineHeight: 1.5 }}>
+          ℹ️ Live online/offline across the team activates once Supabase is connected. Manual shift &amp; break logs work now and are visible per device.
+        </div>
+      )}
+
+      {/* Roster */}
+      <div style={{ borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 90px 100px 100px 1.2fr', gap: 12, padding: '12px 18px', borderBottom: `1px solid ${c.bord}`, fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+          <span>Member</span><span>Status</span><span>In</span><span>Break</span><span>Flags</span>
+        </div>
+        {roster.map(({ m, rec }) => {
+          const online = isOnline(rec);
+          const ab = (rec.breaks || []).find(b => !b.end);
+          const w = warningsFor(rec);
+          return (
+            <div key={m.email} style={{ display: 'grid', gridTemplateColumns: '1.4fr 90px 100px 100px 1.2fr', gap: 12, padding: '12px 18px', borderBottom: `1px solid ${c.bord}`, alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                <Av member={m} size={30} url={m.avatar_url}/>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name || m.email.split('@')[0]}</div>
+                  <div style={{ fontSize: 11, color: c.mut }}>{rec.lastSeen ? 'seen ' + fmtClock(rec.lastSeen) : 'no activity'}</div>
+                </div>
+              </div>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: ab ? '#FBBF24' : online ? '#34D399' : c.mut }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: ab ? '#FBBF24' : online ? '#34D399' : '#64748B' }}/>
+                {ab ? 'Break' : online ? 'Online' : 'Offline'}
+              </span>
+              <span style={{ fontSize: 12, color: c.sub }}>{fmtClock(rec.clockIn)}</span>
+              <span style={{ fontSize: 12, color: totalBreakMins(rec) > 70 ? '#F87171' : c.sub }}>{totalBreakMins(rec)}m</span>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                {w.length === 0 ? <span style={{ fontSize: 11, color: '#34D399' }}>✓ OK</span>
+                  : w.map((x, i) => <span key={i} style={{ fontSize: 10.5, fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: x.sev === 'danger' ? 'rgba(248,113,113,.14)' : 'rgba(251,191,36,.14)', color: x.sev === 'danger' ? '#F87171' : '#FBBF24' }}>{x.t}</span>)}
+              </div>
+            </div>
+          );
+        })}
+        {roster.length === 0 && <div style={{ padding: 32, textAlign: 'center', fontSize: 13, color: c.mut }}>No team members yet.</div>}
+      </div>
+    </div>
+  );
+}
+
 function NotificationPanel({ notifs, onClose, onAction, onMarkAllRead, unread, onDigest, emailBusy }) {
   const c = useC();
   const { dark } = useTheme();
@@ -5675,6 +5904,7 @@ function ManagerView({
   const [area, setArea] = useState('home');
   const [knowledgeSub, setKnowledgeSub] = useState('docs');   // docs | brainstorm
   const [insightsSub, setInsightsSub]   = useState('overview'); // overview | performance | history
+  const [teamSub, setTeamSub]           = useState('directory'); // directory | attendance (manager only)
   const [mobileNav, setMobileNav] = useState(false);
 
   // ── Home quick-action modals ──
@@ -5918,7 +6148,23 @@ function ManagerView({
             <LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} session={session}/>
           )}
 
-          {area === 'team' && <TeamTab tasks={tasks} members={members} isManager={isManager}/>}
+          {area === 'team' && (
+            isManager ? (
+              <>
+                <SubTabs value={teamSub} onChange={setTeamSub}
+                  tabs={[{ id: 'directory', label: 'Directory' }, { id: 'attendance', label: 'Attendance & breaks' }]}/>
+                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={isManager}/>}
+                {teamSub === 'attendance' && <AttendancePanel team={team} members={members} session={session} isManager={true}/>}
+              </>
+            ) : (
+              <>
+                <SubTabs value={teamSub} onChange={setTeamSub}
+                  tabs={[{ id: 'directory', label: 'Directory' }, { id: 'attendance', label: 'My shift & breaks' }]}/>
+                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={isManager}/>}
+                {teamSub === 'attendance' && <AttendancePanel team={team} members={members} session={session} isManager={false}/>}
+              </>
+            )
+          )}
 
           {area === 'communication' && (
             <RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme} isManager={true}/>
