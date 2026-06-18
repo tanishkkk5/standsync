@@ -17,11 +17,11 @@ function useC() {
     sel:'#111827', row:'rgba(255,255,255,.02)',
     accent:'#818CF8', glow:'rgba(99,102,241,.18)', dark:true,
   } : {
-    bg:'#ECEEFF', surf:'rgba(255,255,255,.72)', surfH:'rgba(255,255,255,.95)',
-    bord:'rgba(99,102,241,.11)', bordH:'rgba(99,102,241,.32)',
-    text:'#16145A', sub:'#3730A3', mut:'#7879A8',
-    nav:'rgba(236,238,255,.78)', inp:'rgba(255,255,255,.88)', inpB:'rgba(99,102,241,.2)',
-    sel:'rgba(255,255,255,.97)', row:'rgba(99,102,241,.025)',
+    bg:'#F4F6FB', surf:'#FFFFFF', surfH:'#FFFFFF',
+    bord:'rgba(15,23,42,.1)', bordH:'rgba(99,102,241,.4)',
+    text:'#0F172A', sub:'#475569', mut:'#94A3B8',
+    nav:'rgba(255,255,255,.9)', inp:'#FFFFFF', inpB:'rgba(15,23,42,.16)',
+    sel:'#FFFFFF', row:'rgba(15,23,42,.025)',
     accent:'#6366F1', glow:'rgba(99,102,241,.1)', dark:false,
   };
 }
@@ -177,7 +177,7 @@ function BgEl() {
   const { dark }=useTheme();
   // Premium SaaS: solid base, no glowing orbs, no gaming aesthetics.
   // Dark = #0B1020 deep navy. Light = clean off-white. One barely-there top accent only.
-  const base = dark ? '#0B1020' : '#F7F8FC';
+  const base = dark ? '#0B1020' : '#F4F6FB';
   return(
     <div style={{ position:'fixed',inset:0,zIndex:0,overflow:'hidden',pointerEvents:'none' }}>
       <div style={{ position:'absolute',inset:0,background:base }}/>
@@ -187,8 +187,13 @@ function BgEl() {
   );
 }
 function ThemeToggle() {
-  const { dark, toggle }=useTheme();
-  return <button onClick={toggle} style={{ width:34,height:34,borderRadius:'50%',border:'1px solid rgba(128,128,128,.2)',background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,transition:'all .2s',flexShrink:0 }} title={dark?'Light mode':'Dark mode'}>{dark?'☀️':'🌙'}</button>;
+  const { dark, toggle }=useTheme(); const c=useC();
+  return <button onClick={toggle} style={{ width:34,height:34,borderRadius:'50%',border:`1px solid ${c.bord}`,background:'transparent',color:c.sub,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .2s',flexShrink:0 }} title={dark?'Light mode':'Dark mode'}
+    onMouseEnter={e=>{e.currentTarget.style.background=c.row;e.currentTarget.style.color=c.text;}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color=c.sub;}}>
+    {dark
+      ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4.2"/><line x1="12" y1="2.5" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="21.5"/><line x1="2.5" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="21.5" y2="12"/><line x1="5.2" y1="5.2" x2="6.9" y2="6.9"/><line x1="17.1" y1="17.1" x2="18.8" y2="18.8"/><line x1="5.2" y1="18.8" x2="6.9" y2="17.1"/><line x1="17.1" y1="6.9" x2="18.8" y2="5.2"/></svg>
+      : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>}
+  </button>;
 }
 
 // ─── PROFILE DROPDOWN ─────────────────────────────────────────────────────────
@@ -1845,6 +1850,231 @@ function RemindersPanel() {
 }
 
 // ─── GOOGLE CALENDAR ─────────────────────────────────────────────────────
+// ─── SCHEDULE CALENDAR (task time-blocks) ─────────────────────────────────────
+// Time blocks are stored in localStorage keyed by task id so this works without
+// any DB schema change: ss-schedule-{teamId} = { [taskId]: {date, start, end} }
+function schedKey(teamId) { return `ss-schedule-${teamId}`; }
+function readSchedule(teamId) { try { return JSON.parse(localStorage.getItem(schedKey(teamId)) || '{}'); } catch { return {}; } }
+function writeSchedule(teamId, data) { try { localStorage.setItem(schedKey(teamId), JSON.stringify(data)); } catch {} }
+
+const DAY_START_H = 7;   // calendar shows 7am
+const DAY_END_H   = 21;  // to 9pm
+const HOUR_PX     = 52;
+
+function hhmm(h) { const hh = Math.floor(h); const mm = Math.round((h - hh) * 60); const ap = hh >= 12 ? 'PM' : 'AM'; const h12 = hh % 12 === 0 ? 12 : hh % 12; return `${h12}:${mm.toString().padStart(2, '0')} ${ap}`; }
+function parseHM(str) { // "10:00" -> 10, "13:30" -> 13.5
+  if (!str) return null; const [h, m] = str.split(':').map(Number); return h + (m || 0) / 60;
+}
+
+function ScheduleCalendar({ team, session, members = [], tasks = [], canViewPerformance, isManager }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const teamId = team?.id || 'demo';
+  const myEmail = session?.user?.email || 'me@demo';
+  const [sched, setSched] = useState(() => readSchedule(teamId));
+  const [day, setDay] = useState(() => new Date());
+  const [editTask, setEditTask] = useState(null);
+  const [viewEmail, setViewEmail] = useState(myEmail); // whose calendar (managers/TLs can switch)
+  const [aiNote, setAiNote] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+
+  const dayStr = day.toISOString().slice(0, 10);
+  const canSwitch = canViewPerformance || isManager;
+
+  // tasks for the viewed person
+  const personTasks = tasks.filter(t => t.assignee_email === viewEmail);
+  const blockFor = (taskId) => sched[taskId];
+  const dayBlocks = personTasks
+    .map(t => ({ task: t, block: blockFor(t.id) }))
+    .filter(x => x.block && x.block.date === dayStr);
+
+  const saveBlock = (taskId, block) => {
+    const next = { ...readSchedule(teamId), [taskId]: block };
+    writeSchedule(teamId, next); setSched(next);
+  };
+  const clearBlock = (taskId) => {
+    const next = { ...readSchedule(teamId) }; delete next[taskId];
+    writeSchedule(teamId, next); setSched(next);
+  };
+
+  // Workload: scheduled hours today + total open tasks
+  const scheduledHrsToday = dayBlocks.reduce((s, x) => { const a = parseHM(x.block.start), b = parseHM(x.block.end); return s + (a != null && b != null && b > a ? b - a : 0); }, 0);
+  const openTasks = personTasks.filter(t => t.status !== 'done').length;
+  const workPct = Math.min(100, Math.round((scheduledHrsToday / 8) * 100)); // 8h day
+  const workColor = workPct >= 90 ? '#F87171' : workPct >= 60 ? '#FBBF24' : '#34D399';
+  const workLabel = workPct >= 90 ? 'Overloaded' : workPct >= 60 ? 'Busy' : 'Has capacity';
+
+  const assessWithAI = async () => {
+    setAiBusy(true); setAiNote('');
+    const person = members.find(m => m.email === viewEmail);
+    const name = person?.name || viewEmail.split('@')[0];
+    try {
+      const prompt = `You are a team capacity advisor. Member: ${name}. Today they have ${dayBlocks.length} time-blocked tasks totaling ${scheduledHrsToday.toFixed(1)} hours out of an 8-hour day. They have ${openTasks} open tasks total. Their tasks: ${personTasks.slice(0, 8).map(t => (t.title || t.text) + ' [' + (t.status || 'todo') + ', ' + (t.priority || 'med') + ']').join('; ') || 'none'}. In 2-3 short sentences, advise whether it's wise to assign more work to ${name} right now, and why.`;
+      const res = await askAI(prompt, { tasks: personTasks, members, teamName: team?.name || 'Team', userName: name });
+      setAiNote(typeof res === 'string' ? res : (res?.text || 'Could not get a recommendation.'));
+    } catch (e) {
+      // Fallback heuristic if AI unavailable
+      if (workPct >= 90) setAiNote(`${name} looks overloaded (${scheduledHrsToday.toFixed(1)}h scheduled, ${openTasks} open). Avoid assigning more today — consider another member or tomorrow.`);
+      else if (workPct >= 60) setAiNote(`${name} is fairly busy (${scheduledHrsToday.toFixed(1)}h today). You can assign a small/low-priority task, but watch their load.`);
+      else setAiNote(`${name} has capacity (${scheduledHrsToday.toFixed(1)}h scheduled, ${openTasks} open). Good candidate for new work.`);
+    }
+    setAiBusy(false);
+  };
+
+  const hours = [];
+  for (let h = DAY_START_H; h <= DAY_END_H; h++) hours.push(h);
+  const shiftDay = (n) => setDay(d => { const nd = new Date(d); nd.setDate(nd.getDate() + n); return nd; });
+
+  const prioColor = p => p === 'critical' ? '#EF4444' : p === 'high' ? '#F87171' : p === 'medium' ? '#FBBF24' : '#818CF8';
+
+  return (
+    <div>
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={() => shiftDay(-1)} style={navBtn(c)}>‹</button>
+          <button onClick={() => setDay(new Date())} style={{ ...navBtn(c), width: 'auto', padding: '0 12px', fontSize: 12, fontWeight: 600 }}>Today</button>
+          <button onClick={() => shiftDay(1)} style={navBtn(c)}>›</button>
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: c.text }}>{day.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
+        <div style={{ flex: 1 }}/>
+        {canSwitch && (
+          <Sel value={viewEmail} onChange={e => { setViewEmail(e.target.value); setAiNote(''); }} style={{ minWidth: 180 }}>
+            <option value={myEmail}>My schedule</option>
+            {members.filter(m => m.email !== myEmail).map(m => <option key={m.email} value={m.email}>{m.name || m.email.split('@')[0]}</option>)}
+          </Sel>
+        )}
+      </div>
+
+      {/* Workload card (managers/TLs, when viewing someone) */}
+      {canSwitch && (
+        <div style={{ borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}`, padding: '16px 18px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {(() => { const m = members.find(x => x.email === viewEmail); return m ? <Av member={m} size={32} url={m.avatar_url}/> : null; })()}
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>{(members.find(x => x.email === viewEmail)?.name) || viewEmail.split('@')[0]}</div>
+                <div style={{ fontSize: 12, color: c.mut }}>{scheduledHrsToday.toFixed(1)}h scheduled today · {openTasks} open tasks</div>
+              </div>
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 700, color: workColor, background: workColor + '1f', padding: '4px 12px', borderRadius: 20 }}>{workLabel}</span>
+          </div>
+          <div style={{ height: 8, borderRadius: 4, background: c.row, overflow: 'hidden', marginBottom: 12 }}>
+            <div style={{ height: '100%', width: workPct + '%', background: workColor, borderRadius: 4, transition: 'width .3s' }}/>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <Btn onClick={assessWithAI} loading={aiBusy} v="ghost" style={{ fontSize: 12.5 }}>✦ Should I assign work to them?</Btn>
+            {aiNote && <div style={{ flex: 1, minWidth: 220, fontSize: 12.5, color: c.sub, background: dark ? 'rgba(99,102,241,.08)' : 'rgba(99,102,241,.05)', border: '1px solid rgba(99,102,241,.2)', borderRadius: 10, padding: '8px 12px', lineHeight: 1.5 }}>{aiNote}</div>}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        {/* Day grid */}
+        <div style={{ flex: 1, minWidth: 320, borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}`, overflow: 'hidden' }}>
+          <div style={{ position: 'relative' }}>
+            {hours.map(h => (
+              <div key={h} style={{ display: 'flex', borderTop: `1px solid ${c.bord}`, height: HOUR_PX }}>
+                <div style={{ width: 64, flexShrink: 0, padding: '4px 8px', fontSize: 11, color: c.mut, borderRight: `1px solid ${c.bord}` }}>{hhmm(h)}</div>
+                <div style={{ flex: 1 }}/>
+              </div>
+            ))}
+            {/* Task blocks overlay */}
+            <div style={{ position: 'absolute', left: 64, right: 8, top: 0, bottom: 0 }}>
+              {dayBlocks.map(({ task, block }) => {
+                const a = parseHM(block.start), b = parseHM(block.end);
+                if (a == null || b == null) return null;
+                const top = (a - DAY_START_H) * HOUR_PX;
+                const height = Math.max(22, (b - a) * HOUR_PX - 4);
+                return (
+                  <div key={task.id} onClick={() => setEditTask(task)} style={{ position: 'absolute', top: top + 2, left: 0, right: 0, height, background: prioColor(task.priority) + '22', borderLeft: `3px solid ${prioColor(task.priority)}`, borderRadius: 8, padding: '5px 9px', cursor: 'pointer', overflow: 'hidden' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title || task.text}</div>
+                    <div style={{ fontSize: 10.5, color: c.mut }}>{hhmm(a)} – {hhmm(b)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Unscheduled tasks sidebar */}
+        <div style={{ width: 280, flexShrink: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
+            {viewEmail === myEmail ? 'Schedule a task' : 'Their tasks'}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {personTasks.filter(t => t.status !== 'done').map(t => {
+              const b = blockFor(t.id);
+              return (
+                <div key={t.id} style={{ borderRadius: 10, background: c.surf, border: `1px solid ${c.bord}`, padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: prioColor(t.priority), flexShrink: 0 }}/>
+                    <span style={{ fontSize: 12.5, color: c.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title || t.text}</span>
+                  </div>
+                  {b ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 7 }}>
+                      <span style={{ fontSize: 11, color: c.sub }}>{b.date === dayStr ? 'Today' : b.date} · {hhmm(parseHM(b.start))}–{hhmm(parseHM(b.end))}</span>
+                      <button onClick={() => setEditTask(t)} style={{ fontSize: 11, color: c.accent, background: 'none', border: 'none', cursor: 'pointer' }}>edit</button>
+                      <button onClick={() => clearBlock(t.id)} style={{ fontSize: 11, color: c.mut, background: 'none', border: 'none', cursor: 'pointer' }}>clear</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setEditTask(t)} style={{ marginTop: 7, fontSize: 11.5, color: c.accent, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, padding: 0 }}>+ Set time block</button>
+                  )}
+                </div>
+              );
+            })}
+            {personTasks.filter(t => t.status !== 'done').length === 0 && <div style={{ fontSize: 12.5, color: c.mut, padding: '14px 4px' }}>No open tasks.</div>}
+          </div>
+        </div>
+      </div>
+
+      {editTask && <TimeBlockModal task={editTask} dayStr={dayStr} existing={blockFor(editTask.id)} onClose={() => setEditTask(null)} onSave={(blk) => { saveBlock(editTask.id, blk); setEditTask(null); }}/>}
+    </div>
+  );
+}
+
+function navBtn(c) { return { width: 32, height: 32, borderRadius: 8, border: `1px solid ${c.bord}`, background: 'transparent', color: c.text, cursor: 'pointer', fontSize: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }; }
+
+function TimeBlockModal({ task, dayStr, existing, onClose, onSave }) {
+  const c = useC();
+  const [date, setDate] = useState(existing?.date || dayStr);
+  const [start, setStart] = useState(existing?.start || '10:00');
+  const [end, setEnd] = useState(existing?.end || '12:00');
+  const [repeat, setRepeat] = useState(existing?.repeat || 'none');
+  const valid = start && end && end > start;
+  return (
+    <Modal onClose={onClose} title="Set time block" width={420}>
+      <div style={{ fontSize: 13.5, color: c.sub, marginBottom: 16 }}>{task.title || task.text}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div>
+          <div style={lblS(c)}>Date</div>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={inpS(c)}/>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div><div style={lblS(c)}>Start</div><input type="time" value={start} onChange={e => setStart(e.target.value)} style={inpS(c)}/></div>
+          <div><div style={lblS(c)}>End</div><input type="time" value={end} onChange={e => setEnd(e.target.value)} style={inpS(c)}/></div>
+        </div>
+        <div>
+          <div style={lblS(c)}>Repeat</div>
+          <Sel value={repeat} onChange={e => setRepeat(e.target.value)}>
+            <option value="none">Does not repeat</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </Sel>
+        </div>
+        {!valid && <div style={{ fontSize: 12, color: '#F87171' }}>End time must be after start time.</div>}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn onClick={() => onSave({ date, start, end, repeat })} disabled={!valid}>Save block</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+function lblS(c) { return { fontSize: 11, fontWeight: 600, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }; }
+function inpS(c) { return { width: '100%', background: c.inp, border: `1.5px solid ${c.inpB}`, borderRadius: 10, padding: '9px 12px', color: c.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' }; }
+
 function CalendarPanel({ team, session, members, onInviteMember }) {
   const c=useC();
   // Persist connection status so tab switches don't disconnect
@@ -2714,8 +2944,21 @@ function MgrRow({ task, members, onStatus, onPriority, onNote, session }) {
 
 function AssignModal({ members, onClose, onAdd }) {
   const c=useC(); const [title,setTitle]=useState(''); const [assignee,setAssignee]=useState(members[0]?.email||''); const [priority,setPriority]=useState('medium'); const [timeline,setTimeline]=useState('Today EOD (6 PM)'); const [note,setNote]=useState('');
-  const submit=()=>{ if(!title.trim())return; const m=members.find(x=>x.email===assignee); onAdd({title:title.trim(),assignee_email:assignee,assignee_name:m?.name||assignee,priority,status:'todo',timeline,manager_note:note,notes:'',blocker:''}); onClose(); };
-  return <Modal onClose={onClose} title="Assign a task"><Inp value={title} onChange={e=>setTitle(e.target.value)} placeholder="Task description..." style={{ marginBottom:12 }} autoFocus/><div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10 }}><Sel label="Assign to" value={assignee} onChange={e=>setAssignee(e.target.value)}>{members.map(m=><option key={m.id||m.email} value={m.email}>{m.name||m.email}</option>)}</Sel><Sel label="Priority" value={priority} onChange={e=>setPriority(e.target.value)}>{['critical','high','medium','low'].map(v=><option key={v} value={v}>{v.charAt(0).toUpperCase()+v.slice(1)}</option>)}</Sel></div><Sel label="Timeline" value={timeline} onChange={e=>setTimeline(e.target.value)} style={{ marginBottom:10 }}>{['Today noon (12 PM)','Today 3 PM','Today EOD (6 PM)','Tomorrow morning','Tomorrow EOD','This week'].map(t=><option key={t} value={t}>{t}</option>)}</Sel><Inp value={note} onChange={e=>setNote(e.target.value)} placeholder="Note to team member (optional)" style={{ marginBottom:18 }}/><div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}><Btn v="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={submit} disabled={!title.trim()}>Assign task</Btn></div></Modal>;
+  const [schedOn,setSchedOn]=useState(false); const [sDate,setSDate]=useState(()=>new Date().toISOString().slice(0,10)); const [sStart,setSStart]=useState('10:00'); const [sEnd,setSEnd]=useState('12:00');
+  const submit=()=>{ if(!title.trim())return; const m=members.find(x=>x.email===assignee); const payload={title:title.trim(),assignee_email:assignee,assignee_name:m?.name||assignee,priority,status:'todo',timeline,manager_note:note,notes:'',blocker:''}; if(schedOn&&sStart&&sEnd&&sEnd>sStart) payload._timeBlock={date:sDate,start:sStart,end:sEnd,repeat:'none'}; onAdd(payload); onClose(); };
+  return <Modal onClose={onClose} title="Assign a task"><Inp value={title} onChange={e=>setTitle(e.target.value)} placeholder="Task description..." style={{ marginBottom:12 }} autoFocus/><div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10 }}><Sel label="Assign to" value={assignee} onChange={e=>setAssignee(e.target.value)}>{members.map(m=><option key={m.id||m.email} value={m.email}>{m.name||m.email}</option>)}</Sel><Sel label="Priority" value={priority} onChange={e=>setPriority(e.target.value)}>{['critical','high','medium','low'].map(v=><option key={v} value={v}>{v.charAt(0).toUpperCase()+v.slice(1)}</option>)}</Sel></div><Sel label="Timeline" value={timeline} onChange={e=>setTimeline(e.target.value)} style={{ marginBottom:10 }}>{['Today noon (12 PM)','Today 3 PM','Today EOD (6 PM)','Tomorrow morning','Tomorrow EOD','This week'].map(t=><option key={t} value={t}>{t}</option>)}</Sel><Inp value={note} onChange={e=>setNote(e.target.value)} placeholder="Note to team member (optional)" style={{ marginBottom:12 }}/>
+    <div style={{ marginBottom:14 }}>
+      <label style={{ display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontSize:13,color:c.sub }}>
+        <input type="checkbox" checked={schedOn} onChange={e=>setSchedOn(e.target.checked)} style={{ accentColor:'#6366F1' }}/>
+        Add a time block to the calendar (e.g. 10am–12pm)
+      </label>
+      {schedOn&&<div style={{ display:'grid',gridTemplateColumns:'1.3fr 1fr 1fr',gap:8,marginTop:10 }}>
+        <input type="date" value={sDate} onChange={e=>setSDate(e.target.value)} style={inpS(c)}/>
+        <input type="time" value={sStart} onChange={e=>setSStart(e.target.value)} style={inpS(c)}/>
+        <input type="time" value={sEnd} onChange={e=>setSEnd(e.target.value)} style={inpS(c)}/>
+      </div>}
+    </div>
+    <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}><Btn v="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={submit} disabled={!title.trim()}>Assign task</Btn></div></Modal>;
 }
 
 function TeamTab({ tasks, members, isManager = true }) {
@@ -2836,6 +3079,7 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
                   <Inp label="Designation" value={editDesg} onChange={e=>setEditDesg(e.target.value)} placeholder="e.g. Frontend Developer, QA Lead..."/>
                   <Sel label="Role" value={editRole} onChange={e=>setEditRole(e.target.value)}>
                     <option value="member">Member</option>
+                    <option value="team_lead">Team Lead</option>
                     <option value="manager">Manager</option>
                   </Sel>
                   <div style={{ display:'flex',gap:8 }}>
@@ -4073,7 +4317,12 @@ function BrainstormSpace({ team, session, members=[] }) {
       if (e.ctrlKey || e.metaKey) {
         const rect = el.getBoundingClientRect();
         const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-        const factor = e.deltaY < 0 ? 1.1 : 0.91;
+        // Sensitivity: lower = gentler zoom. Scale by actual delta but clamp each
+        // step so a fast trackpad swipe can't jump the zoom dramatically.
+        const SENS = 0.0022;
+        let step = -e.deltaY * SENS;            // up = zoom in
+        step = Math.max(-0.08, Math.min(0.08, step)); // clamp per-event change
+        const factor = Math.exp(step);          // smooth multiplicative zoom
         setZoom(z => {
           const nz = Math.min(4, Math.max(0.1, z * factor));
           setPan(p => { const np = { x: mx - (mx - p.x) * (nz / z), y: my - (my - p.y) * (nz / z) }; panStateRef.current = np; return np; });
@@ -6105,7 +6354,9 @@ function MailPreviewModal({ mail, onClose }) {
 }
 
 function ManagerView({
- session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers, openPip, pipOpen, isManager = true }) {
+ session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers, openPip, pipOpen, isManager = true, canViewPerformance, myRole = 'member' }) {
+  // Team leads see performance/insights even though they aren't full managers.
+  const canPerf = canViewPerformance !== undefined ? canViewPerformance : isManager;
 
   const c = useC();
   const { dark } = useTheme();
@@ -6116,6 +6367,7 @@ function ManagerView({
   const [knowledgeSub, setKnowledgeSub] = useState('docs');   // docs | brainstorm
   const [insightsSub, setInsightsSub]   = useState('overview'); // overview | performance | history
   const [teamSub, setTeamSub]           = useState('directory'); // directory | attendance (manager only)
+  const [calSub, setCalSub]             = useState('schedule');  // schedule | meetings
   const [mobileNav, setMobileNav] = useState(false);
 
   // ── Home quick-action modals ──
@@ -6219,7 +6471,7 @@ function ManagerView({
     { id: 'team',          label: 'Team',          icon: '⚇' },
     { id: 'communication', label: 'Communication', icon: '◌', badge: unreadChat },
     { id: 'knowledge',     label: 'Knowledge',     icon: '◈' },
-    ...(isManager ? [{ id: 'insights', label: 'Insights', icon: '▤' }] : []),
+    ...(canPerf ? [{ id: 'insights', label: 'Insights', icon: '▤' }] : []),
   ];
   const NAV_YOU = [
     { id: 'calendar',      label: 'Calendar',      icon: '⊟' },
@@ -6232,7 +6484,7 @@ function ManagerView({
   };
 
   const userName = session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || 'You';
-  const userRole = isManager ? 'Manager' : 'Member';
+  const userRole = isManager ? 'Manager' : (myRole === 'team_lead' ? 'Team Lead' : 'Member');
   const userInitials = userName.split(/[.\s]/).map(s => s[0]).slice(0,2).join('').toUpperCase();
 
   const NavBtn = (n) => {
@@ -6347,8 +6599,10 @@ function ManagerView({
 
           {/* Controls: Notifications, Theme, Profile */}
           <button onClick={toggleNotif} title="Notifications"
-            style={{ width: 34, height: 34, borderRadius: '50%', border: '1px solid rgba(128,128,128,.2)', background: 'transparent', color: c.sub, cursor: 'pointer', fontSize: 15, flexShrink: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s' }}>
-            🔔{unreadNotifs > 0 && <span style={{ position: 'absolute', top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, background: '#EF4444', color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', border: `2px solid ${c.nav}` }}>{unreadNotifs > 9 ? '9+' : unreadNotifs}</span>}
+            style={{ width: 34, height: 34, borderRadius: '50%', border: `1px solid ${c.bord}`, background: notifOpen ? c.row : 'transparent', color: notifOpen ? c.text : c.sub, cursor: 'pointer', flexShrink: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s' }}
+            onMouseEnter={e=>{e.currentTarget.style.background=c.row;e.currentTarget.style.color=c.text;}} onMouseLeave={e=>{if(!notifOpen){e.currentTarget.style.background='transparent';e.currentTarget.style.color=c.sub;}}}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+            {unreadNotifs > 0 && <span style={{ position: 'absolute', top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, background: '#EF4444', color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', border: `2px solid ${c.nav}` }}>{unreadNotifs > 9 ? '9+' : unreadNotifs}</span>}
           </button>
           <ThemeToggle/>
           <ProfileMenu session={session} onSettings={onSettings} onLogout={onLogout}/>
@@ -6382,14 +6636,21 @@ function ManagerView({
               <>
                 <SubTabs value={teamSub} onChange={setTeamSub}
                   tabs={[{ id: 'directory', label: 'Directory' }, { id: 'attendance', label: 'Attendance & breaks' }]}/>
-                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={isManager}/>}
+                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={true}/>}
                 {teamSub === 'attendance' && <AttendancePanel team={team} members={members} session={session} isManager={true}/>}
+              </>
+            ) : canPerf ? (
+              <>
+                <SubTabs value={teamSub} onChange={setTeamSub}
+                  tabs={[{ id: 'directory', label: 'Directory' }, { id: 'attendance', label: 'My shift & breaks' }]}/>
+                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={true}/>}
+                {teamSub === 'attendance' && <AttendancePanel team={team} members={members} session={session} isManager={false}/>}
               </>
             ) : (
               <>
                 <SubTabs value={teamSub} onChange={setTeamSub}
                   tabs={[{ id: 'directory', label: 'Directory' }, { id: 'attendance', label: 'My shift & breaks' }]}/>
-                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={isManager}/>}
+                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={false}/>}
                 {teamSub === 'attendance' && <AttendancePanel team={team} members={members} session={session} isManager={false}/>}
               </>
             )
@@ -6411,7 +6672,7 @@ function ManagerView({
             </>
           )}
 
-          {area === 'insights' && isManager && (
+          {area === 'insights' && canPerf && (
             <>
               <SubTabs value={insightsSub} onChange={setInsightsSub}
                 tabs={[{ id: 'overview', label: 'Overview' }, { id: 'performance', label: 'Performance' }, { id: 'ai', label: 'Ask AI' }, { id: 'history', label: 'History' }]}/>
@@ -6422,7 +6683,14 @@ function ManagerView({
             </>
           )}
 
-          {area === 'calendar' && <CalendarPanel team={team} members={members} session={session}/>}
+          {area === 'calendar' && (
+            <>
+              <SubTabs value={calSub} onChange={setCalSub}
+                tabs={[{ id: 'schedule', label: 'My Schedule' }, { id: 'meetings', label: 'Meetings' }]}/>
+              {calSub === 'schedule' && <ScheduleCalendar team={team} session={session} members={members} tasks={tasks} canViewPerformance={canPerf} isManager={isManager}/>}
+              {calSub === 'meetings' && <CalendarPanel team={team} members={members} session={session}/>}
+            </>
+          )}
 
           {area === 'settings' && (
             <>
@@ -6830,8 +7098,8 @@ class ErrorBoundary extends React.Component {
 
 export default function App() {
   // Init supabase from CDN on first render (avoids TDZ bundling crash)
-  const [dark,setDark]=useState(()=>(localStorage.getItem('ss-theme')||'dark')==='dark');
-  const toggle=useCallback(()=>setDark(d=>{const n=!d;localStorage.setItem('ss-theme',n?'dark':'light');document.body.style.background=n?'#060412':'#F1F5F9';return n;}),[]);
+  const [dark,setDark]=useState(()=>(localStorage.getItem('ss-theme')||'light')==='dark');
+  const toggle=useCallback(()=>setDark(d=>{const n=!d;localStorage.setItem('ss-theme',n?'dark':'light');document.body.style.background=n?'#060412':'#F4F6FB';return n;}),[]);
 
   // SESSION: Supabase stores it in localStorage with key 'ss-auth'
   // We read it synchronously so there is zero flicker on load or tab switch
@@ -6874,6 +7142,9 @@ export default function App() {
   const [toast,setToast]=useState(null); const [emailBusy,setEmailBusy]=useState(false); const [inviteToken,setInviteToken]=useState(null);
   const [showPip,setShowPip]=useState(false); // legacy, not used
   const isManager=myRole==='manager'||!SB.IS_LIVE;
+  const isTeamLead=myRole==='team_lead';
+  // Team leads get performance/insights visibility; managers get everything.
+  const canViewPerformance=isManager||isTeamLead;
   const showToast=useCallback((msg,type='success')=>setToast({msg,type}),[]);
 
   // Session persistence handled by Supabase client (localStorage key: ss-auth)
@@ -6980,7 +7251,7 @@ export default function App() {
   // Real-time chat subscription
   useEffect(()=>{ if(!team||!SB.IS_LIVE)return; return SB.subscribeToMessages(team.id,(msg)=>{setMessages(p=>{if(p.find(m=>m.id===msg.id))return p;return [...p,msg];});}); },[team]);
 
-  const handleAddTask=useCallback(async(d)=>{ if(!d?.title?.trim()) return; if(!SB.IS_LIVE){setTasks(p=>[...p,{id:'demo_'+Date.now(),...d,created_at:new Date().toISOString()}]);return;} const{data}=await SB.addTask({...d,standup_id:standup?.id}); if(data) setTasks(p=>[...p,data]); },[standup]);
+  const handleAddTask=useCallback(async(d)=>{ if(!d?.title?.trim()) return; const {_timeBlock,...task}=d; const persistBlock=(tid)=>{ if(_timeBlock&&_timeBlock.start&&_timeBlock.end){ try{ const k='ss-schedule-'+(team?.id||'demo'); const cur=JSON.parse(localStorage.getItem(k)||'{}'); cur[tid]=_timeBlock; localStorage.setItem(k,JSON.stringify(cur)); }catch(e){} } }; if(!SB.IS_LIVE){const nt={id:'demo_'+Date.now(),...task,created_at:new Date().toISOString()};setTasks(p=>[...p,nt]);persistBlock(nt.id);return;} const{data}=await SB.addTask({...task,standup_id:standup?.id}); if(data){setTasks(p=>[...p,data]);persistBlock(data.id);} },[standup,team]);
   const handleStatus=useCallback(async(id,status)=>{ const u={status,...(status==='done'?{completed_at:new Date().toISOString()}:{})}; if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));return;} await SB.updateTask(id,u); },[]);
   const handlePriority=useCallback(async(id,priority)=>{ if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,priority}:t));return;} await SB.updateTask(id,{priority}); },[]);
   const handleNote=useCallback(async(id,manager_note)=>{ if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,manager_note}:t));return;} await SB.updateTask(id,{manager_note}); },[]);
@@ -7097,7 +7368,7 @@ export default function App() {
   const myMember=members.find(m=>m.user_id===(session?.user?.id||'u1'));
   const userForView={email:session?.user?.email||'tanisk.pandey@xtransmatrix.com',name:session?.user?.user_metadata?.name||'Tanisk Pandey'};
 
-  useEffect(()=>{document.body.style.background=dark?'#060412':'#F1F5F9';},[dark]);
+  useEffect(()=>{document.body.style.background=dark?'#060412':'#F4F6FB';},[dark]);
 
   // authLoading removed — session is instant from sessionStorage
 
@@ -7118,9 +7389,9 @@ export default function App() {
       {/* App views */}
       {(session||!SB.IS_LIVE)&&view==='home'&&<HomeView key={homeKey} session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onSelectTeam={handleSelectTeam} onLogout={handleLogout} onSettings={()=>setView('settings')}/>}
       {(session||!SB.IS_LIVE)&&view==='settings'&&<SettingsPage session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onBack={()=>setView(team?'standup':'home')} onSaved={d=>showToast('Profile saved')}/>}
-      {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
+      {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView canViewPerformance={canViewPerformance} myRole={myRole} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
       {/* PiP is a real popup window — no DOM element needed */}
-      {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<ManagerView isManager={false} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
+      {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<ManagerView isManager={false} canViewPerformance={canViewPerformance} myRole={myRole} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
     </ThemeCtx.Provider>
   );
 }
