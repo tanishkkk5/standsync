@@ -454,6 +454,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
   const [roomId,setRoomId]=useState(''); const [roomPass,setRoomPass]=useState('');
   const [joinLoading,setJoinLoading]=useState(false); const [joinError,setJoinError]=useState('');
   const name=session?.user?.user_metadata?.name||session?.user?.email?.split('@')[0]||'there';
+  const greeting=(()=>{ const h=new Date().getHours(); return h<12?'Good morning':h<18?'Good afternoon':'Good evening'; })();
   const ICONS=['⚡','🚀','🎯','🔥','💡','🌟','🏗️','🎨','🔬','📱'];
 
   useEffect(()=>{
@@ -542,7 +543,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
       </div>
 
       <div style={{ maxWidth:960,margin:'0 auto',padding:'36px 24px' }}>
-        <h1 style={{ fontSize:26,fontWeight:800,color:c.text,marginBottom:4 }}>Good morning, {name} 👋</h1>
+        <h1 style={{ fontSize:26,fontWeight:800,color:c.text,marginBottom:4 }}>{greeting}, {name} 👋</h1>
         <p style={{ color:c.mut,fontSize:14,marginBottom:32 }}>What would you like to do today?</p>
 
         {/* ── TWO-PATH CHOOSER ── */}
@@ -5609,42 +5610,55 @@ function MemberSettings({ session, team, myRole }) {
 }
 
 // ─── NOTIFICATION PANEL ───────────────────────────────────────────────────────
-function NotificationPanel({ notifs, onClose, onAction, onDigest, emailBusy }) {
+function NotificationPanel({ notifs, onClose, onAction, onMarkAllRead, unread, onDigest, emailBusy }) {
   const c = useC();
   const { dark } = useTheme();
+  const [showAll, setShowAll] = useState(false);
   useEffect(() => {
     const h = (e) => { if (!e.target.closest?.('.ss-notif-panel') && !e.target.closest?.('[title="Notifications"]')) onClose(); };
     setTimeout(() => document.addEventListener('mousedown', h), 0);
     return () => document.removeEventListener('mousedown', h);
   }, [onClose]);
+  const visible = showAll ? notifs : notifs.slice(0, 5);
+  const dateLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
   return (
-    <div className="ss-notif-panel" style={{ position: 'absolute', top: 48, right: 0, width: 360, maxWidth: 'calc(100vw - 32px)', background: dark ? '#12182B' : '#fff', border: `1px solid ${c.bord}`, borderRadius: 16, boxShadow: '0 16px 48px rgba(0,0,0,.4)', zIndex: 500, overflow: 'hidden', animation: 'fadeUp .18s ease' }}>
+    <div className="ss-notif-panel" style={{ position: 'absolute', top: 48, right: 0, width: 372, maxWidth: 'calc(100vw - 32px)', background: dark ? '#12182B' : '#fff', border: `1px solid ${c.bord}`, borderRadius: 16, boxShadow: '0 16px 48px rgba(0,0,0,.4)', zIndex: 500, overflow: 'hidden', animation: 'fadeUp .18s ease' }}>
       <div style={{ padding: '14px 18px', borderBottom: `1px solid ${c.bord}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Notifications</span>
-        <span style={{ fontSize: 12, color: c.mut }}>{notifs.length} new</span>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Notifications</div>
+          <div style={{ fontSize: 11, color: c.mut, marginTop: 1 }}>{dateLabel} · {unread} unread</div>
+        </div>
+        {notifs.length > 0 && unread > 0 && <button onClick={onMarkAllRead} style={{ fontSize: 12, color: c.accent, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Mark all as read</button>}
       </div>
       <div style={{ maxHeight: 420, overflowY: 'auto' }}>
         {notifs.length === 0 ? (
           <div style={{ padding: '36px 20px', textAlign: 'center' }}>
             <div style={{ fontSize: 32, marginBottom: 10 }}>✅</div>
             <div style={{ fontSize: 14, color: c.sub, fontWeight: 600, marginBottom: 4 }}>You're all caught up</div>
-            <div style={{ fontSize: 12.5, color: c.mut }}>No blockers, deadlines, or meetings need attention.</div>
+            <div style={{ fontSize: 12.5, color: c.mut }}>No blockers, deadlines, or meetings today.</div>
           </div>
-        ) : notifs.map(n => (
-          <div key={n.id} style={{ display: 'flex', gap: 12, padding: '13px 16px', borderBottom: `1px solid ${c.bord}` }}>
+        ) : visible.map(n => (
+          <div key={n.id} style={{ display: 'flex', gap: 12, padding: '13px 16px', borderBottom: `1px solid ${c.bord}`, position: 'relative', background: n.read ? 'transparent' : (dark ? 'rgba(129,140,248,.05)' : 'rgba(99,102,241,.03)') }}>
+            {!n.read && <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', width: 6, height: 6, borderRadius: '50%', background: '#6366F1' }}/>}
             <div style={{ width: 34, height: 34, borderRadius: 10, background: n.accent + '1f', color: n.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{n.icon}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: c.text }}>{n.title}</div>
+              <div style={{ fontSize: 13, fontWeight: n.read ? 600 : 700, color: c.text }}>{n.title}</div>
               <div style={{ fontSize: 12.5, color: c.sub, marginTop: 2, lineHeight: 1.45 }}>{n.body}</div>
               {n.action && <button onClick={() => onAction(n)} style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg,#6366F1,#818CF8)', border: 'none', borderRadius: 8, padding: '5px 12px', cursor: 'pointer' }}>{n.action.label} →</button>}
             </div>
           </div>
         ))}
+        {notifs.length > 5 && !showAll && (
+          <button onClick={() => setShowAll(true)} style={{ width: '100%', padding: '11px', fontSize: 12.5, color: c.accent, background: 'none', border: 'none', borderTop: `1px solid ${c.bord}`, cursor: 'pointer', fontWeight: 600 }}>Read more ({notifs.length - 5} more) →</button>
+        )}
+        {showAll && notifs.length > 5 && (
+          <button onClick={() => setShowAll(false)} style={{ width: '100%', padding: '11px', fontSize: 12.5, color: c.mut, background: 'none', border: 'none', borderTop: `1px solid ${c.bord}`, cursor: 'pointer', fontWeight: 600 }}>Show less ↑</button>
+        )}
       </div>
       <div style={{ padding: '10px 16px', borderTop: `1px solid ${c.bord}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         {onDigest
           ? <button onClick={() => { onDigest && onDigest(); }} disabled={emailBusy} style={{ fontSize: 12, color: c.accent, background: 'none', border: 'none', cursor: emailBusy ? 'wait' : 'pointer', fontWeight: 600 }}>{emailBusy ? 'Sending…' : '✉ Send team digest'}</button>
-          : <span style={{ fontSize: 11, color: c.mut }}>Stay on top of your work</span>}
+          : <span style={{ fontSize: 11, color: c.mut }}>Refreshes daily</span>}
       </div>
     </div>
   );
@@ -5668,57 +5682,63 @@ function ManagerView({
   const [noteModal, setNoteModal]       = useState(false);
   const [standupModal, setStandupModal] = useState(false);
 
-  // ── Notifications ──
+  // ── Notifications (daily, auto-refresh next day) ──
+  const todayKey = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   const [notifOpen, setNotifOpen] = useState(false);
-  const [dismissed, setDismissed] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem('ss-notif-dismissed') || '[]')); } catch { return new Set(); } });
-  const dismissNotif = (id) => { setDismissed(prev => { const n = new Set(prev); n.add(id); try { localStorage.setItem('ss-notif-dismissed', JSON.stringify([...n])); } catch {} return n; }); };
+  // read set is scoped to today; loading also clears any stale (previous-day) data
+  const [readIds, setReadIds] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('ss-notif-read') || '{}');
+      return raw.day === todayKey ? new Set(raw.ids || []) : new Set();
+    } catch { return new Set(); }
+  });
+  const persistRead = (set) => { try { localStorage.setItem('ss-notif-read', JSON.stringify({ day: todayKey, ids: [...set] })); } catch {} };
+  const markRead = (id) => setReadIds(prev => { const n = new Set(prev); n.add(id); persistRead(n); return n; });
+  const markAllRead = () => setReadIds(prev => { const n = new Set(prev); notifs.forEach(x => n.add(x.id)); persistRead(n); return n; });
 
   const notifs = useMemo(() => {
     const out = [];
-    const myEmail = session?.user?.email;
     const now = new Date();
     const hour = now.getHours();
-    // Blocked tasks
     tasks.filter(t => t.status === 'blocked').forEach(t => out.push({
-      id: 'blk-' + t.id, kind: 'blocker', icon: '🚧', accent: '#F87171',
+      id: 'blk-' + todayKey + '-' + t.id, kind: 'blocker', icon: '🚧', accent: '#F87171',
       title: 'Blocker needs attention', body: (t.title || t.text || 'A task') + ' is blocked' + (t.assignee_email ? ' · ' + t.assignee_email.split('@')[0] : ''),
       action: { label: 'View task', go: 'tasks' },
     }));
-    // Due today / EOD pending
     tasks.filter(t => t.status !== 'done' && (/today|eod|6 ?pm|noon/i.test(t.timeline || '') || (t.due_date && new Date(t.due_date).toDateString() === now.toDateString()))).forEach(t => out.push({
-      id: 'due-' + t.id, kind: 'eod', icon: '⏰', accent: '#FBBF24',
+      id: 'due-' + todayKey + '-' + t.id, kind: 'eod', icon: '⏰', accent: '#FBBF24',
       title: 'Due before EOD', body: (t.title || t.text || 'A task') + ' is still pending' + (hour >= 16 ? ' — finish it soon' : ''),
       action: { label: 'Open tasks', go: 'tasks' },
     }));
-    // Upcoming standup from calendar (next 30 min)
     try {
       const cal = JSON.parse(sessionStorage.getItem('ss-cal-events') || '[]');
       cal.map(ev => ({ ...ev, _s: new Date(ev.start?.dateTime || ev.start?.date || 0) }))
         .filter(ev => ev._s > now && ev._s < new Date(now.getTime() + 30 * 60000))
         .slice(0, 3)
         .forEach(ev => out.push({
-          id: 'meet-' + ev.id, kind: 'meeting', icon: '🎥', accent: '#34D399',
+          id: 'meet-' + todayKey + '-' + ev.id, kind: 'meeting', icon: '🎥', accent: '#34D399',
           title: 'Meeting starting soon', body: (ev.summary || 'A meeting') + ' at ' + ev._s.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
           action: { label: 'Join standup', go: 'standup' },
         }));
     } catch {}
-    // Backlog: my not-done tasks older than 2 days
     tasks.filter(t => t.status !== 'done' && t.created_at && (now - new Date(t.created_at)) > 2 * 864e5).forEach(t => out.push({
-      id: 'bkl-' + t.id, kind: 'backlog', icon: '📋', accent: '#818CF8',
+      id: 'bkl-' + todayKey + '-' + t.id, kind: 'backlog', icon: '📋', accent: '#818CF8',
       title: 'Backlog item', body: (t.title || t.text || 'A task') + ' has been open a while',
       action: { label: 'Review', go: 'tasks' },
     }));
-    return out.filter(n => !dismissed.has(n.id)).slice(0, 12);
-  }, [tasks, dismissed, session]);
+    return out.slice(0, 20).map(n => ({ ...n, read: readIds.has(n.id) }));
+  }, [tasks, readIds, session, todayKey]);
 
-  const unreadNotifs = notifs.length;
+  const unreadNotifs = notifs.filter(n => !n.read).length;
 
   const handleNotifAction = (n) => {
     setNotifOpen(false);
+    markRead(n.id);
     if (n.action?.go === 'standup') setStandupModal(true);
     else if (n.action?.go) goArea(n.action.go);
-    dismissNotif(n.id);
   };
+  // Opening the bell marks everything seen (the count clears)
+  const toggleNotif = () => { setNotifOpen(o => { const next = !o; if (next) setTimeout(markAllRead, 1200); return next; }); };
 
   const [unreadChat, setUnreadChat] = useState(0);
   const prevMsgCount = useRef(messages.length);
@@ -5868,14 +5888,14 @@ function ManagerView({
           <div style={{ flex: 1 }}/>
 
           {/* Controls: Notifications, Theme, Profile */}
-          <button onClick={() => setNotifOpen(o => !o)} title="Notifications"
-            style={{ width: 38, height: 38, borderRadius: 10, border: `1px solid ${c.bord}`, background: notifOpen ? (dark ? 'rgba(129,140,248,.14)' : 'rgba(99,102,241,.1)') : 'transparent', color: unreadNotifs > 0 ? '#FBBF24' : c.sub, cursor: 'pointer', fontSize: 17, flexShrink: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            🔔{unreadNotifs > 0 && <span style={{ position: 'absolute', top: 5, right: 5, minWidth: 15, height: 15, borderRadius: 8, background: '#EF4444', color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>{unreadNotifs > 9 ? '9+' : unreadNotifs}</span>}
+          <button onClick={toggleNotif} title="Notifications"
+            style={{ width: 34, height: 34, borderRadius: '50%', border: '1px solid rgba(128,128,128,.2)', background: 'transparent', color: c.sub, cursor: 'pointer', fontSize: 15, flexShrink: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s' }}>
+            🔔{unreadNotifs > 0 && <span style={{ position: 'absolute', top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, background: '#EF4444', color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', border: `2px solid ${c.nav}` }}>{unreadNotifs > 9 ? '9+' : unreadNotifs}</span>}
           </button>
           <ThemeToggle/>
           <ProfileMenu session={session} onSettings={onSettings} onLogout={onLogout}/>
 
-          {notifOpen && <NotificationPanel notifs={notifs} onClose={() => setNotifOpen(false)} onAction={handleNotifAction} onDigest={isManager ? onDigest : null} emailBusy={emailBusy}/>}
+          {notifOpen && <NotificationPanel notifs={notifs} onClose={() => setNotifOpen(false)} onAction={handleNotifAction} onMarkAllRead={markAllRead} unread={unreadNotifs} onDigest={isManager ? onDigest : null} emailBusy={emailBusy}/>}
         </div>
 
         {/* Live status strip (only on Home/Tasks) */}
