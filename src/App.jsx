@@ -5200,15 +5200,15 @@ function QuickNoteModal({ session, team, onClose, onOpenKnowledge }) {
 function StandupOptionsModal({ team, onClose, onJoin, onPip }) {
   const c = useC();
   const { dark } = useTheme();
-  const [view, setView] = useState('main'); // main | join | pip
+  const [view, setView] = useState('main'); // main | join | pip | pipjoin
+  const [pendingPipMode, setPendingPipMode] = useState('both');
 
-  // Pull events from the calendar session cache
   const calEvents = (() => { try { return JSON.parse(sessionStorage.getItem('ss-cal-events') || '[]'); } catch { return []; } })();
   const standupKeywords = ['standup', 'stand-up', 'stand up', 'daily', 'dsu', 'scrum', 'sync'];
   const now = new Date();
   const upcoming = calEvents
     .map(ev => ({ ...ev, _start: new Date(ev.start?.dateTime || ev.start?.date || 0) }))
-    .filter(ev => ev._start >= new Date(now.getTime() - 60*60*1000))
+    .filter(ev => ev._start >= new Date(now.getTime() - 60 * 60 * 1000))
     .sort((a, b) => a._start - b._start)
     .slice(0, 12);
   const standupsOnly = upcoming.filter(ev => standupKeywords.some(k => (ev.summary || '').toLowerCase().includes(k)));
@@ -5216,18 +5216,14 @@ function StandupOptionsModal({ team, onClose, onJoin, onPip }) {
 
   const fmtTime = (d) => d && !isNaN(d) ? d.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
 
-  // Find a usable meeting link from any provider
   const getMeetLink = (ev) => {
     if (ev.hangoutLink) return ev.hangoutLink;
-    // Google conferenceData
     const cd = ev.conferenceData?.entryPoints?.find(e => e.entryPointType === 'video');
     if (cd?.uri) return cd.uri;
-    // Scan location + description for any zoom/teams/skype/meet/webex url
-    const text = `${ev.location || ''} ${ev.description || ''}`;
-    const m = text.match(/https?:\/\/[^\s"'<>]+(zoom\.us|teams\.microsoft|teams\.live|meet\.google|skype\.com|webex\.com|whereby\.com|meet\.jit\.si)[^\s"'<>]*/i);
+    const text = (ev.location || '') + ' ' + (ev.description || '');
+    const m = text.match(/https?:\/\/[^\s"\'<>]+(zoom\.us|teams\.microsoft|teams\.live|meet\.google|skype\.com|webex\.com|whereby\.com|meet\.jit\.si)[^\s"\'<>]*/i);
     if (m) return m[0];
-    // Any url at all as last resort
-    const any = text.match(/https?:\/\/[^\s"'<>]+/);
+    const any = text.match(/https?:\/\/[^\s"\'<>]+/);
     return any ? any[0] : null;
   };
   const providerOf = (link) => {
@@ -5242,80 +5238,121 @@ function StandupOptionsModal({ team, onClose, onJoin, onPip }) {
     return 'Link';
   };
 
+  // Join only
   const joinMeeting = (ev) => {
     const link = getMeetLink(ev);
     if (link) { window.open(link, '_blank', 'noopener'); onClose(); }
-    else { onJoin(); } // no link found — fall back to live board
+    else { onJoin(); }
+  };
+  // Join meeting AND open PiP in chosen mode
+  const joinWithPip = (ev) => {
+    const link = getMeetLink(ev);
+    if (link) window.open(link, '_blank', 'noopener');
+    onPip(pendingPipMode);
   };
 
   const Action = ({ icon, title, desc, onClick, accent }) => (
-    <button onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 12, border: `1px solid ${c.bord}`, background: c.surf, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all .15s' }}
+    <button onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 12, border: '1px solid ' + c.bord, background: c.surf, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all .15s' }}
       onMouseEnter={e => e.currentTarget.style.borderColor = c.bordH}
       onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
-      <div style={{ width: 40, height: 40, borderRadius: 11, background: (accent || '#6366F1') + '1f', color: accent || '#818CF8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, flexShrink: 0 }}>{icon}</div>
+      <div style={{ width: 40, height: 40, borderRadius: 11, background: (accent || '#6366F1') + '1f', color: accent || '#818CF8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{icon}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>{title}</div>
         <div style={{ fontSize: 12, color: c.mut, marginTop: 2 }}>{desc}</div>
       </div>
-      <span style={{ color: c.mut, fontSize: 16 }}>\u2192</span>
+      <span style={{ color: c.mut, fontSize: 18 }}>→</span>
     </button>
   );
 
-  // ── JOIN: calendar list ──
+  const MeetRow = ({ ev, onPick, cta }) => {
+    const link = getMeetLink(ev);
+    const prov = providerOf(link);
+    return (
+      <button onClick={() => onPick(ev)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 11, border: '1px solid ' + c.bord, background: c.surf, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all .15s' }}
+        onMouseEnter={e => e.currentTarget.style.borderColor = c.bordH}
+        onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: link ? '#34D399' : '#64748B', flexShrink: 0 }}/>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.summary || 'Untitled meeting'}</div>
+          <div style={{ fontSize: 11, color: c.mut, marginTop: 2 }}>{fmtTime(ev._start)}</div>
+        </div>
+        {prov
+          ? <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: 'linear-gradient(135deg,#6366F1,#818CF8)', padding: '4px 12px', borderRadius: 20, flexShrink: 0 }}>{cta} {prov}</span>
+          : <span style={{ fontSize: 11, color: c.mut, flexShrink: 0 }}>No link</span>}
+      </button>
+    );
+  };
+
+  const EmptyCal = () => (
+    <div style={{ fontSize: 13, color: c.mut, padding: '20px 2px', lineHeight: 1.6, textAlign: 'center' }}>
+      No upcoming meetings found.<br/>Connect Google Calendar in the Calendar tab to see your standups here.
+    </div>
+  );
+
+  // JOIN list
   if (view === 'join') {
     return (
       <Modal onClose={onClose} title="Join a standup" width={520}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <button onClick={() => setView('main')} style={{ alignSelf: 'flex-start', fontSize: 12, color: c.mut, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 2 }}>\u2190 Back</button>
+          <button onClick={() => setView('main')} style={{ alignSelf: 'flex-start', fontSize: 12, color: c.mut, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 2 }}>← Back</button>
           <div style={{ fontSize: 12.5, color: c.mut, lineHeight: 1.5, marginBottom: 4 }}>Pick a meeting to jump straight into its video call.</div>
-          {joinList.length === 0 ? (
-            <div style={{ fontSize: 13, color: c.mut, padding: '20px 2px', lineHeight: 1.6, textAlign: 'center' }}>
-              No upcoming meetings found.<br/>Connect Google Calendar in the Calendar tab to see and join your standups here.
-            </div>
-          ) : joinList.map(ev => {
-            const link = getMeetLink(ev);
-            const prov = providerOf(link);
-            return (
-              <button key={ev.id} onClick={() => joinMeeting(ev)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 11, border: `1px solid ${c.bord}`, background: c.surf, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all .15s' }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = c.bordH}
-                onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: link ? '#34D399' : '#64748B', flexShrink: 0 }}/>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.summary || 'Untitled meeting'}</div>
-                  <div style={{ fontSize: 11, color: c.mut, marginTop: 2 }}>{fmtTime(ev._start)}</div>
-                </div>
-                {prov
-                  ? <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: 'linear-gradient(135deg,#6366F1,#818CF8)', padding: '4px 12px', borderRadius: 20, flexShrink: 0 }}>Join {prov}</span>
-                  : <span style={{ fontSize: 11, color: c.mut, flexShrink: 0 }}>No link</span>}
-              </button>
-            );
-          })}
-          <button onClick={onJoin} style={{ marginTop: 4, fontSize: 13, color: c.accent, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Or open the live board \u2192</button>
+          {joinList.length === 0 ? <EmptyCal/> : joinList.map(ev => <MeetRow key={ev.id} ev={ev} onPick={joinMeeting} cta="Join"/>)}
+          <button onClick={onJoin} style={{ marginTop: 4, fontSize: 13, color: c.accent, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Or open the live board →</button>
         </div>
       </Modal>
     );
   }
 
-  // ── PIP: notes / tasks / both ──
+  // PIP mode picker
   if (view === 'pip') {
     return (
       <Modal onClose={onClose} title="Picture-in-picture" width={460}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <button onClick={() => setView('main')} style={{ alignSelf: 'flex-start', fontSize: 12, color: c.mut, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 2 }}>\u2190 Back</button>
-          <Action icon="\u2261" title="Meeting notes" desc="Floating notes pad over your call" accent="#FBBF24" onClick={() => onPip('notes')}/>
-          <Action icon="\u25CE" title="Create tasks" desc="Floating task board over your call" accent="#60A5FA" onClick={() => onPip('tasks')}/>
-          <Action icon="\u29C9" title="Both" desc="Notes and tasks together in one window" accent="#818CF8" onClick={() => onPip('both')}/>
+          <button onClick={() => setView('main')} style={{ alignSelf: 'flex-start', fontSize: 12, color: c.mut, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 2 }}>← Back</button>
+          <div style={{ fontSize: 12.5, color: c.mut, lineHeight: 1.5, marginBottom: 2 }}>Choose what floats over your call.</div>
+          <Action icon="📝" title="Meeting notes" desc="Floating notes pad over your call" accent="#FBBF24" onClick={() => onPip('notes')}/>
+          <Action icon="✅" title="Create tasks" desc="Floating task board over your call" accent="#60A5FA" onClick={() => onPip('tasks')}/>
+          <Action icon="🪟" title="Both" desc="Notes and tasks together in one window" accent="#818CF8" onClick={() => onPip('both')}/>
+          <div style={{ marginTop: 4, paddingTop: 12, borderTop: '1px solid ' + c.bord }}>
+            <Action icon="🎥" title="Join a meeting + open PiP" desc="Open a call from your calendar, then float PiP on top" accent="#34D399" onClick={() => setView('pipjoin')}/>
+          </div>
         </div>
       </Modal>
     );
   }
 
-  // ── MAIN: two options ──
+  // PIP + join meeting: choose mode, then pick meeting
+  if (view === 'pipjoin') {
+    return (
+      <Modal onClose={onClose} title="Join meeting with PiP" width={520}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <button onClick={() => setView('pip')} style={{ alignSelf: 'flex-start', fontSize: 12, color: c.mut, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← Back</button>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, letterSpacing: '.08em', marginBottom: 8 }}>PIP SHOWS</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[['notes', '📝 Notes'], ['tasks', '✅ Tasks'], ['both', '🪟 Both']].map(([m, lbl]) => (
+                <button key={m} onClick={() => setPendingPipMode(m)} style={{ flex: 1, padding: '8px 10px', borderRadius: 9, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (pendingPipMode === m ? '#818CF8' : c.bord), background: pendingPipMode === m ? 'rgba(99,102,241,.12)' : 'transparent', color: pendingPipMode === m ? c.accent : c.sub }}>{lbl}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, letterSpacing: '.08em', marginBottom: 8 }}>PICK A MEETING</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {joinList.length === 0 ? <EmptyCal/> : joinList.map(ev => <MeetRow key={ev.id} ev={ev} onPick={joinWithPip} cta="Join"/>)}
+            </div>
+          </div>
+          <button onClick={() => onPip(pendingPipMode)} style={{ marginTop: 2, fontSize: 13, color: c.accent, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Skip — just open PiP →</button>
+        </div>
+      </Modal>
+    );
+  }
+
+  // MAIN
   return (
     <Modal onClose={onClose} title="Start standup" width={520}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <Action icon="\u25C9" title="Join the standup" desc="Pick a meeting from your calendar and jump in" onClick={() => setView('join')} accent="#34D399"/>
-        <Action icon="\u29C9" title="PiP mode" desc="Floating window that stays over your video call" onClick={() => setView('pip')} accent="#818CF8"/>
+        <Action icon="🎯" title="Join the standup" desc="Pick a meeting from your calendar and jump in" onClick={() => setView('join')} accent="#34D399"/>
+        <Action icon="🪟" title="PiP mode" desc="Floating window that stays over your video call" onClick={() => setView('pip')} accent="#818CF8"/>
       </div>
     </Modal>
   );
