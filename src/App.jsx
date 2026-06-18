@@ -309,7 +309,7 @@ function InfoModal({ which, onClose }) {
 }
 
 function AuthPage({ onLogin, inviteToken }) {
-  const c=useC(); const [mode,setMode]=useState(inviteToken?'signup':'login');
+  const c=useC(); const { dark }=useTheme(); const [mode,setMode]=useState(inviteToken?'signup':'login');
   const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); const [name,setName]=useState('');
   const [loading,setLoading]=useState(false); const [gLoading,setGLoading]=useState(false);
   const [error,setError]=useState(''); const [info,setInfo]=useState(''); const [gError,setGError]=useState('');
