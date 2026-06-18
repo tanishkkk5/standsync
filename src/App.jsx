@@ -45,6 +45,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 .ss-tip:hover::after{opacity:1;transform:translateX(-50%) scale(1)}
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes ssGlow{0%,100%{transform:scale(.92);opacity:.6}50%{transform:scale(1.08);opacity:1}}
 input,select,textarea,button{font-family:inherit}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -65,6 +66,16 @@ input,select,textarea,button{font-family:inherit}
 @media(max-width:560px){
   .ss-home-quick{grid-template-columns:1fr!important}
   .ss-home-stats{grid-template-columns:1fr!important}
+}
+@media(max-width:880px){
+  .ss-auth-wrap{flex-direction:column!important}
+  .ss-auth-hero{flex:none!important;max-width:100%!important;padding:36px 28px 20px!important}
+  .ss-auth-side{padding:8px 28px 40px!important}
+  .ss-auth-features{grid-template-columns:1fr 1fr!important}
+}
+@media(max-width:480px){
+  .ss-auth-features{grid-template-columns:1fr!important}
+  .ss-auth-hero h1{font-size:30px!important}
 }
 `;
 
@@ -215,6 +226,92 @@ function ProfileMenu({ session, onSettings, onLogout }) {
 }
 
 // ─── AUTH PAGE ────────────────────────────────────────────────────────────────
+// ─── SPLASH SCREEN ────────────────────────────────────────────────────────────
+function SplashScreen({ onDone }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const t0 = setTimeout(() => setShow(true), 60);
+    const t1 = setTimeout(() => onDone && onDone(), 2500);
+    return () => { clearTimeout(t0); clearTimeout(t1); };
+  }, [onDone]);
+  const word = 'StandSync';
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 22,
+      background: 'radial-gradient(ellipse at 50% 40%, #1A1450 0%, #0B0A2E 45%, #050816 100%)' }}>
+      {/* glow pulse */}
+      <div style={{ position: 'absolute', width: 320, height: 320, borderRadius: '50%', background: 'radial-gradient(circle, rgba(124,92,255,.35), transparent 70%)', filter: 'blur(40px)', animation: 'ssGlow 2.4s ease-in-out infinite' }}/>
+      <div style={{ position: 'relative', transform: show ? 'scale(1)' : 'scale(.8)', opacity: show ? 1 : 0, transition: 'transform .7s cubic-bezier(.2,.8,.2,1), opacity .7s ease' }}>
+        <Logo size={64}/>
+      </div>
+      <div style={{ position: 'relative', display: 'flex', gap: 1 }}>
+        {word.split('').map((ch, i) => (
+          <span key={i} style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.02em', color: '#fff',
+            opacity: show ? 1 : 0, transform: show ? 'translateY(0)' : 'translateY(8px)',
+            transition: `opacity .5s ease ${0.5 + i * 0.06}s, transform .5s ease ${0.5 + i * 0.06}s` }}>{ch}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── ABOUT / HOW IT WORKS / CONTACT MODALS ────────────────────────────────────
+function InfoModal({ which, onClose }) {
+  const c = useC();
+  const titles = { about: 'About StandSync', how: 'How it works', contact: 'Get in touch' };
+  return (
+    <Modal onClose={onClose} title={titles[which]} width={which === 'how' ? 560 : 480}>
+      {which === 'about' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, fontSize: 14, lineHeight: 1.7, color: c.sub }}>
+          <p style={{ margin: 0 }}>StandSync is one workspace for running standups, managing work, and keeping your team aligned — without juggling five different tools.</p>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 6 }}>Who it's for</div>
+            <p style={{ margin: 0 }}>Fast-moving teams that run daily standups and want tasks, docs, communication, and AI insights in a single place.</p>
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 6 }}>Our mission</div>
+            <p style={{ margin: 0 }}>Cut the busywork around alignment so teams spend their energy on the work that matters.</p>
+          </div>
+        </div>
+      )}
+      {which === 'how' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {[
+            ['Create workspace', 'Spin up a team space in seconds.'],
+            ['Invite your team', 'Bring people in by email or Google.'],
+            ['Create tasks', 'Capture work with owners and priorities.'],
+            ['Run standups', 'Async or live — track progress and blockers.'],
+            ['Track progress', 'See completion, workload, and what is stuck.'],
+            ['Get AI insights', 'Automatic summaries and recommended actions.'],
+          ].map(([t, d], i, arr) => (
+            <div key={t} style={{ display: 'flex', gap: 14 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#6366F1,#818CF8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
+                {i < arr.length - 1 && <div style={{ width: 2, flex: 1, background: c.bord, margin: '4px 0' }}/>}
+              </div>
+              <div style={{ paddingBottom: 18 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>{t}</div>
+                <div style={{ fontSize: 13, color: c.mut, marginTop: 2, lineHeight: 1.5 }}>{d}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {which === 'contact' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, fontSize: 14, color: c.sub }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span style={{ fontSize: 16 }}>✉️</span> <a href="mailto:hello@standsync.app" style={{ color: c.accent, textDecoration: 'none' }}>hello@standsync.app</a></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span style={{ fontSize: 16 }}>🌐</span> <a href="https://standsync-olive.vercel.app" target="_blank" rel="noreferrer" style={{ color: c.accent, textDecoration: 'none' }}>standsync-olive.vercel.app</a></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span style={{ fontSize: 16 }}>💬</span> Support: <a href="mailto:support@standsync.app" style={{ color: c.accent, textDecoration: 'none' }}>support@standsync.app</a></div>
+          <div style={{ marginTop: 6 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 8 }}>Send feedback</div>
+            <Textarea placeholder="Tell us what you think…" style={{ minHeight: 90 }}/>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}><Btn onClick={onClose}>Send</Btn></div>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 function AuthPage({ onLogin, inviteToken }) {
   const c=useC(); const [mode,setMode]=useState(inviteToken?'signup':'login');
   const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); const [name,setName]=useState('');
@@ -246,45 +343,89 @@ function AuthPage({ onLogin, inviteToken }) {
     // On success: Supabase redirects to window.location.origin
   };
 
+  const [infoModal, setInfoModal] = useState(null);
+
+  const FEATURES = [
+    { icon: '◉', title: 'Daily Standups', desc: 'Run async and live standups effortlessly.' },
+    { icon: '◎', title: 'Task Management', desc: 'Track work, priorities, blockers and ownership.' },
+    { icon: '✦', title: 'AI Insights', desc: 'Automatic summaries and action items.' },
+    { icon: '◈', title: 'Knowledge Hub', desc: 'Docs, SOPs and decisions in one place.' },
+  ];
+
   return (
-    <div style={{ minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24,position:'relative',zIndex:1,animation:'fadeIn .4s ease' }}>
-      <div style={{ marginBottom:40 }}><Logo size={40}/></div>
-      <Card style={{ width:'100%',maxWidth:420,padding:32 }}>
-        <h2 style={{ color:c.text,fontSize:22,fontWeight:700,marginBottom:6,letterSpacing:'-.02em' }}>
-          {mode==='login'?'Welcome back':mode==='signup'?'Create account':'Reset password'}
-        </h2>
-        <p style={{ color:c.mut,fontSize:14,marginBottom:24 }}>
-          {mode==='login'?'Sign in to StandSync':mode==='signup'?'Join and track your standups':'We will send a reset link'}
-        </p>
-        {inviteToken&&mode==='signup'&&<div style={{ background:'rgba(99,102,241,.12)',border:'1px solid rgba(99,102,241,.3)',borderRadius:10,padding:'10px 14px',marginBottom:18,fontSize:13,color:'#818CF8' }}>🎉 You were invited! Create an account to join.</div>}
-        {info&&<div style={{ background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.3)',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#34D399',marginBottom:14 }}>✅ {info}</div>}
-        {gError&&<div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#F87171',marginBottom:14 }}>{gError}</div>}
-        {error&&!gError&&<div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#F87171',marginBottom:14 }}>{error}</div>}
+    <div style={{ minHeight: '100vh', position: 'relative', zIndex: 1, animation: 'fadeIn .4s ease' }}>
+      <div className="ss-auth-wrap" style={{ display: 'flex', minHeight: '100vh' }}>
 
-        {/* Google Sign-In */}
-        {mode!=='forgot'&&(
-          <>
-            <Btn v="google" onClick={signInWithGoogle} loading={gLoading} style={{ width:'100%',justifyContent:'center',padding:'11px',fontSize:14,marginBottom:16,fontWeight:600 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-              Continue with Google
-            </Btn>
+        {/* LEFT — hero (60%) */}
+        <div className="ss-auth-hero" style={{ flex: '0 0 58%', maxWidth: '58%', padding: '48px 56px', display: 'flex', flexDirection: 'column', justifyContent: 'center', boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 40 }}>
+            <Logo size={32}/>
+            <span style={{ fontSize: 18, fontWeight: 800, color: c.text, letterSpacing: '-.02em' }}>StandSync</span>
+          </div>
+          <h1 style={{ fontSize: 40, fontWeight: 800, color: c.text, letterSpacing: '-.03em', lineHeight: 1.1, margin: '0 0 18px', maxWidth: 520 }}>Run Standups. Manage Work. Stay Aligned.</h1>
+          <p style={{ fontSize: 16, color: c.sub, lineHeight: 1.6, margin: '0 0 40px', maxWidth: 480 }}>StandSync brings tasks, standups, collaboration, knowledge, and AI insights into one workspace.</p>
 
-            <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:16 }}><div style={{ flex:1,height:1,background:c.bord }}/><span style={{ fontSize:12,color:c.mut }}>or</span><div style={{ flex:1,height:1,background:c.bord }}/></div>
-          </>
-        )}
+          <div className="ss-auth-features" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, maxWidth: 540 }}>
+            {FEATURES.map(f => (
+              <div key={f.title} style={{ padding: '18px 20px', borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, transition: 'transform .18s, border-color .18s' }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.borderColor = c.bordH; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.borderColor = c.bord; }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(124,92,255,.14)', color: '#A78BFA', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, marginBottom: 12 }}>{f.icon}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: c.text, marginBottom: 4 }}>{f.title}</div>
+                <div style={{ fontSize: 12.5, color: c.mut, lineHeight: 1.5 }}>{f.desc}</div>
+              </div>
+            ))}
+          </div>
 
-        {mode==='signup'&&<div style={{ marginBottom:14 }}><Inp label="Your name" value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Alex Johnson"/></div>}
-        <div style={{ marginBottom:14 }}><Inp label="Email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@company.com" onKeyDown={e=>e.key==='Enter'&&submit()} autoComplete="email"/></div>
-        {mode!=='forgot'&&<div style={{ marginBottom:20 }}><Inp label="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder={mode==='signup'?'Min 6 characters':'Your password'} onKeyDown={e=>e.key==='Enter'&&submit()} autoComplete={mode==='signup'?'new-password':'current-password'}/></div>}
-        <Btn onClick={submit} loading={loading} style={{ width:'100%',justifyContent:'center',padding:'12px',fontSize:15 }}>
-          {mode==='login'?'Sign in':mode==='signup'?'Create account':'Send reset link'}
-        </Btn>
-        <div style={{ marginTop:18,textAlign:'center',fontSize:13,color:c.mut }}>
-          {mode==='login'?<><button onClick={()=>{setMode('forgot');setGError('');setError('');}} style={{ background:'none',border:'none',color:'#818CF8',cursor:'pointer',fontSize:13,textDecoration:'underline' }}>Forgot password?</button><span style={{ margin:'0 8px' }}>·</span><button onClick={()=>{setMode('signup');setGError('');setError('');}} style={{ background:'none',border:'none',color:'#818CF8',cursor:'pointer',fontSize:13 }}>Create account</button></>
-          :mode==='signup'?<><span>Already have an account? </span><button onClick={()=>{setMode('login');setGError('');setError('');}} style={{ background:'none',border:'none',color:'#818CF8',cursor:'pointer',fontSize:13 }}>Sign in</button></>
-          :<button onClick={()=>{setMode('login');setGError('');setError('');}} style={{ background:'none',border:'none',color:'#818CF8',cursor:'pointer',fontSize:13 }}>Back to login</button>}
+          <div style={{ display: 'flex', gap: 22, marginTop: 40 }}>
+            {[['about', 'About'], ['how', 'How it works'], ['contact', 'Contact']].map(([k, l]) => (
+              <button key={k} onClick={() => setInfoModal(k)} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 13.5, fontWeight: 500, padding: 0, transition: 'color .15s' }}
+                onMouseEnter={e => e.currentTarget.style.color = c.text} onMouseLeave={e => e.currentTarget.style.color = c.mut}>{l}</button>
+            ))}
+          </div>
         </div>
-      </Card>
+
+        {/* RIGHT — auth card (40%) */}
+        <div className="ss-auth-side" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 32px', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 60% 40%, rgba(124,92,255,.12), transparent 60%)', pointerEvents: 'none' }}/>
+          <div style={{ position: 'relative', width: '100%', maxWidth: 400, background: dark ? 'rgba(17,24,39,.72)' : 'rgba(255,255,255,.82)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: `1px solid ${c.bord}`, borderRadius: 20, padding: 32, boxShadow: '0 24px 70px rgba(0,0,0,.35)' }}>
+            <h2 style={{ color: c.text, fontSize: 22, fontWeight: 700, marginBottom: 6, letterSpacing: '-.02em' }}>
+              {mode === 'login' ? 'Welcome to StandSync' : mode === 'signup' ? 'Create your account' : 'Reset password'}
+            </h2>
+            <p style={{ color: c.mut, fontSize: 14, marginBottom: 24 }}>
+              {mode === 'login' ? 'Sign in to continue' : mode === 'signup' ? 'Join and track your standups' : 'We will send a reset link'}
+            </p>
+            {inviteToken && mode === 'signup' && <div style={{ background: 'rgba(99,102,241,.12)', border: '1px solid rgba(99,102,241,.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 18, fontSize: 13, color: '#818CF8' }}>🎉 You were invited! Create an account to join.</div>}
+            {info && <div style={{ background: 'rgba(52,211,153,.1)', border: '1px solid rgba(52,211,153,.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#34D399', marginBottom: 14 }}>✅ {info}</div>}
+            {gError && <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#F87171', marginBottom: 14 }}>{gError}</div>}
+            {error && !gError && <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#F87171', marginBottom: 14 }}>{error}</div>}
+
+            {mode !== 'forgot' && (
+              <>
+                <Btn v="google" onClick={signInWithGoogle} loading={gLoading} style={{ width: '100%', justifyContent: 'center', padding: '11px', fontSize: 14, marginBottom: 16, fontWeight: 600 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+                  Continue with Google
+                </Btn>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}><div style={{ flex: 1, height: 1, background: c.bord }}/><span style={{ fontSize: 12, color: c.mut }}>or</span><div style={{ flex: 1, height: 1, background: c.bord }}/></div>
+              </>
+            )}
+
+            {mode === 'signup' && <div style={{ marginBottom: 14 }}><Inp label="Your name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Alex Johnson"/></div>}
+            <div style={{ marginBottom: 14 }}><Inp label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" onKeyDown={e => e.key === 'Enter' && submit()} autoComplete="email"/></div>
+            {mode !== 'forgot' && <div style={{ marginBottom: 20 }}><Inp label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={mode === 'signup' ? 'Min 6 characters' : 'Your password'} onKeyDown={e => e.key === 'Enter' && submit()} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}/></div>}
+            <Btn onClick={submit} loading={loading} style={{ width: '100%', justifyContent: 'center', padding: '12px', fontSize: 15 }}>
+              {mode === 'login' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send reset link'}
+            </Btn>
+            <div style={{ marginTop: 18, textAlign: 'center', fontSize: 13, color: c.mut }}>
+              {mode === 'login' ? <><button onClick={() => { setMode('forgot'); setGError(''); setError(''); }} style={{ background: 'none', border: 'none', color: '#818CF8', cursor: 'pointer', fontSize: 13, textDecoration: 'underline' }}>Forgot password?</button><span style={{ margin: '0 8px' }}>·</span><button onClick={() => { setMode('signup'); setGError(''); setError(''); }} style={{ background: 'none', border: 'none', color: '#818CF8', cursor: 'pointer', fontSize: 13 }}>Create account</button></>
+              : mode === 'signup' ? <><span>Already have an account? </span><button onClick={() => { setMode('login'); setGError(''); setError(''); }} style={{ background: 'none', border: 'none', color: '#818CF8', cursor: 'pointer', fontSize: 13 }}>Sign in</button></>
+              : <button onClick={() => { setMode('login'); setGError(''); setError(''); }} style={{ background: 'none', border: 'none', color: '#818CF8', cursor: 'pointer', fontSize: 13 }}>Back to login</button>}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {infoModal && <InfoModal which={infoModal} onClose={() => setInfoModal(null)}/>}
     </div>
   );
 }
@@ -6155,15 +6296,15 @@ export default function App() {
       const urlParams=new URLSearchParams(window.location.search);
       if(urlParams.get('error')||urlParams.get('error_code')) return 'auth';
       const raw = localStorage.getItem('ss-auth');
-      if (!raw) return 'auth';
+      if (!raw) return 'splash';
       const parsed = JSON.parse(raw);
       const hasSession = !!(parsed?.currentSession || parsed?.session);
-      if (!hasSession) return 'auth';
+      if (!hasSession) return 'splash';
       const savedView = localStorage.getItem('ss-view');
       const team = localStorage.getItem('ss-team');
       if (savedView === 'standup' && team) return 'standup';
       return 'home';
-    } catch(e){ return 'auth'; }
+    } catch(e){ return 'splash'; }
   });
   // Persist team + role so page reloads (OAuth redirects) don't lose state
   const [team,setTeam]=useState(()=>{
@@ -6205,7 +6346,7 @@ export default function App() {
       setView('auth');
     }
     const inv=p.get('invite');
-    if(inv) setInviteToken(inv);
+    if(inv){ setInviteToken(inv); setView(v=>v==='splash'?'auth':v); }
     // Also clear any OAuth code/token params that shouldn't stay in URL
     if(p.get('code')||p.get('access_token')){
       window.history.replaceState({},'',window.location.pathname);
@@ -6213,7 +6354,7 @@ export default function App() {
   },[]);
 
   useEffect(()=>{
-    if(!SB.IS_LIVE){ setView('home'); return; }
+    if(!SB.IS_LIVE){ setView(v=>v==='splash'?v:'home'); return; }
 
     // Get session — handles Google OAuth redirect return (code in URL)
     SB.getSession().then(s=>{
@@ -6361,6 +6502,7 @@ export default function App() {
       <style>{CSS+`select option{background:${dark?'#0D0B24':'#fff'}!important;color:${dark?'#fff':'#1E1B4B'}}input::placeholder,textarea::placeholder{color:${dark?'rgba(255,255,255,.28)':'rgba(0,0,0,.35)'}}`}</style>
       <BgEl/>
       {toast&&<ToastEl msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
+      {view==='splash'&&<SplashScreen onDone={()=>setView(SB.IS_LIVE?'auth':'home')}/>}
       {view==='auth'&&<AuthPage onLogin={handleLogin} inviteToken={inviteToken}/>}
       {/* App views */}
       {(session||!SB.IS_LIVE)&&view==='home'&&<HomeView key={homeKey} session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onSelectTeam={handleSelectTeam} onLogout={handleLogout} onSettings={()=>setView('settings')}/>}
