@@ -5612,8 +5612,10 @@ function MemberSettings({ session, team, myRole }) {
 // ─── NOTIFICATION PANEL ───────────────────────────────────────────────────────
 // ─── ATTENDANCE & BREAK TRACKING ──────────────────────────────────────────────
 // Manual logging works fully offline (localStorage). Auto-presence is wired to
-// Supabase when available (SB.upsertPresence / SB.getTeamPresence) and otherwise
-// gracefully reflects only the current user's own session.
+// Supabase when available (presence helpers) and otherwise reflects only the
+// current user's own session. Presence helpers are resolved dynamically so the
+// build never fails if lib/supabase.js doesn't export them yet.
+const sbFn = (name) => { try { return SB[name]; } catch { return undefined; } };
 const DEFAULT_SHIFT_START = 9;   // 9 AM
 const DEFAULT_SHIFT_END   = 19;  // 7 PM
 // Shift config stored per team (default) + per member (override) in localStorage.
@@ -5664,7 +5666,7 @@ function AttendancePanel({ team, members, session, isManager }) {
   useEffect(() => {
     const beat = () => {
       const next = { ...log }; const r = { ...(next[myEmail] || {}) }; r.lastSeen = Date.now(); next[myEmail] = r; save(next);
-      try { const up = SB['upsertPresence']; if (SB.IS_LIVE && up) up(teamId, myEmail, Date.now()); } catch {}
+      try { const up = sbFn('upsertPresence'); if (SB.IS_LIVE && up) up(teamId, myEmail, Date.now()); } catch {}
     };
     beat();
     const t = setInterval(beat, 60000);
@@ -5674,7 +5676,7 @@ function AttendancePanel({ team, members, session, isManager }) {
 
   // Pull cross-user presence from backend when available (manager view benefits most)
   useEffect(() => {
-    const getPresence = SB['getTeamPresence'];
+    const getPresence = sbFn('getTeamPresence');
     if (!(SB.IS_LIVE && getPresence)) return;
     let alive = true;
     const pull = async () => {
