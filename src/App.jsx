@@ -5614,8 +5614,19 @@ function MemberSettings({ session, team, myRole }) {
 // Manual logging works fully offline (localStorage). Auto-presence is wired to
 // Supabase when available (SB.upsertPresence / SB.getTeamPresence) and otherwise
 // gracefully reflects only the current user's own session.
-const SHIFT_START = 9;   // 9 AM
-const SHIFT_END   = 19;  // 7 PM
+const DEFAULT_SHIFT_START = 9;   // 9 AM
+const DEFAULT_SHIFT_END   = 19;  // 7 PM
+// Shift config stored per team (default) + per member (override) in localStorage.
+function getShiftConfig(teamId, email) {
+  try {
+    const team = JSON.parse(localStorage.getItem(`ss-shift-${teamId}`) || '{}');
+    const def = { start: team.start ?? DEFAULT_SHIFT_START, end: team.end ?? DEFAULT_SHIFT_END, graceMin: team.graceMin ?? 15, maxBreakMin: team.maxBreakMin ?? 70 };
+    if (email && team.overrides && team.overrides[email]) return { ...def, ...team.overrides[email] };
+    return def;
+  } catch { return { start: DEFAULT_SHIFT_START, end: DEFAULT_SHIFT_END, graceMin: 15, maxBreakMin: 70 }; }
+}
+function saveShiftConfig(teamId, cfg) { try { localStorage.setItem(`ss-shift-${teamId}`, JSON.stringify(cfg)); } catch {} }
+function fmtHour(h) { const ap = h >= 12 ? 'PM' : 'AM'; const hh = h % 12 === 0 ? 12 : h % 12; return `${hh}${ap}`; }
 const BREAK_TYPES = [
   { id: 'lunch',  label: 'Lunch',     mins: 45, icon: '🍱' },
   { id: 'short20',label: '20 min',    mins: 20, icon: '☕' },
@@ -5634,6 +5645,9 @@ function AttendancePanel({ team, members, session, isManager }) {
   const myEmail = session?.user?.email || 'me@demo';
   const dayKey = new Date().toISOString().slice(0, 10);
   const KEY = `ss-attendance-${teamId}-${dayKey}`;
+  const [showShiftCfg, setShowShiftCfg] = useState(false);
+  const [cfgTick, setCfgTick] = useState(0);
+  const myShift = getShiftConfig(teamId, myEmail);
 
   // record shape: { [email]: { clockIn, clockOut, breaks:[{id,type,label,start,end,mins}], lastSeen } }
   const [log, setLog] = useState(() => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { return {}; } });
@@ -5683,15 +5697,16 @@ function AttendancePanel({ team, members, session, isManager }) {
   const totalBreakMins = (rec) => (rec?.breaks || []).reduce((s, b) => s + (b.end ? (b.mins || Math.round((b.end - b.start) / 60000)) : Math.round((now - b.start) / 60000)), 0);
 
   // ── Warnings (manager) ──
-  const warningsFor = (rec) => {
+  const warningsFor = (rec, email) => {
+    const sh = getShiftConfig(teamId, email);
     const w = [];
     const hour = new Date().getHours();
-    const inShift = hour >= SHIFT_START && hour < SHIFT_END;
-    // Late start: no clock-in by 9:15
-    if (inShift && !rec?.clockIn && hour >= SHIFT_START) w.push({ t: 'Not clocked in', sev: 'warn' });
-    else if (rec?.clockIn) { const ci = new Date(rec.clockIn); if (ci.getHours() > SHIFT_START || (ci.getHours() === SHIFT_START && ci.getMinutes() > 15)) w.push({ t: `Late start (${fmtClock(rec.clockIn)})`, sev: 'warn' }); }
-    // Over-break: total > 70 min (45 lunch + 2x short)
-    if (totalBreakMins(rec) > 70) w.push({ t: `Over break (${totalBreakMins(rec)}m)`, sev: 'danger' });
+    const inShift = hour >= sh.start && hour < sh.end;
+    // Late start: no clock-in within grace window
+    if (inShift && !rec?.clockIn && hour >= sh.start) w.push({ t: 'Not clocked in', sev: 'warn' });
+    else if (rec?.clockIn) { const ci = new Date(rec.clockIn); const lateBy = (ci.getHours() * 60 + ci.getMinutes()) - (sh.start * 60); if (lateBy > sh.graceMin) w.push({ t: `Late start (${fmtClock(rec.clockIn)})`, sev: 'warn' }); }
+    // Over-break
+    if (totalBreakMins(rec) > sh.maxBreakMin) w.push({ t: `Over break (${totalBreakMins(rec)}m)`, sev: 'danger' });
     // Active break running long
     const ab = (rec?.breaks || []).find(b => !b.end);
     if (ab && ab.plannedMins && (now - ab.start) / 60000 > ab.plannedMins + 5) w.push({ t: `Break overrun (${ab.label})`, sev: 'danger' });
@@ -5706,7 +5721,7 @@ function AttendancePanel({ team, members, session, isManager }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: c.text }}>My shift today</div>
-          <div style={{ fontSize: 12, color: c.mut, marginTop: 2 }}>Shift {SHIFT_START}:00 AM – {SHIFT_END - 12}:00 PM · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</div>
+          <div style={{ fontSize: 12, color: c.mut, marginTop: 2 }}>Shift {fmtHour(myShift.start)} – {fmtHour(myShift.end)} · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}{isManager && <button onClick={() => setShowShiftCfg(true)} style={{ marginLeft: 8, fontSize: 11, color: c.accent, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Edit shifts</button>}</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {!myRec.clockIn && <Btn onClick={clockIn}>🟢 Clock in</Btn>}
@@ -5773,7 +5788,7 @@ function AttendancePanel({ team, members, session, isManager }) {
   const roster = members.map(m => ({ m, rec: log[m.email] || {} }));
   const onlineNum = roster.filter(r => isOnline(r.rec)).length;
   const onBreakNum = roster.filter(r => (r.rec.breaks || []).some(b => !b.end)).length;
-  const warnNum = roster.reduce((s, r) => s + warningsFor(r.rec).length, 0);
+  const warnNum = roster.reduce((s, r) => s + warningsFor(r.rec, r.m.email).length, 0);
 
   return (
     <div>
@@ -5785,7 +5800,7 @@ function AttendancePanel({ team, members, session, isManager }) {
           { l: 'Online now', v: `${onlineNum}/${members.length}`, col: '#34D399', icon: '🟢' },
           { l: 'On break', v: onBreakNum, col: '#FBBF24', icon: '⏸️' },
           { l: 'Warnings', v: warnNum, col: warnNum ? '#F87171' : c.text, icon: '⚠️' },
-          { l: 'Shift', v: `${SHIFT_START}–${SHIFT_END - 12}`, col: '#818CF8', icon: '🕘' },
+          { l: 'Shift', v: `${fmtHour(myShift.start)}–${fmtHour(myShift.end)}`, col: '#818CF8', icon: '🕘' },
         ].map(s => (
           <div key={s.l} style={{ padding: '14px 16px', borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}` }}>
             <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
@@ -5810,7 +5825,7 @@ function AttendancePanel({ team, members, session, isManager }) {
         {roster.map(({ m, rec }) => {
           const online = isOnline(rec);
           const ab = (rec.breaks || []).find(b => !b.end);
-          const w = warningsFor(rec);
+          const w = warningsFor(rec, m.email);
           return (
             <div key={m.email} style={{ display: 'grid', gridTemplateColumns: '1.4fr 90px 100px 100px 1.2fr', gap: 12, padding: '12px 18px', borderBottom: `1px solid ${c.bord}`, alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
@@ -5835,7 +5850,86 @@ function AttendancePanel({ team, members, session, isManager }) {
         })}
         {roster.length === 0 && <div style={{ padding: 32, textAlign: 'center', fontSize: 13, color: c.mut }}>No team members yet.</div>}
       </div>
+
+      {showShiftCfg && <ShiftConfigModal teamId={teamId} members={members} onClose={() => setShowShiftCfg(false)} onSaved={() => setCfgTick(t => t + 1)}/>}
     </div>
+  );
+}
+
+// ─── SHIFT CONFIG MODAL (manager) ─────────────────────────────────────────────
+function ShiftConfigModal({ teamId, members, onClose, onSaved }) {
+  const c = useC();
+  const [cfg, setCfg] = useState(() => { try { return JSON.parse(localStorage.getItem(`ss-shift-${teamId}`) || '{}'); } catch { return {}; } });
+  const def = { start: cfg.start ?? DEFAULT_SHIFT_START, end: cfg.end ?? DEFAULT_SHIFT_END, graceMin: cfg.graceMin ?? 15, maxBreakMin: cfg.maxBreakMin ?? 70 };
+  const overrides = cfg.overrides || {};
+  const [tab, setTab] = useState('default');
+  const HOURS = Array.from({ length: 24 }, (_, i) => i);
+
+  const setDefault = (k, v) => setCfg(p => ({ ...p, [k]: v }));
+  const setOverride = (email, k, v) => setCfg(p => ({ ...p, overrides: { ...(p.overrides || {}), [email]: { ...((p.overrides || {})[email] || {}), [k]: v } } }));
+  const clearOverride = (email) => setCfg(p => { const o = { ...(p.overrides || {}) }; delete o[email]; return { ...p, overrides: o }; });
+
+  const save = () => { saveShiftConfig(teamId, cfg); onSaved && onSaved(); onClose(); };
+
+  const HourSel = ({ value, onChange }) => (
+    <select value={value} onChange={e => onChange(parseInt(e.target.value))} style={{ background: c.inp, border: `1px solid ${c.inpB}`, borderRadius: 8, padding: '6px 8px', color: c.text, fontSize: 13, outline: 'none' }}>
+      {HOURS.map(h => <option key={h} value={h}>{fmtHour(h)}</option>)}
+    </select>
+  );
+
+  return (
+    <Modal onClose={onClose} title="Shift settings" width={560}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 18, borderBottom: `1px solid ${c.bord}` }}>
+        {[['default', 'Team default'], ['overrides', 'Per-member']].map(([id, l]) => (
+          <button key={id} onClick={() => setTab(id)} style={{ padding: '8px 14px', border: 'none', borderBottom: `2px solid ${tab === id ? c.accent : 'transparent'}`, background: 'transparent', color: tab === id ? c.text : c.mut, fontSize: 13, fontWeight: tab === id ? 700 : 500, cursor: 'pointer', marginBottom: -1 }}>{l}</button>
+        ))}
+      </div>
+
+      {tab === 'default' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <span style={{ fontSize: 13, color: c.sub, width: 130 }}>Shift hours</span>
+            <HourSel value={def.start} onChange={v => setDefault('start', v)}/>
+            <span style={{ color: c.mut }}>to</span>
+            <HourSel value={def.end} onChange={v => setDefault('end', v)}/>
+          </div>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <span style={{ fontSize: 13, color: c.sub, width: 130 }}>Late grace (min)</span>
+            <input type="number" value={def.graceMin} onChange={e => setDefault('graceMin', parseInt(e.target.value) || 0)} style={{ width: 80, background: c.inp, border: `1px solid ${c.inpB}`, borderRadius: 8, padding: '7px 10px', color: c.text, fontSize: 13, outline: 'none' }}/>
+            <span style={{ fontSize: 12, color: c.mut }}>clock-in after this = "late"</span>
+          </div>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <span style={{ fontSize: 13, color: c.sub, width: 130 }}>Max break (min)</span>
+            <input type="number" value={def.maxBreakMin} onChange={e => setDefault('maxBreakMin', parseInt(e.target.value) || 0)} style={{ width: 80, background: c.inp, border: `1px solid ${c.inpB}`, borderRadius: 8, padding: '7px 10px', color: c.text, fontSize: 13, outline: 'none' }}/>
+            <span style={{ fontSize: 12, color: c.mut }}>total breaks over this = "over break"</span>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 320, overflowY: 'auto' }}>
+          {members.map(m => {
+            const ov = overrides[m.email];
+            const eff = { ...def, ...(ov || {}) };
+            return (
+              <div key={m.email} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10, border: `1px solid ${c.bord}` }}>
+                <Av member={m} size={28} url={m.avatar_url}/>
+                <span style={{ flex: 1, fontSize: 13, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name || m.email.split('@')[0]}</span>
+                <HourSel value={eff.start} onChange={v => setOverride(m.email, 'start', v)}/>
+                <span style={{ color: c.mut, fontSize: 12 }}>–</span>
+                <HourSel value={eff.end} onChange={v => setOverride(m.email, 'end', v)}/>
+                {ov ? <button onClick={() => clearOverride(m.email)} style={{ fontSize: 11, color: c.mut, background: 'none', border: 'none', cursor: 'pointer' }}>reset</button>
+                  : <span style={{ fontSize: 10, color: c.mut, width: 34 }}>default</span>}
+              </div>
+            );
+          })}
+          {members.length === 0 && <div style={{ fontSize: 13, color: c.mut, textAlign: 'center', padding: 20 }}>No members to configure.</div>}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+        <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={save}>Save shifts</Btn>
+      </div>
+    </Modal>
   );
 }
 
@@ -5890,6 +5984,38 @@ function NotificationPanel({ notifs, onClose, onAction, onMarkAllRead, unread, o
           : <span style={{ fontSize: 11, color: c.mut }}>Refreshes daily</span>}
       </div>
     </div>
+  );
+}
+
+// ─── MAIL PREVIEW MODAL ───────────────────────────────────────────────────────
+function MailPreviewModal({ mail, onClose }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const openEmail = () => {
+    const url = 'mailto:' + encodeURIComponent(mail.to || '') + '?subject=' + encodeURIComponent(mail.subject || '') + '&body=' + encodeURIComponent(mail.body || '');
+    window.open(url, '_blank');
+  };
+  return (
+    <Modal onClose={onClose} title="" width={520}>
+      <div style={{ marginTop: -8 }}>
+        {/* Mail highlight header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 12, background: dark ? 'rgba(99,102,241,.1)' : 'rgba(99,102,241,.06)', border: '1px solid rgba(99,102,241,.25)', marginBottom: 16 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 11, background: 'linear-gradient(135deg,#6366F1,#818CF8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, flexShrink: 0 }}>📧</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: c.text }}>{mail.subject}</div>
+            <div style={{ fontSize: 12, color: c.mut, marginTop: 1 }}>To: {mail.to}</div>
+          </div>
+        </div>
+        {/* Body */}
+        <div style={{ background: dark ? 'rgba(255,255,255,.03)' : '#fff', border: `1px solid ${c.bord}`, borderRadius: 12, padding: '16px 18px', fontSize: 13.5, lineHeight: 1.7, color: c.sub, whiteSpace: 'pre-wrap', maxHeight: 320, overflowY: 'auto' }}>
+          {mail.body}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
+          <Btn v="ghost" onClick={onClose}>Close</Btn>
+          <Btn onClick={openEmail}>✉ Open in email app</Btn>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -5956,14 +6082,28 @@ function ManagerView({
       title: 'Backlog item', body: (t.title || t.text || 'A task') + ' has been open a while',
       action: { label: 'Review', go: 'tasks' },
     }));
+    // Digest / EOD mails delivered to ME (members see the manager's digest as a notification)
+    try {
+      const myEmail = session?.user?.email;
+      const digs = JSON.parse(localStorage.getItem('ss-digests-' + (team?.id || 'demo')) || '[]');
+      digs.filter(d => d.email === myEmail && d.day === todayKey).forEach(d => out.unshift({
+        id: 'mail-' + d.id, kind: 'mail', icon: '📧', accent: '#6366F1',
+        title: d.kind === 'eod' ? 'EOD summary from ' + d.from : 'Standup digest from ' + d.from,
+        body: d.subject,
+        mail: { subject: d.subject, body: d.body, to: d.to },
+        action: { label: 'Open email', mail: true },
+      }));
+    } catch {}
     return out.slice(0, 20).map(n => ({ ...n, read: readIds.has(n.id) }));
-  }, [tasks, readIds, session, todayKey]);
+  }, [tasks, readIds, session, todayKey, team]);
 
   const unreadNotifs = notifs.filter(n => !n.read).length;
 
+  const [mailView, setMailView] = useState(null);
   const handleNotifAction = (n) => {
-    setNotifOpen(false);
     markRead(n.id);
+    if (n.action?.mail && n.mail) { setMailView(n.mail); setNotifOpen(false); return; }
+    setNotifOpen(false);
     if (n.action?.go === 'standup') setStandupModal(true);
     else if (n.action?.go) goArea(n.action.go);
   };
@@ -6221,6 +6361,8 @@ function ManagerView({
 
       {/* Floating AI assistant — available on every area */}
       <AIBubble tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name || 'Team'}/>
+
+      {mailView && <MailPreviewModal mail={mailView} onClose={() => setMailView(null)}/>}
     </div>
   );
 }
@@ -6754,22 +6896,74 @@ export default function App() {
   const handlePriority=useCallback(async(id,priority)=>{ if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,priority}:t));return;} await SB.updateTask(id,{priority}); },[]);
   const handleNote=useCallback(async(id,manager_note)=>{ if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,manager_note}:t));return;} await SB.updateTask(id,{manager_note}); },[]);
   const handleBlocker=useCallback(async(id,blocker)=>{ const u={status:'blocked',blocker}; if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));showToast('⚠️ Blocker reported');return;} await SB.updateTask(id,u); const task=tasks.find(t=>t.id===id),manager=members.find(m=>m.role==='manager'); if(task&&manager)await Email.sendBlockerAlert(manager.email,{email:session.user.email,name:session.user.user_metadata?.name},{...task,blocker}); showToast('⚠️ Blocker reported — manager notified'); },[tasks,members,session,showToast]);
+  // Records an in-app "digest delivered" notification each member will see in their bell.
+  const recordDigest=useCallback((kind,perMemberTasks,subjectFn,bodyFn)=>{
+    try{
+      const teamId=team?.id||'demo';
+      const day=new Date().toISOString().slice(0,10);
+      const key='ss-digests-'+teamId;
+      const existing=JSON.parse(localStorage.getItem(key)||'[]');
+      const stamp=Date.now();
+      const fromName=session?.user?.user_metadata?.name||session?.user?.email?.split('@')[0]||'Manager';
+      const recs=members.filter(x=>x.role!=='manager').map(m=>{
+        const mt=perMemberTasks(m);
+        return { id:kind+'-'+day+'-'+m.email, kind, email:m.email, day, at:stamp, from:fromName,
+          subject:subjectFn(m,mt), body:bodyFn(m,mt), to:m.email };
+      });
+      // de-dup by id (re-sending same day replaces)
+      const merged=[...existing.filter(e=>!recs.find(r=>r.id===e.id)),...recs];
+      localStorage.setItem(key,JSON.stringify(merged.slice(-200)));
+    }catch(e){}
+  },[team,members,session]);
+
   const handleDigest=useCallback(async()=>{
     setEmailBusy(true);
-    if(!process.env.REACT_APP_RESEND_KEY){ showToast('⚠️ Add REACT_APP_RESEND_KEY to Vercel to send emails','error'); setEmailBusy(false); return; }
-    let sent=0;
     const nonManagers=members.filter(x=>x.role!=='manager');
     if(nonManagers.length===0){ showToast('No team members to send digest to — invite members first','error'); setEmailBusy(false); return; }
-    for(const m of nonManagers){
-      const mt=tasks.filter(t=>t.assignee_email===m.email);
-      // Send digest even if no tasks — member should know standup started
-      await Email.sendMorningDigest(m,mt,team?.name||'Team');
-      sent++;
+    // 1) Always record the in-app notification (works without backend)
+    recordDigest('digest',
+      (m)=>tasks.filter(t=>t.assignee_email===m.email),
+      (m,mt)=>`Your standup digest — ${team?.name||'Team'}`,
+      (m,mt)=>{
+        const open=mt.filter(t=>t.status!=='done');
+        const lines=mt.length?mt.map(t=>`• ${t.title||t.text} — ${t.status||'todo'}`).join('\n'):'No tasks assigned yet today.';
+        return `Good morning ${m.name||m.email.split('@')[0]},\n\nHere's your standup digest for ${team?.name||'the team'}:\n\n${lines}\n\n${open.length} open task${open.length!==1?'s':''}. Have a great day!`;
+      });
+    // 2) Try real email if the backend key exists
+    let sent=0;
+    if(process.env.REACT_APP_RESEND_KEY){
+      for(const m of nonManagers){
+        const mt=tasks.filter(t=>t.assignee_email===m.email);
+        try{ await Email.sendMorningDigest(m,mt,team?.name||'Team'); sent++; }catch(e){}
+      }
+      showToast('📧 Digest emailed to '+sent+' member'+(sent!==1?'s':'')+' + in-app');
+    } else {
+      showToast('🔔 Digest delivered in-app to '+nonManagers.length+' member'+(nonManagers.length!==1?'s':'')+'. Add REACT_APP_RESEND_KEY for email too.');
     }
     setEmailBusy(false);
-    showToast('📧 Digest sent to '+sent+' member'+(sent!==1?'s':''));
-  },[tasks,members,team,showToast]);
-  const handleEOD=useCallback(async()=>{ setEmailBusy(true); try{ for(const m of members.filter(x=>x.role!=='manager')){const p=tasks.filter(t=>t.assignee_email===m.email&&t.status!=='done');if(p.length>0)await Email.sendEODBacklog(m,p,team?.name||'Team');} const mg=members.find(m=>m.role==='manager'); if(mg)await Email.sendManagerSummary(mg.email,tasks,members,team?.name||'Team'); showToast('🕕 EOD summary sent'); }catch(e){showToast('Failed to send EOD','error');} setEmailBusy(false); },[tasks,members,team,showToast]);
+  },[tasks,members,team,showToast,recordDigest]);
+  const handleEOD=useCallback(async()=>{
+    setEmailBusy(true);
+    const nonManagers=members.filter(x=>x.role!=='manager');
+    // in-app EOD record
+    recordDigest('eod',
+      (m)=>tasks.filter(t=>t.assignee_email===m.email&&t.status!=='done'),
+      (m,p)=>`EOD backlog — ${team?.name||'Team'}`,
+      (m,p)=>{
+        const lines=p.length?p.map(t=>`• ${t.title||t.text} — ${t.status||'todo'}`).join('\n'):'Nothing pending. Great work today!';
+        return `Hi ${m.name||m.email.split('@')[0]},\n\nEnd-of-day summary for ${team?.name||'the team'}:\n\n${lines}\n\n${p.length} item${p.length!==1?'s':''} still open.`;
+      });
+    try{
+      if(process.env.REACT_APP_RESEND_KEY){
+        for(const m of nonManagers){const p=tasks.filter(t=>t.assignee_email===m.email&&t.status!=='done');if(p.length>0)await Email.sendEODBacklog(m,p,team?.name||'Team');}
+        const mg=members.find(m=>m.role==='manager'); if(mg)await Email.sendManagerSummary(mg.email,tasks,members,team?.name||'Team');
+        showToast('🕕 EOD summary emailed + in-app');
+      } else {
+        showToast('🔔 EOD summary delivered in-app. Add REACT_APP_RESEND_KEY for email too.');
+      }
+    }catch(e){showToast('In-app EOD delivered; email failed','error');}
+    setEmailBusy(false);
+  },[tasks,members,team,showToast,recordDigest]);
   const handleLogin=useCallback(async(sess)=>{ setSession(sess); if(inviteToken&&SB.IS_LIVE){const r=await SB.acceptInvite(inviteToken,sess.user.id,sess.user.email,sess.user.user_metadata?.name||sess.user.email);if(r.teamId)showToast(`✅ Joined: ${r.teamName}`);window.history.replaceState({},'',window.location.pathname);setInviteToken(null);} setView('home'); },[inviteToken,showToast]);
   const handleSelectTeam=useCallback((t,role)=>{
     // Normalize: if t comes from getMyTeams it might be tm.teams
