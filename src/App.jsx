@@ -5664,7 +5664,7 @@ function AttendancePanel({ team, members, session, isManager }) {
   useEffect(() => {
     const beat = () => {
       const next = { ...log }; const r = { ...(next[myEmail] || {}) }; r.lastSeen = Date.now(); next[myEmail] = r; save(next);
-      try { if (SB.IS_LIVE && SB.upsertPresence) SB.upsertPresence(teamId, myEmail, Date.now()); } catch {}
+      try { const up = SB['upsertPresence']; if (SB.IS_LIVE && up) up(teamId, myEmail, Date.now()); } catch {}
     };
     beat();
     const t = setInterval(beat, 60000);
@@ -5674,10 +5674,11 @@ function AttendancePanel({ team, members, session, isManager }) {
 
   // Pull cross-user presence from backend when available (manager view benefits most)
   useEffect(() => {
-    if (!(SB.IS_LIVE && SB.getTeamPresence)) return;
+    const getPresence = SB['getTeamPresence'];
+    if (!(SB.IS_LIVE && getPresence)) return;
     let alive = true;
     const pull = async () => {
-      try { const rows = await SB.getTeamPresence(teamId); if (!alive || !rows) return;
+      try { const rows = await getPresence(teamId); if (!alive || !rows) return;
         setLog(prev => { const next = { ...prev }; rows.forEach(r => { next[r.email] = { ...(next[r.email] || {}), lastSeen: new Date(r.last_seen).getTime() }; }); return next; });
       } catch {}
     };
