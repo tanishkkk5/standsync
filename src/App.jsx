@@ -2905,11 +2905,9 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
                 <div style={{ fontSize:11,color:c.mut,marginTop:6 }}>They click this link, create an account, and join your team automatically.</div>
               </div>
             )}
-            {!process.env.REACT_APP_RESEND_KEY&&(
-              <div style={{ marginTop:10,padding:'9px 12px',background:'rgba(245,158,11,.07)',border:'1px solid rgba(245,158,11,.2)',borderRadius:8,fontSize:12,color:'#FCD34D' }}>
-                ⚠️ Email delivery needs REACT_APP_RESEND_KEY in Vercel. Use the copy link above to share manually.
-              </div>
-            )}
+            <div style={{ marginTop:10,padding:'9px 12px',background:'rgba(99,102,241,.07)',border:'1px solid rgba(99,102,241,.2)',borderRadius:8,fontSize:12,color:c.sub }}>
+              ✉️ The invite is emailed automatically when <code style={{color:'#818CF8'}}>RESEND_API_KEY</code> is set in Vercel. You can always copy the link above to share it directly.
+            </div>
           </Card>
           <Card style={{ padding:'14px 20px' }}>
             <div style={{ fontSize:13,color:c.sub,fontWeight:600,marginBottom:3 }}>Faster option</div>
@@ -7020,17 +7018,15 @@ export default function App() {
         const lines=mt.length?mt.map(t=>`• ${t.title||t.text} — ${t.status||'todo'}`).join('\n'):'No tasks assigned yet today.';
         return `Good morning ${m.name||m.email.split('@')[0]},\n\nHere's your standup digest for ${team?.name||'the team'}:\n\n${lines}\n\n${open.length} open task${open.length!==1?'s':''}. Have a great day!`;
       });
-    // 2) Try real email if the backend key exists
-    let sent=0;
-    if(process.env.REACT_APP_RESEND_KEY){
-      for(const m of nonManagers){
-        const mt=tasks.filter(t=>t.assignee_email===m.email);
-        try{ await Email.sendMorningDigest(m,mt,team?.name||'Team'); sent++; }catch(e){}
-      }
-      showToast('📧 Digest emailed to '+sent+' member'+(sent!==1?'s':'')+' + in-app');
-    } else {
-      showToast('🔔 Digest delivered in-app to '+nonManagers.length+' member'+(nonManagers.length!==1?'s':'')+'. Add REACT_APP_RESEND_KEY for email too.');
+    // 2) Send real email via the serverless function (server holds RESEND_API_KEY)
+    let sent=0, failed=0, demo=false;
+    for(const m of nonManagers){
+      const mt=tasks.filter(t=>t.assignee_email===m.email);
+      try{ const r=await Email.sendMorningDigest(m,mt,team?.name||'Team'); if(r?.ok) sent++; else { failed++; if(r?.demo) demo=true; } }catch(e){ failed++; }
     }
+    if(sent>0) showToast('📧 Digest emailed to '+sent+' member'+(sent!==1?'s':'')+' + in-app');
+    else if(demo) showToast('🔔 Digest delivered in-app. Set RESEND_API_KEY in Vercel to also email.');
+    else showToast('🔔 Digest in-app; email failed ('+failed+'). Check RESEND_API_KEY & domain.','error');
     setEmailBusy(false);
   },[tasks,members,team,showToast,recordDigest]);
   const handleEOD=useCallback(async()=>{
@@ -7044,14 +7040,13 @@ export default function App() {
         const lines=p.length?p.map(t=>`• ${t.title||t.text} — ${t.status||'todo'}`).join('\n'):'Nothing pending. Great work today!';
         return `Hi ${m.name||m.email.split('@')[0]},\n\nEnd-of-day summary for ${team?.name||'the team'}:\n\n${lines}\n\n${p.length} item${p.length!==1?'s':''} still open.`;
       });
+    let sent=0, demo=false;
     try{
-      if(process.env.REACT_APP_RESEND_KEY){
-        for(const m of nonManagers){const p=tasks.filter(t=>t.assignee_email===m.email&&t.status!=='done');if(p.length>0)await Email.sendEODBacklog(m,p,team?.name||'Team');}
-        const mg=members.find(m=>m.role==='manager'); if(mg)await Email.sendManagerSummary(mg.email,tasks,members,team?.name||'Team');
-        showToast('🕕 EOD summary emailed + in-app');
-      } else {
-        showToast('🔔 EOD summary delivered in-app. Add REACT_APP_RESEND_KEY for email too.');
-      }
+      for(const m of nonManagers){const p=tasks.filter(t=>t.assignee_email===m.email&&t.status!=='done');if(p.length>0){const r=await Email.sendEODBacklog(m,p,team?.name||'Team'); if(r?.ok) sent++; else if(r?.demo) demo=true;}}
+      const mg=members.find(m=>m.role==='manager'); if(mg)await Email.sendManagerSummary(mg.email,tasks,members,team?.name||'Team');
+      if(sent>0) showToast('🕕 EOD summary emailed + in-app');
+      else if(demo) showToast('🔔 EOD in-app. Set RESEND_API_KEY in Vercel to also email.');
+      else showToast('🔔 EOD delivered in-app');
     }catch(e){showToast('In-app EOD delivered; email failed','error');}
     setEmailBusy(false);
   },[tasks,members,team,showToast,recordDigest]);
