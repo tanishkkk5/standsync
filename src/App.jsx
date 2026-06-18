@@ -4848,6 +4848,615 @@ function HomeCommand({ session, team, tasks, members, onGoto, onAddTask, onStart
   );
 }
 
+// ─── SPACES (Jira-style projects) ─────────────────────────────────────────────
+const SPACE_TEMPLATES = [
+  { id: 'pm',       name: 'Project management', icon: '📋', color: '#2563EB', desc: 'Plan and deliver business projects.' },
+  { id: 'software', name: 'Software development', icon: '💻', color: '#7C3AED', desc: 'Build, ship, and iterate on products.' },
+  { id: 'marketing',name: 'Marketing',           icon: '📣', color: '#DB2777', desc: 'Campaigns, content, and launches.' },
+  { id: 'design',   name: 'Design',              icon: '🎨', color: '#EA580C', desc: 'Design work, reviews, and assets.' },
+  { id: 'ops',      name: 'Operations',          icon: '⚙️', color: '#0891B2', desc: 'Processes, SOPs, and recurring work.' },
+  { id: 'blank',    name: 'Blank space',         icon: '⬜', color: '#64748B', desc: 'Start from scratch, your way.' },
+];
+const SPACE_STATUSES = [
+  { id: 'todo',  label: 'To Do',        color: '#64748B' },
+  { id: 'inprog',label: 'In Progress',  color: '#2563EB' },
+  { id: 'review',label: 'In Review',    color: '#D97706' },
+  { id: 'done',  label: 'Done',         color: '#16A34A' },
+];
+
+function SpacesArea({ team, session, members = [] }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const teamId = team?.id || 'demo';
+  const KEY = `ss-spaces-${teamId}`;
+  const myEmail = session?.user?.email;
+
+  const [spaces, setSpaces]   = useState([]);
+  const [selId, setSelId]     = useState(null);
+  const [view, setView]       = useState('list'); // list | create | invite | space
+  const [draft, setDraft]     = useState(null);   // {name, templateId} while creating
+
+  // load
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) { const d = JSON.parse(raw); setSpaces(d || []); }
+    } catch(e) {}
+  }, [KEY]);
+  const save = useCallback((s) => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch(e) {} }, [KEY]);
+
+  const sel = spaces.find(s => s.id === selId);
+
+  const updateSpace = useCallback((id, patch) => {
+    setSpaces(prev => { const next = prev.map(s => s.id === id ? { ...s, ...patch } : s); save(next); return next; });
+  }, [save]);
+
+  // ── create flow ──
+  const startCreate = () => { setDraft({ name: '', templateId: 'pm' }); setView('create'); };
+  const goInvite = () => { if (!draft?.name.trim()) return; setView('invite'); };
+  const finishCreate = (invited) => {
+    const tpl = SPACE_TEMPLATES.find(t => t.id === draft.templateId) || SPACE_TEMPLATES[0];
+    const key = draft.name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 3) || 'SP';
+    const sp = {
+      id: 'sp' + Date.now(), name: draft.name.trim(), key,
+      template: tpl.id, icon: tpl.icon, color: tpl.color,
+      createdAt: Date.now(), createdBy: myEmail,
+      members: invited || [], items: [], docs: [],
+    };
+    const next = [...spaces, sp]; setSpaces(next); save(next);
+    setSelId(sp.id); setView('space'); setDraft(null);
+  };
+
+  const deleteSpace = (id) => {
+    if (!window.confirm('Delete this space and all its items?')) return;
+    const next = spaces.filter(s => s.id !== id); setSpaces(next); save(next);
+    setSelId(null); setView('list');
+  };
+
+  // ══ CREATE WIZARD (with live preview) ══
+  if (view === 'create') {
+    const tpl = SPACE_TEMPLATES.find(t => t.id === draft.templateId) || SPACE_TEMPLATES[0];
+    const key = draft.name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 3) || 'NP';
+    return (
+      <div style={{ display: 'flex', gap: 40, maxWidth: 1200, margin: '0 auto', flexWrap: 'wrap' }}>
+        {/* Left: form */}
+        <div style={{ flex: 1, minWidth: 320, maxWidth: 460 }}>
+          <button onClick={() => setView('list')} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 13, marginBottom: 22, padding: 0 }}>← Back to spaces</button>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: c.text, margin: '0 0 8px', letterSpacing: '-.02em' }}>Create space</h1>
+          <p style={{ fontSize: 14, color: c.sub, lineHeight: 1.6, margin: '0 0 6px' }}>Explore what's possible when you collaborate with your team. Edit space details anytime in settings.</p>
+          <p style={{ fontSize: 12.5, color: c.mut, margin: '0 0 24px' }}>Required fields are marked with an asterisk <span style={{ color: '#F87171' }}>*</span></p>
+
+          <div style={{ marginBottom: 22 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 7 }}>Name <span style={{ color: '#F87171' }}>*</span></div>
+            <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} onKeyDown={e => e.key === 'Enter' && goInvite()} placeholder="e.g. New Project" autoFocus
+              style={{ width: '100%', background: c.inp, border: `1.5px solid ${draft.name ? '#6366F1' : c.inpB}`, borderRadius: 8, padding: '11px 14px', color: c.text, fontSize: 15, outline: 'none', boxSizing: 'border-box' }}/>
+          </div>
+
+          <div style={{ marginBottom: 22 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 10 }}>Template</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {SPACE_TEMPLATES.map(t => (
+                <button key={t.id} onClick={() => setDraft(d => ({ ...d, templateId: t.id }))}
+                  style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 10, cursor: 'pointer', textAlign: 'left', width: '100%',
+                    border: `1.5px solid ${draft.templateId === t.id ? '#6366F1' : c.bord}`, background: draft.templateId === t.id ? (dark ? 'rgba(99,102,241,.1)' : 'rgba(99,102,241,.06)') : c.surf }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 9, background: t.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{t.icon}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>{t.name}</div>
+                    <div style={{ fontSize: 12, color: c.mut, marginTop: 1 }}>{t.desc}</div>
+                  </div>
+                  {draft.templateId === t.id && <span style={{ color: '#6366F1', fontSize: 16 }}>✓</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <Btn v="ghost" onClick={() => setView('list')}>Cancel</Btn>
+            <Btn onClick={goInvite} disabled={!draft.name.trim()}>Next: invite team →</Btn>
+          </div>
+        </div>
+
+        {/* Right: live preview */}
+        <div style={{ flex: 1, minWidth: 360, display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
+          <div style={{ width: '100%', maxWidth: 520, position: 'relative' }}>
+            {/* blob bg */}
+            <div style={{ position: 'absolute', inset: '-30px -10px', background: `radial-gradient(circle at 60% 40%, ${tpl.color}33, transparent 65%)`, borderRadius: 40, filter: 'blur(20px)' }}/>
+            <div style={{ position: 'relative', background: dark ? '#0F1525' : '#fff', border: `1px solid ${c.bord}`, borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,.25)', overflow: 'hidden' }}>
+              <div style={{ display: 'flex' }}>
+                {/* mini sidebar */}
+                <div style={{ width: 130, background: dark ? '#0B1020' : '#F8F9FB', borderRight: `1px solid ${c.bord}`, padding: '16px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 16 }}>
+                    <div style={{ width: 22, height: 22, borderRadius: 6, background: tpl.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>{tpl.icon}</div>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{draft.name || 'New Space'}</div>
+                  </div>
+                  {[...Array(7)].map((_, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 11 }}>
+                      <div style={{ width: 12, height: 12, borderRadius: '50%', background: c.bord, flexShrink: 0 }}/>
+                      <div style={{ height: 7, borderRadius: 4, background: c.bord, width: `${50 + (i % 3) * 18}%` }}/>
+                    </div>
+                  ))}
+                </div>
+                {/* mini board/list */}
+                <div style={{ flex: 1, padding: '16px 14px' }}>
+                  <div style={{ height: 9, width: '55%', borderRadius: 4, background: c.bord, marginBottom: 14 }}/>
+                  {[...Array(7)].map((_, i) => {
+                    const cols = ['#FCA5A5', '#93C5FD', '#BFDBFE', '#FDE68A', '#FCA5A5', '#86EFAC', '#FDE68A'];
+                    return (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 9 }}>
+                        <div style={{ width: 14, height: 14, borderRadius: 3, background: tpl.color, flexShrink: 0 }}/>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: c.sub, width: 34, flexShrink: 0 }}>{key}-{i + 1}</span>
+                        <div style={{ flex: 1, height: 7, borderRadius: 4, background: c.bord }}/>
+                        <div style={{ width: 36, height: 11, borderRadius: 4, background: cols[i] }}/>
+                        <div style={{ width: 11, height: 11, borderRadius: '50%', background: cols[(i + 2) % cols.length] }}/>
+                      </div>
+                    );
+                  })}
+                  <div style={{ fontSize: 10, color: c.mut, marginTop: 14 }}>Preview · {tpl.name}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ══ INVITE STEP ══
+  if (view === 'invite') {
+    return <SpaceInvite draft={draft} members={members} myEmail={myEmail}
+      onBack={() => setView('create')} onSkip={() => finishCreate([])} onInvite={(list) => finishCreate(list)}/>;
+  }
+
+  // ══ INSIDE A SPACE ══
+  if (view === 'space' && sel) {
+    return <SpaceWorkspace space={sel} members={members} session={session}
+      onBack={() => { setView('list'); setSelId(null); }}
+      onUpdate={(patch) => updateSpace(sel.id, patch)}
+      onDelete={() => deleteSpace(sel.id)}/>;
+  }
+
+  // ══ SPACES LIST ══
+  return (
+    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: c.text, margin: 0, letterSpacing: '-.02em' }}>Spaces</h1>
+          <p style={{ fontSize: 13.5, color: c.mut, margin: '6px 0 0' }}>Full project workspaces — boards, lists, timelines, and docs.</p>
+        </div>
+        <Btn onClick={startCreate}>＋ Create space</Btn>
+      </div>
+
+      {spaces.length === 0 ? (
+        <div style={{ padding: '48px 20px', textAlign: 'center', borderRadius: 16, border: `1.5px dashed ${c.bord}` }}>
+          <div style={{ fontSize: 42, marginBottom: 12 }}>▦</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: c.text, marginBottom: 6 }}>No spaces yet</div>
+          <div style={{ fontSize: 13.5, color: c.mut, marginBottom: 18, maxWidth: 360, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.6 }}>Create a space for each project. Each one gets its own board, list, calendar, timeline, and docs.</div>
+          <Btn onClick={startCreate}>＋ Create your first space</Btn>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px,1fr))', gap: 14 }}>
+          {spaces.map(s => {
+            const open = s.items.filter(i => i.status !== 'done').length;
+            const tpl = SPACE_TEMPLATES.find(t => t.id === s.template);
+            return (
+              <div key={s.id} onClick={() => { setSelId(s.id); setView('space'); }}
+                style={{ padding: '18px', borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, cursor: 'pointer', transition: 'border-color .15s', position: 'relative' }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = c.bordH}
+                onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 11, background: (s.color || '#6366F1') + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</div>
+                    <div style={{ fontSize: 11.5, color: c.mut }}>{tpl?.name || 'Space'} · {s.key}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 16 }}>
+                  <div><span style={{ fontSize: 18, fontWeight: 800, color: c.text }}>{s.items.length}</span><span style={{ fontSize: 11, color: c.mut, marginLeft: 5 }}>items</span></div>
+                  <div><span style={{ fontSize: 18, fontWeight: 800, color: open ? '#FBBF24' : c.text }}>{open}</span><span style={{ fontSize: 11, color: c.mut, marginLeft: 5 }}>open</span></div>
+                  <div style={{ flex: 1 }}/>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    {(s.members || []).slice(0, 3).map((m, i) => (
+                      <div key={i} style={{ width: 24, height: 24, borderRadius: '50%', background: 'linear-gradient(135deg,#6366F1,#818CF8)', border: `2px solid ${c.surf}`, marginLeft: i ? -8 : 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff' }}>{(m.email || m).slice(0, 2).toUpperCase()}</div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── SPACE INVITE STEP ────────────────────────────────────────────────────────
+function SpaceInvite({ draft, members, myEmail, onBack, onSkip, onInvite }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const [chips, setChips] = useState([]);
+  const [input, setInput] = useState('');
+  const [role, setRole] = useState('member');
+  const [showSug, setShowSug] = useState(false);
+
+  const suggestions = members.filter(m => m.email && m.email !== myEmail && !chips.find(c2 => c2.email === m.email));
+
+  const addChip = (m) => { setChips(prev => [...prev, m]); setInput(''); setShowSug(false); };
+  const addRaw = () => {
+    const v = input.trim();
+    if (v && /\S+@\S+/.test(v) && !chips.find(c2 => c2.email === v)) { setChips(prev => [...prev, { email: v, name: v.split('@')[0] }]); setInput(''); }
+  };
+  const removeChip = (email) => setChips(prev => prev.filter(c2 => c2.email !== email));
+
+  return (
+    <div style={{ maxWidth: 720, margin: '0 auto', paddingTop: 8 }}>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 13, marginBottom: 22, padding: 0 }}>← Back</button>
+      <h1 style={{ fontSize: 28, fontWeight: 800, color: c.text, margin: '0 0 8px', letterSpacing: '-.02em' }}>Bring your team along</h1>
+      <p style={{ fontSize: 14, color: c.sub, margin: '0 0 28px' }}>Add people to <strong style={{ color: c.text }}>{draft.name}</strong>, or invite someone new.</p>
+
+      <div style={{ background: c.surf, border: `1px solid ${c.bord}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 8 }}>Enter names or emails</div>
+        <div style={{ border: `1.5px solid ${c.inpB}`, borderRadius: 9, padding: '8px 10px', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', background: c.inp, marginBottom: 18 }}>
+          {chips.map(ch => (
+            <span key={ch.email} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: dark ? 'rgba(99,102,241,.18)' : 'rgba(99,102,241,.12)', borderRadius: 16, padding: '3px 6px 3px 9px', fontSize: 12.5, color: c.text, fontWeight: 600 }}>
+              {ch.name || ch.email}
+              <button onClick={() => removeChip(ch.email)} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+            </span>
+          ))}
+          <input value={input} onFocus={() => setShowSug(true)} onChange={e => { setInput(e.target.value); setShowSug(true); }} onKeyDown={e => { if (e.key === 'Enter') addRaw(); if (e.key === 'Backspace' && !input && chips.length) removeChip(chips[chips.length - 1].email); }}
+            placeholder={chips.length ? 'Enter more' : 'name@company.com'} style={{ flex: 1, minWidth: 140, background: 'transparent', border: 'none', outline: 'none', color: c.text, fontSize: 13, padding: '4px 2px' }}/>
+        </div>
+        {showSug && suggestions.length > 0 && (
+          <div style={{ marginTop: -12, marginBottom: 16, border: `1px solid ${c.bord}`, borderRadius: 9, overflow: 'hidden', maxHeight: 160, overflowY: 'auto' }}>
+            {suggestions.slice(0, 6).map(m => (
+              <button key={m.email} onClick={() => addChip(m)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                onMouseEnter={e => e.currentTarget.style.background = c.row} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'linear-gradient(135deg,#6366F1,#818CF8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff' }}>{(m.email || '').slice(0, 2).toUpperCase()}</div>
+                <div><div style={{ fontSize: 13, fontWeight: 600, color: c.text }}>{m.name || m.email}</div><div style={{ fontSize: 11, color: c.mut }}>{m.email}</div></div>
+              </button>
+            ))}
+          </div>
+        )}
+        <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 8 }}>Role</div>
+        <Sel value={role} onChange={e => setRole(e.target.value)}>
+          <option value="admin">Administrator — full access to the space</option>
+          <option value="member">Member — can view and edit work items</option>
+          <option value="guest">Guest — limited access, view only</option>
+        </Sel>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 14, alignItems: 'center' }}>
+        <button onClick={onSkip} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>Skip</button>
+        <Btn onClick={() => onInvite(chips.map(ch => ({ ...ch, role })))}>Invite and continue</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ─── SPACE WORKSPACE (the project, with tabs) ─────────────────────────────────
+function SpaceWorkspace({ space, members, session, onBack, onUpdate, onDelete }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const [tab, setTab] = useState('summary');
+  const [showNew, setShowNew] = useState(false);
+  const myEmail = session?.user?.email;
+  const items = space.items || [];
+
+  const TABS = [
+    { id: 'summary',  label: 'Summary',  icon: '🌐' },
+    { id: 'board',    label: 'Board',    icon: '▦' },
+    { id: 'list',     label: 'List',     icon: '☰' },
+    { id: 'calendar', label: 'Calendar', icon: '⊟' },
+    { id: 'timeline', label: 'Timeline', icon: '↔' },
+    { id: 'docs',     label: 'Docs',     icon: '◈' },
+  ];
+
+  const addItem = (data) => {
+    const n = items.length + 1;
+    const it = { id: 'it' + Date.now(), key: `${space.key}-${n}`, title: data.title, status: data.status || 'todo', assignee: data.assignee || '', priority: data.priority || 'medium', due: data.due || '', createdAt: Date.now() };
+    onUpdate({ items: [...items, it] });
+    setShowNew(false);
+  };
+  const setItemStatus = (id, status) => onUpdate({ items: items.map(i => i.id === id ? { ...i, status } : i) });
+  const delItem = (id) => onUpdate({ items: items.filter(i => i.id !== id) });
+
+  const stColor = s => (SPACE_STATUSES.find(x => x.id === s) || SPACE_STATUSES[0]).color;
+  const stLabel = s => (SPACE_STATUSES.find(x => x.id === s) || SPACE_STATUSES[0]).label;
+  const prioColor = p => p === 'high' ? '#F87171' : p === 'medium' ? '#FBBF24' : '#818CF8';
+
+  return (
+    <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+      {/* Header */}
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 13, marginBottom: 12, padding: 0 }}>← All spaces</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
+        <div style={{ width: 44, height: 44, borderRadius: 12, background: (space.color || '#6366F1') + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{space.icon}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: c.text, margin: 0, letterSpacing: '-.02em' }}>{space.name}</h1>
+          <div style={{ fontSize: 12, color: c.mut }}>{items.length} work items · {(space.members || []).length + 1} members</div>
+        </div>
+        <Btn onClick={() => setShowNew(true)}>＋ Create work item</Btn>
+        <button onClick={onDelete} style={{ width: 38, height: 38, borderRadius: 10, border: '1px solid rgba(239,68,68,.2)', background: 'rgba(239,68,68,.06)', color: '#F87171', cursor: 'pointer', fontSize: 15 }}>🗑</button>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 2, borderBottom: `1px solid ${c.bord}`, marginBottom: 22, overflowX: 'auto' }}>
+        {TABS.map(t => {
+          const on = tab === t.id;
+          return (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 14px', border: 'none', borderBottom: `2px solid ${on ? c.accent : 'transparent'}`, background: 'transparent', color: on ? c.text : c.mut, fontSize: 13.5, fontWeight: on ? 700 : 500, cursor: 'pointer', whiteSpace: 'nowrap', marginBottom: -1 }}>
+              <span style={{ fontSize: 14 }}>{t.icon}</span>{t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tab content */}
+      {tab === 'summary' && <SpaceSummary space={space} items={items} stColor={stColor} stLabel={stLabel}/>}
+
+      {tab === 'board' && (
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${SPACE_STATUSES.length},1fr)`, gap: 12, alignItems: 'flex-start' }}>
+          {SPACE_STATUSES.map(st => {
+            const col = items.filter(i => i.status === st.id);
+            return (
+              <div key={st.id} style={{ background: c.surf, border: `1px solid ${c.bord}`, borderRadius: 14, padding: 12, minHeight: 120 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12, padding: '0 4px' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: st.color }}/>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: c.text }}>{st.label}</span>
+                  <span style={{ fontSize: 11, color: c.mut }}>{col.length}</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {col.map(it => (
+                    <div key={it.id} style={{ background: dark ? 'rgba(255,255,255,.03)' : '#fff', border: `1px solid ${c.bord}`, borderRadius: 10, padding: '10px 12px' }}>
+                      <div style={{ fontSize: 13, color: c.text, fontWeight: 500, marginBottom: 8, lineHeight: 1.4 }}>{it.title}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: prioColor(it.priority) }}/>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: c.mut }}>{it.key}</span>
+                        <div style={{ flex: 1 }}/>
+                        <select value={it.status} onChange={e => setItemStatus(it.id, e.target.value)} style={{ fontSize: 10, background: 'transparent', border: `1px solid ${c.bord}`, borderRadius: 6, color: c.sub, padding: '2px 4px', cursor: 'pointer' }}>
+                          {SPACE_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                        </select>
+                        <button onClick={() => delItem(it.id)} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 12 }}>×</button>
+                      </div>
+                    </div>
+                  ))}
+                  {col.length === 0 && <div style={{ fontSize: 11, color: c.mut, textAlign: 'center', padding: '16px 0' }}>—</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {tab === 'list' && (
+        <div style={{ background: c.surf, border: `1px solid ${c.bord}`, borderRadius: 14, overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr 130px 110px 90px 40px', gap: 12, padding: '11px 16px', borderBottom: `1px solid ${c.bord}`, fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+            <span>Key</span><span>Summary</span><span>Status</span><span>Assignee</span><span>Priority</span><span></span>
+          </div>
+          {items.length === 0 ? <div style={{ padding: '32px', textAlign: 'center', fontSize: 13, color: c.mut }}>No work items yet.</div> : items.map(it => (
+            <div key={it.id} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 130px 110px 90px 40px', gap: 12, padding: '11px 16px', borderBottom: `1px solid ${c.bord}`, alignItems: 'center' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: c.accent }}>{it.key}</span>
+              <span style={{ fontSize: 13, color: c.text }}>{it.title}</span>
+              <select value={it.status} onChange={e => setItemStatus(it.id, e.target.value)} style={{ fontSize: 11, background: stColor(it.status) + '1f', border: 'none', borderRadius: 6, color: stColor(it.status), padding: '4px 6px', cursor: 'pointer', fontWeight: 700 }}>
+                {SPACE_STATUSES.map(s => <option key={s.id} value={s.id} style={{ background: c.surf, color: c.text }}>{s.label}</option>)}
+              </select>
+              <span style={{ fontSize: 12, color: c.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(it.assignee || '—').split('@')[0]}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: prioColor(it.priority), textTransform: 'capitalize' }}>{it.priority}</span>
+              <button onClick={() => delItem(it.id)} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 13 }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === 'calendar' && <SpaceCalendar items={items} stColor={stColor}/>}
+
+      {tab === 'timeline' && (
+        <div style={{ background: c.surf, border: `1px solid ${c.bord}`, borderRadius: 14, padding: 20 }}>
+          {items.length === 0 ? <div style={{ textAlign: 'center', fontSize: 13, color: c.mut, padding: 24 }}>Add work items to see them on the timeline.</div> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {items.map((it, i) => (
+                <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: c.accent, width: 54, flexShrink: 0 }}>{it.key}</span>
+                  <span style={{ fontSize: 12, color: c.text, width: 160, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</span>
+                  <div style={{ flex: 1, height: 22, background: c.row, borderRadius: 6, position: 'relative', overflow: 'hidden' }}>
+                    <div style={{ position: 'absolute', left: `${(i % 4) * 12}%`, width: `${30 + (i % 3) * 18}%`, top: 3, bottom: 3, borderRadius: 5, background: stColor(it.status) + 'cc' }}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'docs' && <SpaceDocs space={space} onUpdate={onUpdate}/>}
+
+      {showNew && <NewWorkItemModal space={space} members={members} myEmail={myEmail} onClose={() => setShowNew(false)} onAdd={addItem}/>}
+    </div>
+  );
+}
+
+function SpaceSummary({ space, items, stColor, stLabel }) {
+  const c = useC();
+  const done = items.filter(i => i.status === 'done').length;
+  const created7 = items.filter(i => i.createdAt && (Date.now() - i.createdAt) < 7 * 864e5).length;
+  const dueSoon = items.filter(i => i.status !== 'done' && i.due).length;
+  const cards = [
+    { label: 'completed', value: done, sub: 'total done', icon: '✅' },
+    { label: 'created', value: created7, sub: 'in the last 7 days', icon: '🆕' },
+    { label: 'open', value: items.filter(i => i.status !== 'done').length, sub: 'in progress', icon: '⚡' },
+    { label: 'due soon', value: dueSoon, sub: 'have a due date', icon: '📅' },
+  ];
+  const byStatus = SPACE_STATUSES.map(s => ({ ...s, n: items.filter(i => i.status === s.id).length }));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+        {cards.map(cd => (
+          <div key={cd.label} style={{ padding: '16px 18px', borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}` }}>
+            <div style={{ fontSize: 20, marginBottom: 6 }}>{cd.icon}</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: c.text }}>{cd.value}</div>
+            <div style={{ fontSize: 11, color: c.mut, marginTop: 2 }}>{cd.sub}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div style={{ padding: 20, borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}` }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: c.text, marginBottom: 16 }}>Status overview</div>
+          {items.length === 0 ? <div style={{ fontSize: 13, color: c.mut, padding: '8px 0' }}>The status overview will display here after you create some work items.</div> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {byStatus.map(s => (
+                <div key={s.id}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}><span style={{ fontSize: 12.5, color: c.sub }}>{s.label}</span><span style={{ fontSize: 12.5, fontWeight: 700, color: c.text }}>{s.n}</span></div>
+                  <div style={{ height: 7, borderRadius: 4, background: c.row, overflow: 'hidden' }}><div style={{ height: '100%', width: `${items.length ? (s.n / items.length) * 100 : 0}%`, background: s.color, borderRadius: 4 }}/></div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{ padding: 20, borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
+          {items.length === 0 ? (
+            <>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>📊</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: c.text, marginBottom: 4 }}>No activity yet</div>
+              <div style={{ fontSize: 12.5, color: c.mut, textAlign: 'center', lineHeight: 1.5 }}>Create work items and invite teammates to see space activity.</div>
+            </>
+          ) : (
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 40, fontWeight: 800, color: c.text }}>{items.length}</div>
+              <div style={{ fontSize: 12, color: c.mut }}>total work items</div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SpaceCalendar({ items, stColor }) {
+  const c = useC();
+  const now = new Date();
+  const [month] = useState(now.getMonth());
+  const [year] = useState(now.getFullYear());
+  const first = new Date(year, month, 1).getDay();
+  const days = new Date(year, month + 1, 0).getDate();
+  const cells = [...Array(first).fill(null), ...Array(days).fill(0).map((_, i) => i + 1)];
+  const itemsOn = (d) => items.filter(i => i.due && new Date(i.due).getDate() === d && new Date(i.due).getMonth() === month);
+  return (
+    <div style={{ background: c.surf, border: `1px solid ${c.bord}`, borderRadius: 14, padding: 18 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: c.text, marginBottom: 14 }}>{now.toLocaleString('en-US', { month: 'long', year: 'numeric' })}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => <div key={d} style={{ fontSize: 10, fontWeight: 700, color: c.mut, textAlign: 'center', padding: 4 }}>{d}</div>)}
+        {cells.map((d, i) => (
+          <div key={i} style={{ minHeight: 64, borderRadius: 8, border: d ? `1px solid ${c.bord}` : 'none', padding: 5, background: d === now.getDate() ? (c.dark ? 'rgba(99,102,241,.1)' : 'rgba(99,102,241,.06)') : 'transparent' }}>
+            {d && <div style={{ fontSize: 11, color: c.sub, marginBottom: 3 }}>{d}</div>}
+            {d && itemsOn(d).slice(0, 2).map(it => <div key={it.id} style={{ fontSize: 9, padding: '1px 4px', borderRadius: 3, background: stColor(it.status) + '33', color: stColor(it.status), marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.key}</div>)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SpaceDocs({ space, onUpdate }) {
+  const c = useC();
+  const docs = space.docs || [];
+  const [title, setTitle] = useState('');
+  const add = () => { if (!title.trim()) return; onUpdate({ docs: [...docs, { id: 'd' + Date.now(), title: title.trim(), body: '', at: Date.now() }] }); setTitle(''); };
+  const [editing, setEditing] = useState(null);
+  const ed = docs.find(d => d.id === editing);
+  if (ed) return (
+    <div style={{ background: c.surf, border: `1px solid ${c.bord}`, borderRadius: 14, padding: 20 }}>
+      <button onClick={() => setEditing(null)} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 13, marginBottom: 14, padding: 0 }}>← All docs</button>
+      <input value={ed.title} onChange={e => onUpdate({ docs: docs.map(d => d.id === ed.id ? { ...d, title: e.target.value } : d) })} style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 24, fontWeight: 800, color: c.text, marginBottom: 14 }}/>
+      <textarea value={ed.body} onChange={e => onUpdate({ docs: docs.map(d => d.id === ed.id ? { ...d, body: e.target.value } : d) })} placeholder="Write your doc…" style={{ width: '100%', minHeight: 320, background: 'transparent', border: 'none', outline: 'none', color: c.sub, fontSize: 14, lineHeight: 1.7, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }}/>
+    </div>
+  );
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <input value={title} onChange={e => setTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} placeholder="New doc title…" style={{ flex: 1, background: c.inp, border: `1px solid ${c.inpB}`, borderRadius: 9, padding: '9px 13px', color: c.text, fontSize: 13, outline: 'none' }}/>
+        <Btn onClick={add} disabled={!title.trim()}>＋ Add doc</Btn>
+      </div>
+      {docs.length === 0 ? <div style={{ padding: '40px', textAlign: 'center', borderRadius: 14, border: `1.5px dashed ${c.bord}`, fontSize: 13, color: c.mut }}>No docs yet. Create one to document this project.</div> : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 12 }}>
+          {docs.map(d => (
+            <div key={d.id} onClick={() => setEditing(d.id)} style={{ padding: '16px 18px', borderRadius: 12, background: c.surf, border: `1px solid ${c.bord}`, cursor: 'pointer' }}>
+              <div style={{ fontSize: 22, marginBottom: 8 }}>📄</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: c.text, marginBottom: 4 }}>{d.title}</div>
+              <div style={{ fontSize: 11, color: c.mut }}>{new Date(d.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NewWorkItemModal({ space, members, myEmail, onClose, onAdd }) {
+  const c = useC();
+  const [title, setTitle] = useState('');
+  const [status, setStatus] = useState('todo');
+  const [priority, setPriority] = useState('medium');
+  const [assignee, setAssignee] = useState(myEmail || '');
+  const [due, setDue] = useState('');
+  return (
+    <Modal onClose={onClose} title="Create work item" width={460}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Inp value={title} onChange={e => setTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && title.trim() && onAdd({ title, status, priority, assignee, due })} placeholder="What needs to be done?" autoFocus/>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <Sel label="Status" value={status} onChange={e => setStatus(e.target.value)}>{SPACE_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</Sel>
+          <Sel label="Priority" value={priority} onChange={e => setPriority(e.target.value)}><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></Sel>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <Sel label="Assignee" value={assignee} onChange={e => setAssignee(e.target.value)}><option value="">Unassigned</option>{members.map(m => <option key={m.email} value={m.email}>{m.name || m.email}</option>)}</Sel>
+          <div style={{ width: '100%' }}><div style={{ fontSize: 11, fontWeight: 600, color: c.mut, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>Due date</div><input type="date" value={due} onChange={e => setDue(e.target.value)} style={{ width: '100%', background: c.inp, border: `1.5px solid ${c.inpB}`, borderRadius: 10, padding: '9px 12px', color: c.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}/></div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn onClick={() => onAdd({ title, status, priority, assignee, due })} disabled={!title.trim()}>Create</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ─── NOTIFICATION PANEL ───────────────────────────────────────────────────────
+function NotificationPanel({ notifs, onClose, onAction, onDigest, emailBusy }) {
+  const c = useC();
+  const { dark } = useTheme();
+  useEffect(() => {
+    const h = (e) => { if (!e.target.closest?.('.ss-notif-panel') && !e.target.closest?.('[title="Notifications"]')) onClose(); };
+    setTimeout(() => document.addEventListener('mousedown', h), 0);
+    return () => document.removeEventListener('mousedown', h);
+  }, [onClose]);
+  return (
+    <div className="ss-notif-panel" style={{ position: 'absolute', top: 48, right: 0, width: 360, maxWidth: 'calc(100vw - 32px)', background: dark ? '#12182B' : '#fff', border: `1px solid ${c.bord}`, borderRadius: 16, boxShadow: '0 16px 48px rgba(0,0,0,.4)', zIndex: 500, overflow: 'hidden', animation: 'fadeUp .18s ease' }}>
+      <div style={{ padding: '14px 18px', borderBottom: `1px solid ${c.bord}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Notifications</span>
+        <span style={{ fontSize: 12, color: c.mut }}>{notifs.length} new</span>
+      </div>
+      <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+        {notifs.length === 0 ? (
+          <div style={{ padding: '36px 20px', textAlign: 'center' }}>
+            <div style={{ fontSize: 32, marginBottom: 10 }}>✅</div>
+            <div style={{ fontSize: 14, color: c.sub, fontWeight: 600, marginBottom: 4 }}>You're all caught up</div>
+            <div style={{ fontSize: 12.5, color: c.mut }}>No blockers, deadlines, or meetings need attention.</div>
+          </div>
+        ) : notifs.map(n => (
+          <div key={n.id} style={{ display: 'flex', gap: 12, padding: '13px 16px', borderBottom: `1px solid ${c.bord}` }}>
+            <div style={{ width: 34, height: 34, borderRadius: 10, background: n.accent + '1f', color: n.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{n.icon}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: c.text }}>{n.title}</div>
+              <div style={{ fontSize: 12.5, color: c.sub, marginTop: 2, lineHeight: 1.45 }}>{n.body}</div>
+              {n.action && <button onClick={() => onAction(n)} style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg,#6366F1,#818CF8)', border: 'none', borderRadius: 8, padding: '5px 12px', cursor: 'pointer' }}>{n.action.label} →</button>}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ padding: '10px 16px', borderTop: `1px solid ${c.bord}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <button onClick={() => { onDigest && onDigest(); }} disabled={emailBusy} style={{ fontSize: 12, color: c.accent, background: 'none', border: 'none', cursor: emailBusy ? 'wait' : 'pointer', fontWeight: 600 }}>{emailBusy ? 'Sending…' : '✉ Send team digest'}</button>
+      </div>
+    </div>
+  );
+}
+
 function ManagerView({
  session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers, openPip, pipOpen }) {
 
@@ -4865,6 +5474,58 @@ function ManagerView({
   const [taskModal, setTaskModal]       = useState(false);
   const [noteModal, setNoteModal]       = useState(false);
   const [standupModal, setStandupModal] = useState(false);
+
+  // ── Notifications ──
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [dismissed, setDismissed] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem('ss-notif-dismissed') || '[]')); } catch { return new Set(); } });
+  const dismissNotif = (id) => { setDismissed(prev => { const n = new Set(prev); n.add(id); try { localStorage.setItem('ss-notif-dismissed', JSON.stringify([...n])); } catch {} return n; }); };
+
+  const notifs = useMemo(() => {
+    const out = [];
+    const myEmail = session?.user?.email;
+    const now = new Date();
+    const hour = now.getHours();
+    // Blocked tasks
+    tasks.filter(t => t.status === 'blocked').forEach(t => out.push({
+      id: 'blk-' + t.id, kind: 'blocker', icon: '🚧', accent: '#F87171',
+      title: 'Blocker needs attention', body: (t.title || t.text || 'A task') + ' is blocked' + (t.assignee_email ? ' · ' + t.assignee_email.split('@')[0] : ''),
+      action: { label: 'View task', go: 'tasks' },
+    }));
+    // Due today / EOD pending
+    tasks.filter(t => t.status !== 'done' && (/today|eod|6 ?pm|noon/i.test(t.timeline || '') || (t.due_date && new Date(t.due_date).toDateString() === now.toDateString()))).forEach(t => out.push({
+      id: 'due-' + t.id, kind: 'eod', icon: '⏰', accent: '#FBBF24',
+      title: 'Due before EOD', body: (t.title || t.text || 'A task') + ' is still pending' + (hour >= 16 ? ' — finish it soon' : ''),
+      action: { label: 'Open tasks', go: 'tasks' },
+    }));
+    // Upcoming standup from calendar (next 30 min)
+    try {
+      const cal = JSON.parse(sessionStorage.getItem('ss-cal-events') || '[]');
+      cal.map(ev => ({ ...ev, _s: new Date(ev.start?.dateTime || ev.start?.date || 0) }))
+        .filter(ev => ev._s > now && ev._s < new Date(now.getTime() + 30 * 60000))
+        .slice(0, 3)
+        .forEach(ev => out.push({
+          id: 'meet-' + ev.id, kind: 'meeting', icon: '🎥', accent: '#34D399',
+          title: 'Meeting starting soon', body: (ev.summary || 'A meeting') + ' at ' + ev._s.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+          action: { label: 'Join standup', go: 'standup' },
+        }));
+    } catch {}
+    // Backlog: my not-done tasks older than 2 days
+    tasks.filter(t => t.status !== 'done' && t.created_at && (now - new Date(t.created_at)) > 2 * 864e5).forEach(t => out.push({
+      id: 'bkl-' + t.id, kind: 'backlog', icon: '📋', accent: '#818CF8',
+      title: 'Backlog item', body: (t.title || t.text || 'A task') + ' has been open a while',
+      action: { label: 'Review', go: 'tasks' },
+    }));
+    return out.filter(n => !dismissed.has(n.id)).slice(0, 12);
+  }, [tasks, dismissed, session]);
+
+  const unreadNotifs = notifs.length;
+
+  const handleNotifAction = (n) => {
+    setNotifOpen(false);
+    if (n.action?.go === 'standup') setStandupModal(true);
+    else if (n.action?.go) goArea(n.action.go);
+    dismissNotif(n.id);
+  };
 
   const [unreadChat, setUnreadChat] = useState(0);
   const prevMsgCount = useRef(messages.length);
@@ -4886,6 +5547,7 @@ function ManagerView({
   const NAV_WORKSPACE = [
     { id: 'home',          label: 'Home',          icon: '⌂' },
     { id: 'tasks',         label: 'Tasks',         icon: '◎' },
+    { id: 'spaces',        label: 'Spaces',        icon: '▦' },
     { id: 'team',          label: 'Team',          icon: '⚇' },
     { id: 'communication', label: 'Communication', icon: '◌', badge: unreadChat },
     { id: 'knowledge',     label: 'Knowledge',     icon: '◈' },
@@ -4897,7 +5559,7 @@ function ManagerView({
   ];
 
   const areaTitle = {
-    home: 'Home', tasks: 'Tasks', team: 'Team', communication: 'Communication',
+    home: 'Home', tasks: 'Tasks', spaces: 'Spaces', team: 'Team', communication: 'Communication',
     knowledge: 'Knowledge', insights: 'Insights', calendar: 'Calendar', settings: 'Settings',
   };
 
@@ -5012,17 +5674,15 @@ function ManagerView({
 
           <div style={{ flex: 1 }}/>
 
-          {/* 4 controls: Create, Notifications, Theme, Profile */}
-          <button onClick={() => setTaskModal(true)} title="Create"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, height: 38, padding: '0 16px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#6366F1,#818CF8)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
-            <span style={{ fontSize: 16 }}>＋</span><span className="ss-create-label">Create</span>
-          </button>
-          <button onClick={onDigest} title="Send digest" disabled={emailBusy}
-            style={{ width: 38, height: 38, borderRadius: 10, border: `1px solid ${c.bord}`, background: 'transparent', color: blocked > 0 ? '#F87171' : c.sub, cursor: 'pointer', fontSize: 16, flexShrink: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            ◔{blocked > 0 && <span style={{ position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: '50%', background: '#F87171' }}/>}
+          {/* Controls: Notifications, Theme, Profile */}
+          <button onClick={() => setNotifOpen(o => !o)} title="Notifications"
+            style={{ width: 38, height: 38, borderRadius: 10, border: `1px solid ${c.bord}`, background: notifOpen ? (dark ? 'rgba(129,140,248,.14)' : 'rgba(99,102,241,.1)') : 'transparent', color: unreadNotifs > 0 ? '#FBBF24' : c.sub, cursor: 'pointer', fontSize: 17, flexShrink: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            🔔{unreadNotifs > 0 && <span style={{ position: 'absolute', top: 5, right: 5, minWidth: 15, height: 15, borderRadius: 8, background: '#EF4444', color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>{unreadNotifs > 9 ? '9+' : unreadNotifs}</span>}
           </button>
           <ThemeToggle/>
           <ProfileMenu session={session} onSettings={onSettings} onLogout={onLogout}/>
+
+          {notifOpen && <NotificationPanel notifs={notifs} onClose={() => setNotifOpen(false)} onAction={handleNotifAction} onDigest={onDigest} emailBusy={emailBusy}/>}
         </div>
 
         {/* Live status strip (only on Home/Tasks) */}
@@ -5050,6 +5710,8 @@ function ManagerView({
           {area === 'communication' && (
             <RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme} isManager={true}/>
           )}
+
+          {area === 'spaces' && <SpacesArea team={team} session={session} members={members}/>}
 
           {area === 'knowledge' && (
             <>
@@ -5091,6 +5753,9 @@ function ManagerView({
       {standupModal && <StandupOptionsModal team={team} onClose={() => setStandupModal(false)}
         onJoin={() => { setStandupModal(false); goArea('tasks'); }}
         onPip={(mode) => { setStandupModal(false); openPip && openPip(mode); }}/>}
+
+      {/* Floating AI assistant — available on every area */}
+      <AIBubble tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name || 'Team'}/>
     </div>
   );
 }
