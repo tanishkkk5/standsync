@@ -66,6 +66,7 @@ input,select,textarea,button{font-family:inherit}
 @media(max-width:560px){
   .ss-home-quick{grid-template-columns:1fr!important}
   .ss-home-stats{grid-template-columns:1fr!important}
+  .ss-tag-label{display:none}
 }
 @media(max-width:880px){
   .ss-auth-wrap{flex-direction:column!important}
@@ -4783,7 +4784,7 @@ function BrainstormSpace({ team, session, members=[] }) {
 
 // ─── HOME COMMAND CENTER ──────────────────────────────────────────────────────
 // Daily landing page. Focus, not clutter. Replaces the "everything exposed" dashboard.
-function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTask, onStartStandup, onNewTask, onNewNote, onStandupOptions, isManager = true }) {
+function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTask, onStartStandup, onNewTask, onNewNote, onStandupOptions, onOpenAttendance, isManager = true }) {
   // Members see only their own tasks across home metrics; managers see the whole team's.
   const myEmail0 = session?.user?.email;
   const tasks = isManager ? allTasks : allTasks.filter(t => t.assignee_email === myEmail0);
@@ -4897,6 +4898,9 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
           </button>
         ))}
       </div>
+
+      {/* Attendance / shift status */}
+      <AttendanceWidget teamId={team?.id || 'demo'} email={session?.user?.email || 'me@demo'} shift={getShiftConfig(team?.id || 'demo', session?.user?.email)} onOpenFull={() => onOpenAttendance && onOpenAttendance()}/>
 
       {/* Focus + AI insights */}
       <div className="ss-home-mid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr)', gap: 16 }}>
@@ -5640,6 +5644,86 @@ const BREAK_TYPES = [
 function fmtClock(ts) { return ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—'; }
 function fmtDur(ms) { const m = Math.round(ms / 60000); if (m < 60) return m + 'm'; return Math.floor(m / 60) + 'h ' + (m % 60) + 'm'; }
 
+// Shared attendance store so the header tag + Home widget stay in sync with the panel.
+function attKey(teamId) { return `ss-attendance-${teamId}-${new Date().toISOString().slice(0,10)}`; }
+function readAtt(teamId) { try { return JSON.parse(localStorage.getItem(attKey(teamId)) || '{}'); } catch { return {}; } }
+function writeAtt(teamId, data) { try { localStorage.setItem(attKey(teamId), JSON.stringify(data)); } catch {} }
+function useAttendance(teamId, email) {
+  const [log, setLog] = useState(() => readAtt(teamId));
+  useEffect(() => {
+    const refresh = () => setLog(readAtt(teamId));
+    const t = setInterval(refresh, 20000);
+    const onStorage = (e) => { if (e.key === attKey(teamId)) refresh(); };
+    window.addEventListener('storage', onStorage);
+    return () => { clearInterval(t); window.removeEventListener('storage', onStorage); };
+  }, [teamId]);
+  const rec = log[email] || {};
+  const clockIn = () => { const n = { ...readAtt(teamId) }; n[email] = { ...(n[email] || {}), clockIn: Date.now(), lastSeen: Date.now() }; writeAtt(teamId, n); setLog(n); };
+  const clockOut = () => { const n = { ...readAtt(teamId) }; n[email] = { ...(n[email] || {}), clockOut: Date.now() }; writeAtt(teamId, n); setLog(n); };
+  const startBreak = (label, plannedMins) => { const n = { ...readAtt(teamId) }; const r = { ...(n[email] || {}) }; r.breaks = [...(r.breaks || []), { id: 'b' + Date.now(), label, plannedMins, start: Date.now(), end: null }]; n[email] = r; writeAtt(teamId, n); setLog(n); };
+  const endBreak = () => { const n = { ...readAtt(teamId) }; const r = { ...(n[email] || {}) }; r.breaks = (r.breaks || []).map(b => b.end ? b : { ...b, end: Date.now(), mins: Math.round((Date.now() - b.start) / 60000) }); n[email] = r; writeAtt(teamId, n); setLog(n); };
+  const activeBreak = (rec.breaks || []).find(b => !b.end);
+  const status = activeBreak ? 'break' : (rec.clockIn && !rec.clockOut ? 'online' : 'offline');
+  return { rec, status, activeBreak, clockIn, clockOut, startBreak, endBreak };
+}
+
+// Compact header status tag — visible to everyone, clickable to open attendance.
+function AttendanceTag({ teamId, email, onClick }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const { rec, status, activeBreak, clockIn, clockOut } = useAttendance(teamId, email);
+  const map = {
+    online: { dot: '#34D399', label: 'Online', bg: 'rgba(52,211,153,.12)', col: '#34D399' },
+    break:  { dot: '#FBBF24', label: activeBreak ? `On ${activeBreak.label}` : 'On break', bg: 'rgba(251,191,36,.12)', col: '#FBBF24' },
+    offline:{ dot: '#94A3B8', label: rec.clockOut ? 'Clocked out' : 'Offline', bg: dark ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.05)', col: c.mut },
+  };
+  const s = map[status];
+  return (
+    <button onClick={onClick} title="Attendance" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 34, padding: '0 12px', borderRadius: 18, border: `1px solid ${c.bord}`, background: s.bg, color: s.col, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, flexShrink: 0, whiteSpace: 'nowrap' }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.dot, boxShadow: status === 'online' ? `0 0 6px ${s.dot}` : 'none' }}/>
+      <span className="ss-tag-label">{s.label}</span>
+    </button>
+  );
+}
+
+// Compact Home widget — punch in/out + quick break, links to full panel.
+function AttendanceWidget({ teamId, email, shift, onOpenFull }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const { rec, status, activeBreak, clockIn, clockOut, startBreak, endBreak } = useAttendance(teamId, email);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(t); }, []);
+  const totalBreak = (rec.breaks || []).reduce((s, b) => s + (b.end ? (b.mins || 0) : Math.round((now - b.start) / 60000)), 0);
+  const statusMap = { online: ['#34D399', 'Online'], break: ['#FBBF24', activeBreak ? `On ${activeBreak.label}` : 'On break'], offline: ['#94A3B8', rec.clockOut ? 'Clocked out' : 'Not clocked in'] };
+  const [sc, sl] = statusMap[status];
+  return (
+    <div style={{ borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, padding: '18px 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: sc, boxShadow: status === 'online' ? `0 0 6px ${sc}` : 'none' }}/>
+          <span style={{ fontSize: 15, fontWeight: 700, color: c.text }}>{sl}</span>
+        </div>
+        <button onClick={onOpenFull} style={{ fontSize: 12.5, color: c.accent, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Full view →</button>
+      </div>
+      <div style={{ display: 'flex', gap: 18, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div><div style={{ fontSize: 10.5, color: c.mut, marginBottom: 2 }}>Shift</div><div style={{ fontSize: 13, fontWeight: 600, color: c.text }}>{fmtHour(shift.start)}–{fmtHour(shift.end)}</div></div>
+        <div><div style={{ fontSize: 10.5, color: c.mut, marginBottom: 2 }}>In</div><div style={{ fontSize: 13, fontWeight: 600, color: c.text }}>{fmtClock(rec.clockIn)}</div></div>
+        <div><div style={{ fontSize: 10.5, color: c.mut, marginBottom: 2 }}>Break</div><div style={{ fontSize: 13, fontWeight: 600, color: totalBreak > shift.maxBreakMin ? '#F87171' : c.text }}>{totalBreak}m</div></div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {!rec.clockIn && <Btn onClick={clockIn} style={{ padding: '8px 16px', fontSize: 13 }}>🟢 Clock in</Btn>}
+        {rec.clockIn && !rec.clockOut && !activeBreak && <>
+          <Btn v="ghost" onClick={clockOut} style={{ padding: '8px 16px', fontSize: 13 }}>🔴 Clock out</Btn>
+          <button onClick={() => startBreak('15 min', 15)} style={{ padding: '8px 14px', borderRadius: 10, border: `1px solid ${c.bord}`, background: c.surf, color: c.text, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>☕ Quick break</button>
+          <button onClick={onOpenFull} style={{ padding: '8px 14px', borderRadius: 10, border: `1px solid ${c.bord}`, background: c.surf, color: c.mut, cursor: 'pointer', fontSize: 13 }}>More breaks…</button>
+        </>}
+        {activeBreak && <Btn onClick={endBreak} style={{ padding: '8px 16px', fontSize: 13 }}>End {activeBreak.label} break</Btn>}
+        {rec.clockOut && <span style={{ fontSize: 13, color: '#34D399', fontWeight: 600, alignSelf: 'center' }}>✓ Shift ended at {fmtClock(rec.clockOut)}</span>}
+      </div>
+    </div>
+  );
+}
+
 function AttendancePanel({ team, members, session, isManager }) {
   const c = useC();
   const { dark } = useTheme();
@@ -6260,6 +6344,9 @@ function ManagerView({
 
           <div style={{ flex: 1 }}/>
 
+          {/* Attendance status tag */}
+          <AttendanceTag teamId={team?.id || 'demo'} email={session?.user?.email || 'me@demo'} onClick={() => { setTeamSub('attendance'); goArea('team'); }}/>
+
           {/* Controls: Notifications, Theme, Profile */}
           <button onClick={toggleNotif} title="Notifications"
             style={{ width: 34, height: 34, borderRadius: '50%', border: '1px solid rgba(128,128,128,.2)', background: 'transparent', color: c.sub, cursor: 'pointer', fontSize: 15, flexShrink: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s' }}>
@@ -6284,7 +6371,8 @@ function ManagerView({
           {area === 'home' && (
             <HomeCommand session={session} team={team} tasks={tasks} members={members}
               onGoto={goArea} onAddTask={onAddTask} onStartStandup={() => setStandupModal(true)}
-              onNewTask={() => setTaskModal(true)} onNewNote={() => setNoteModal(true)} onStandupOptions={() => setStandupModal(true)}/>
+              onNewTask={() => setTaskModal(true)} onNewNote={() => setNoteModal(true)} onStandupOptions={() => setStandupModal(true)}
+              onOpenAttendance={() => { setTeamSub('attendance'); goArea('team'); }} isManager={isManager}/>
           )}
 
           {area === 'tasks' && (
