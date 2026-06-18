@@ -4626,7 +4626,7 @@ function BrainstormSpace({ team, session, members=[] }) {
 
 // ─── HOME COMMAND CENTER ──────────────────────────────────────────────────────
 // Daily landing page. Focus, not clutter. Replaces the "everything exposed" dashboard.
-function HomeCommand({ session, team, tasks, members, onGoto, onAddTask, onStartStandup }) {
+function HomeCommand({ session, team, tasks, members, onGoto, onAddTask, onStartStandup, onNewTask, onNewNote, onStandupOptions }) {
   const c = useC();
   const { dark } = useTheme();
   const fullName = session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || 'there';
@@ -4686,9 +4686,9 @@ function HomeCommand({ session, team, tasks, members, onGoto, onAddTask, onStart
 
   // ── Quick action cards ──
   const QUICK = [
-    { l: 'New task', sub: 'Capture work', icon: '＋', fn: () => onGoto('tasks') },
-    { l: 'Meeting note', sub: 'Start a doc', icon: '≡', fn: () => onGoto('knowledge') },
-    { l: 'Start standup', sub: 'Run the room', icon: '◉', fn: () => onStartStandup ? onStartStandup() : onGoto('tasks') },
+    { l: 'New task', sub: 'Capture work', icon: '＋', fn: () => onNewTask && onNewTask() },
+    { l: 'Meeting note', sub: 'Start a doc', icon: '≡', fn: () => onNewNote && onNewNote() },
+    { l: 'Start standup', sub: 'Run the room', icon: '◉', fn: () => onStandupOptions && onStandupOptions() },
     { l: 'Ask AI', sub: 'Summarize the day', icon: '✦', fn: () => onGoto('insights') },
   ];
 
@@ -4716,7 +4716,7 @@ function HomeCommand({ session, team, tasks, members, onGoto, onAddTask, onStart
               style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 11, border: `1px solid ${c.bord}`, background: c.surf, color: c.text, cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
               <span style={{ color: '#A78BFA' }}>✦</span> Ask AI
             </button>
-            <button onClick={() => onGoto('tasks')}
+            <button onClick={() => onNewTask && onNewTask()}
               style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 11, border: 'none', background: 'linear-gradient(135deg,#6366F1,#818CF8)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', boxShadow: '0 2px 10px rgba(99,102,241,.3)' }}>
               <span style={{ fontSize: 16 }}>＋</span> New task
             </button>
@@ -4758,7 +4758,7 @@ function HomeCommand({ session, team, tasks, members, onGoto, onAddTask, onStart
                 <div style={{ fontSize: 32, marginBottom: 10 }}>🎯</div>
                 <div style={{ fontSize: 14, color: c.sub, fontWeight: 600, marginBottom: 4 }}>Nothing urgent right now</div>
                 <div style={{ fontSize: 13, color: c.mut, marginBottom: 16 }}>Add a task to plan your day</div>
-                <button onClick={() => onGoto('tasks')} style={{ padding: '8px 18px', borderRadius: 10, background: 'linear-gradient(135deg,#6366F1,#818CF8)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>＋ New task</button>
+                <button onClick={() => onNewTask && onNewTask()} style={{ padding: '8px 18px', borderRadius: 10, background: 'linear-gradient(135deg,#6366F1,#818CF8)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>＋ New task</button>
               </div>
             ) : focus.map(t => {
               const m = members.find(x => x.email === t.assignee_email);
@@ -4863,6 +4863,11 @@ function ManagerView({
   const [knowledgeSub, setKnowledgeSub] = useState('docs');   // docs | brainstorm
   const [insightsSub, setInsightsSub]   = useState('overview'); // overview | performance | history
   const [mobileNav, setMobileNav] = useState(false);
+
+  // ── Home quick-action modals ──
+  const [taskModal, setTaskModal]       = useState(false);
+  const [noteModal, setNoteModal]       = useState(false);
+  const [standupModal, setStandupModal] = useState(false);
 
   const [unreadChat, setUnreadChat] = useState(0);
   const prevMsgCount = useRef(messages.length);
@@ -5011,7 +5016,7 @@ function ManagerView({
           <div style={{ flex: 1 }}/>
 
           {/* 4 controls: Create, Notifications, Theme, Profile */}
-          <button onClick={() => goArea('tasks')} title="Create"
+          <button onClick={() => setTaskModal(true)} title="Create"
             style={{ display: 'flex', alignItems: 'center', gap: 6, height: 38, padding: '0 16px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#6366F1,#818CF8)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
             <span style={{ fontSize: 16 }}>＋</span><span className="ss-create-label">Create</span>
           </button>
@@ -5035,7 +5040,8 @@ function ManagerView({
 
           {area === 'home' && (
             <HomeCommand session={session} team={team} tasks={tasks} members={members}
-              onGoto={goArea} onAddTask={onAddTask} onStartStandup={() => goArea('tasks')}/>
+              onGoto={goArea} onAddTask={onAddTask} onStartStandup={() => setStandupModal(true)}
+              onNewTask={() => setTaskModal(true)} onNewNote={() => setNoteModal(true)} onStandupOptions={() => setStandupModal(true)}/>
           )}
 
           {area === 'tasks' && (
@@ -5081,7 +5087,155 @@ function ManagerView({
           )}
         </div>
       </div>
+
+      {/* ── Quick-action modals ── */}
+      {taskModal && <QuickTaskModal members={members} session={session} onClose={() => setTaskModal(false)} onAdd={(d) => { onAddTask && onAddTask(d); setTaskModal(false); }} onOpenBoard={() => { setTaskModal(false); goArea('tasks'); }}/>}
+      {noteModal && <QuickNoteModal session={session} team={team} onClose={() => setNoteModal(false)} onOpenKnowledge={() => { setNoteModal(false); setKnowledgeSub('meetings'); goArea('knowledge'); }}/>}
+      {standupModal && <StandupOptionsModal team={team} onClose={() => setStandupModal(false)}
+        onJoin={() => { setStandupModal(false); goArea('tasks'); }}
+        onPip={() => { setStandupModal(false); openPip && openPip(); }}
+        onNotes={() => { setStandupModal(false); setKnowledgeSub('meetings'); goArea('knowledge'); }}
+        onTasks={() => { setStandupModal(false); goArea('tasks'); }}/>}
     </div>
+  );
+}
+
+// ─── QUICK TASK MODAL ─────────────────────────────────────────────────────────
+function QuickTaskModal({ members, session, onClose, onAdd, onOpenBoard }) {
+  const c = useC();
+  const [title, setTitle] = useState('');
+  const [priority, setPriority] = useState('medium');
+  const [assignee, setAssignee] = useState(session?.user?.email || '');
+  const [timeline, setTimeline] = useState('');
+  const submit = () => {
+    if (!title.trim()) return;
+    onAdd({ title: title.trim(), priority, assignee_email: assignee, timeline: timeline.trim(), status: 'todo' });
+  };
+  return (
+    <Modal onClose={onClose} title="New task" width={460}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Inp value={title} onChange={e => setTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} placeholder="What needs to get done?" autoFocus/>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <Sel label="Priority" value={priority} onChange={e => setPriority(e.target.value)}>
+            <option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+          </Sel>
+          <Sel label="Assignee" value={assignee} onChange={e => setAssignee(e.target.value)}>
+            <option value="">Unassigned</option>
+            {members.map(m => <option key={m.email} value={m.email}>{m.name || m.email}</option>)}
+          </Sel>
+        </div>
+        <Inp label="Timeline (optional)" value={timeline} onChange={e => setTimeline(e.target.value)} placeholder="e.g. Today, This week, Fri"/>
+        <div style={{ display: 'flex', gap: 8, marginTop: 4, justifyContent: 'space-between', alignItems: 'center' }}>
+          <button onClick={onOpenBoard} style={{ fontSize: 13, color: c.mut, background: 'none', border: 'none', cursor: 'pointer' }}>Open full board →</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+            <Btn onClick={submit} disabled={!title.trim()}>Add task</Btn>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ─── QUICK NOTE MODAL ─────────────────────────────────────────────────────────
+function QuickNoteModal({ session, team, onClose, onOpenKnowledge }) {
+  const c = useC();
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [saved, setSaved] = useState(false);
+  const teamId = team?.id || 'demo';
+  const save = () => {
+    if (!title.trim() && !body.trim()) return;
+    try {
+      const key = 'ss-quicknotes-' + teamId;
+      const list = JSON.parse(localStorage.getItem(key) || '[]');
+      list.unshift({ id: 'qn' + Date.now(), title: title.trim() || 'Untitled note', body: body.trim(), at: Date.now(), by: session?.user?.email });
+      localStorage.setItem(key, JSON.stringify(list));
+    } catch(e) {}
+    setSaved(true);
+    setTimeout(() => onClose(), 700);
+  };
+  return (
+    <Modal onClose={onClose} title="Quick meeting note" width={520}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Inp value={title} onChange={e => setTitle(e.target.value)} placeholder="Note title" autoFocus/>
+        <Textarea value={body} onChange={e => setBody(e.target.value)} placeholder="Jot down decisions, action items, anything from the meeting…" style={{ minHeight: 160 }}/>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
+          <button onClick={onOpenKnowledge} style={{ fontSize: 13, color: c.mut, background: 'none', border: 'none', cursor: 'pointer' }}>Open full editor →</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+            <Btn onClick={save} disabled={!title.trim() && !body.trim()}>{saved ? '✓ Saved!' : 'Save note'}</Btn>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ─── STANDUP OPTIONS MODAL ────────────────────────────────────────────────────
+function StandupOptionsModal({ team, onClose, onJoin, onPip, onNotes, onTasks }) {
+  const c = useC();
+  const { dark } = useTheme();
+  // Pull detected standups / events from the calendar session cache
+  const calEvents = (() => { try { return JSON.parse(sessionStorage.getItem('ss-cal-events') || '[]'); } catch { return []; } })();
+  const standupKeywords = ['standup', 'stand-up', 'stand up', 'daily', 'dsu', 'scrum', 'sync'];
+  const now = new Date();
+  const upcoming = calEvents
+    .map(ev => ({ ...ev, _start: new Date(ev.start?.dateTime || ev.start?.date || 0) }))
+    .filter(ev => ev._start >= new Date(now.getTime() - 60*60*1000)) // include ones that started within last hour
+    .filter(ev => standupKeywords.some(k => (ev.summary || '').toLowerCase().includes(k)) || true)
+    .sort((a, b) => a._start - b._start)
+    .slice(0, 6);
+  const standupsOnly = upcoming.filter(ev => standupKeywords.some(k => (ev.summary || '').toLowerCase().includes(k)));
+  const list = standupsOnly.length ? standupsOnly : upcoming;
+
+  const fmtTime = (d) => d && !isNaN(d) ? d.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
+
+  const Action = ({ icon, title, desc, onClick, accent }) => (
+    <button onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 12, border: `1px solid ${c.bord}`, background: c.surf, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all .15s' }}
+      onMouseEnter={e => e.currentTarget.style.borderColor = c.bordH}
+      onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
+      <div style={{ width: 40, height: 40, borderRadius: 11, background: (accent || '#6366F1') + '1f', color: accent || '#818CF8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, flexShrink: 0 }}>{icon}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>{title}</div>
+        <div style={{ fontSize: 12, color: c.mut, marginTop: 2 }}>{desc}</div>
+      </div>
+      <span style={{ color: c.mut, fontSize: 16 }}>→</span>
+    </button>
+  );
+
+  return (
+    <Modal onClose={onClose} title="Start standup" width={520}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <Action icon="◉" title="Join the standup" desc="Open the live board to track tasks in real time" onClick={onJoin} accent="#34D399"/>
+        <Action icon="⧉" title="PiP mode" desc="Floating window that stays over your video call" onClick={onPip} accent="#818CF8"/>
+        <Action icon="≡" title="Meeting notes" desc="Capture notes while the standup runs" onClick={onNotes} accent="#FBBF24"/>
+        <Action icon="◎" title="Task board" desc="Go straight to assigning and updating tasks" onClick={onTasks} accent="#60A5FA"/>
+
+        {/* Standups from calendar */}
+        <div style={{ marginTop: 8, paddingTop: 14, borderTop: `1px solid ${c.bord}` }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, letterSpacing: '.08em', marginBottom: 10 }}>FROM YOUR CALENDAR</div>
+          {list.length === 0 ? (
+            <div style={{ fontSize: 13, color: c.mut, padding: '8px 2px', lineHeight: 1.5 }}>
+              No upcoming standups detected. Connect Google Calendar in the Calendar tab to see and join your scheduled standups here.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {list.map(ev => (
+                <button key={ev.id} onClick={onJoin} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10, border: `1px solid ${c.bord}`, background: 'transparent', cursor: 'pointer', textAlign: 'left', width: '100%' }}
+                  onMouseEnter={e => e.currentTarget.style.background = c.row}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#34D399', flexShrink: 0 }}/>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.summary || 'Untitled event'}</span>
+                  <span style={{ fontSize: 11, color: c.mut, flexShrink: 0 }}>{fmtTime(ev._start)}</span>
+                  {ev.hangoutLink && <span style={{ fontSize: 11, color: '#818CF8', flexShrink: 0 }}>Meet</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </Modal>
   );
 }
 
