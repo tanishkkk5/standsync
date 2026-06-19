@@ -5088,6 +5088,70 @@ function BrainstormSpace({ team, session, members=[] }) {
 
 // ─── HOME COMMAND CENTER ──────────────────────────────────────────────────────
 // Daily landing page. Focus, not clutter. Replaces the "everything exposed" dashboard.
+// Aggregates client-report rows across all spaces → "doing good" vs "needs focus".
+function ProjectHighlights({ teamId, onGoto }) {
+  const c = useC();
+  const { dark } = useTheme();
+  let spaces = [];
+  try { spaces = JSON.parse(localStorage.getItem('ss-spaces-' + teamId) || '[]'); } catch {}
+  const rows = [];
+  (Array.isArray(spaces) ? spaces : []).forEach(s => {
+    if (s.report && Array.isArray(s.report.items)) s.report.items.forEach(it => rows.push({ ...it, space: s.name }));
+  });
+  if (rows.length === 0) return null; // nothing to show until a report is uploaded
+
+  const cls = (it) => {
+    const ap = (it.approval || '').toLowerCase(), st = (it.status || '').toLowerCase();
+    const overdue = it.target && !isNaN(Date.parse(it.target)) && new Date(it.target) < new Date() && st !== 'done';
+    if (ap === 'rejected' || overdue) return 'focus';
+    if (ap === 'approved' || st === 'done' || (st === 'in review' && ap === 'pending')) return 'good';
+    return 'neutral';
+  };
+  const good = rows.filter(r => cls(r) === 'good');
+  const focus = rows.filter(r => cls(r) === 'focus');
+  const reason = (r) => {
+    const ap = (r.approval || '').toLowerCase(), st = (r.status || '').toLowerCase();
+    if (ap === 'rejected') return 'Rejected by client';
+    if (r.target && !isNaN(Date.parse(r.target)) && new Date(r.target) < new Date() && st !== 'done') return 'Overdue (' + r.target + ')';
+    if (ap === 'approved') return 'Approved';
+    if (st === 'done') return 'Delivered';
+    return 'On track';
+  };
+
+  const Col = ({ title, list, color, emptyText }) => (
+    <div style={{ flex: 1, minWidth: 240, borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}`, overflow: 'hidden' }}>
+      <div style={{ padding: '12px 16px', borderBottom: `1px solid ${c.bord}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: color }}/>
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: c.text }}>{title}</span>
+        <span style={{ fontSize: 12, color: c.mut }}>{list.length}</span>
+      </div>
+      <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+        {list.length === 0 ? <div style={{ padding: '18px 16px', fontSize: 12.5, color: c.mut }}>{emptyText}</div>
+          : list.slice(0, 6).map((r, i) => (
+            <div key={i} style={{ padding: '10px 16px', borderBottom: `1px solid ${c.bord}` }}>
+              <div style={{ fontSize: 13, color: c.text, fontWeight: 500 }}>{r.item}</div>
+              <div style={{ fontSize: 11.5, color: c.mut, marginTop: 2 }}>{r.space} · {reason(r)} · {r.pct || 0}%</div>
+            </div>
+          ))}
+        {list.length > 6 && <div style={{ padding: '8px 16px', fontSize: 12, color: c.accent, cursor: 'pointer' }} onClick={() => onGoto && onGoto('spaces')}>+{list.length - 6} more →</div>}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ marginTop: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Project highlights</div>
+        <button onClick={() => onGoto && onGoto('spaces')} style={{ fontSize: 12.5, color: c.accent, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>View spaces →</button>
+      </div>
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+        <Col title="Doing good" list={good} color="#16A34A" emptyText="Nothing flagged as on-track yet."/>
+        <Col title="Needs focus" list={focus} color="#DC2626" emptyText="Nothing needs urgent focus. 🎉"/>
+      </div>
+    </div>
+  );
+}
+
 function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTask, onStartStandup, onNewTask, onNewNote, onStandupOptions, onOpenAttendance, isManager = true }) {
   // Members see only their own tasks across home metrics; managers see the whole team's.
   const myEmail0 = session?.user?.email;
@@ -5205,6 +5269,8 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
 
       {/* Attendance / shift status */}
       <AttendanceWidget teamId={team?.id || 'demo'} email={session?.user?.email || 'me@demo'} shift={getShiftConfig(team?.id || 'demo', session?.user?.email)} onOpenFull={() => onOpenAttendance && onOpenAttendance()}/>
+
+      <ProjectHighlights teamId={team?.id || 'demo'} onGoto={onGoto}/>
 
       {/* Focus + AI insights */}
       <div className="ss-home-mid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr)', gap: 16 }}>
@@ -5615,6 +5681,7 @@ function SpaceWorkspace({ space, members, session, onBack, onUpdate, onDelete })
     { id: 'list',     label: 'List',     icon: '☰' },
     { id: 'calendar', label: 'Calendar', icon: '⊟' },
     { id: 'timeline', label: 'Timeline', icon: '↔' },
+    { id: 'report',   label: 'Client Report', icon: '📊' },
     { id: 'docs',     label: 'Docs',     icon: '◈' },
   ];
 
@@ -5734,6 +5801,7 @@ function SpaceWorkspace({ space, members, session, onBack, onUpdate, onDelete })
         </div>
       )}
 
+      {tab === 'report' && <SpaceClientReport space={space} onUpdate={onUpdate}/>}
       {tab === 'docs' && <SpaceDocs space={space} onUpdate={onUpdate}/>}
 
       {showNew && <NewWorkItemModal space={space} members={members} myEmail={myEmail} onClose={() => setShowNew(false)} onAdd={addItem}/>}
@@ -5821,6 +5889,211 @@ function SpaceCalendar({ items, stColor }) {
     </div>
   );
 }
+
+// ─── CLIENT PROJECT REPORT (Excel/CSV upload + analysis) ──────────────────────
+// Parses a CSV natively (zero deps) and .xlsx via SheetJS loaded from CDN at
+// parse time (graceful: if blocked, asks for CSV). Rows: Item, Owner, Status,
+// Approval, Pipeline Stage, Target Date, % Done, Priority, Notes.
+function parseCSV(text) {
+  const rows = [];
+  let cur = [], val = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) {
+      if (ch === '"' && text[i + 1] === '"') { val += '"'; i++; }
+      else if (ch === '"') q = false;
+      else val += ch;
+    } else {
+      if (ch === '"') q = true;
+      else if (ch === ',') { cur.push(val); val = ''; }
+      else if (ch === '\n' || ch === '\r') { if (val !== '' || cur.length) { cur.push(val); rows.push(cur); cur = []; val = ''; } if (ch === '\r' && text[i + 1] === '\n') i++; }
+      else val += ch;
+    }
+  }
+  if (val !== '' || cur.length) { cur.push(val); rows.push(cur); }
+  return rows;
+}
+
+const norm = (s) => (s || '').toString().trim().toLowerCase();
+function rowsToItems(rows) {
+  if (!rows || rows.length < 2) return [];
+  // find header row (first row containing "item")
+  let h = 0;
+  for (let i = 0; i < Math.min(rows.length, 6); i++) { if (rows[i].some(c => norm(c) === 'item')) { h = i; break; } }
+  const head = rows[h].map(norm);
+  const idx = (names) => head.findIndex(c => names.some(n => c.includes(n)));
+  const ci = { item: idx(['item','deliverable','task']), owner: idx(['owner','assignee']), status: idx(['status']), approval: idx(['approval']), pipeline: idx(['pipeline','stage']), target: idx(['target','due','date']), pct: idx(['% done','percent','progress','%']), priority: idx(['priority']), notes: idx(['notes','comment']) };
+  const out = [];
+  for (let r = h + 1; r < rows.length; r++) {
+    const row = rows[r]; if (!row || !row.length) continue;
+    const get = (k) => ci[k] >= 0 ? (row[ci[k]] || '').toString().trim() : '';
+    const item = get('item'); if (!item) continue;
+    let pct = parseFloat(get('pct')); if (isNaN(pct)) pct = 0; if (pct <= 1 && pct > 0 && get('pct').includes('.')) pct = Math.round(pct * 100);
+    out.push({ item, owner: get('owner'), status: get('status') || 'Not Started', approval: get('approval') || 'Pending', pipeline: get('pipeline') || 'Backlog', target: get('target'), pct: Math.max(0, Math.min(100, Math.round(pct))), priority: get('priority') || 'Medium', notes: get('notes') });
+  }
+  return out;
+}
+
+// Classify a row as good / focus / neutral (shared with Home summary)
+function classifyReportRow(row) {
+  const ap = norm(row.approval), st = norm(row.status);
+  const overdue = row.target && !isNaN(Date.parse(row.target)) && new Date(row.target) < new Date() && st !== 'done';
+  if (ap === 'rejected' || overdue) return 'focus';
+  if (ap === 'approved' || st === 'done') return 'good';
+  if (st === 'in review' && ap === 'pending') return 'good';
+  return 'neutral';
+}
+
+function SpaceClientReport({ space, onUpdate }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const fileRef = useRef();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const report = space.report || null; // { items:[], uploadedAt, filename }
+
+  const handleFile = async (e) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    setErr(''); setBusy(true);
+    try {
+      let items = [];
+      if (/\.csv$/i.test(f.name)) {
+        const text = await f.text();
+        items = rowsToItems(parseCSV(text));
+      } else if (/\.xlsx?$/i.test(f.name)) {
+        const XLSX = await loadSheetJS();
+        if (!XLSX) { setErr('Could not load the Excel reader. Please re-save your file as CSV and upload that.'); setBusy(false); return; }
+        const buf = await f.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
+        items = rowsToItems(rows);
+      } else { setErr('Please upload a .xlsx or .csv file.'); setBusy(false); return; }
+      if (items.length === 0) { setErr('No rows found. Make sure the sheet has an "Item" header and at least one row.'); setBusy(false); return; }
+      onUpdate({ report: { items, uploadedAt: Date.now(), filename: f.name } });
+    } catch (e2) {
+      setErr('Could not read that file: ' + (e2.message || 'unknown error') + '. Try uploading as CSV.');
+    }
+    setBusy(false);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  if (!report) {
+    return (
+      <div style={{ padding: '40px 20px', textAlign: 'center', borderRadius: 16, border: `1.5px dashed ${c.bord}`, background: c.surf }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: c.text, marginBottom: 6 }}>Upload a client project report</div>
+        <div style={{ fontSize: 13.5, color: c.mut, maxWidth: 460, margin: '0 auto 18px', lineHeight: 1.6 }}>
+          Fill the StandSync report template (one row per work item: status, approval, target date, % done) and upload it here as <strong>.xlsx</strong> or <strong>.csv</strong>. The analysis and Home highlights update automatically.
+        </div>
+        {err && <div style={{ fontSize: 12.5, color: '#F87171', marginBottom: 12 }}>{err}</div>}
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{ display: 'none' }}/>
+        <Btn onClick={() => fileRef.current?.click()} loading={busy}>⬆ Upload report</Btn>
+      </div>
+    );
+  }
+
+  const items = report.items;
+  const total = items.length;
+  const approved = items.filter(i => norm(i.approval) === 'approved').length;
+  const rejected = items.filter(i => norm(i.approval) === 'rejected').length;
+  const pending = items.filter(i => norm(i.approval) === 'pending').length;
+  const done = items.filter(i => norm(i.status) === 'done').length;
+  const avgPct = total ? Math.round(items.reduce((s, i) => s + (i.pct || 0), 0) / total) : 0;
+  const approvalRate = (approved + rejected) ? Math.round(approved / (approved + rejected) * 100) : 0;
+  const overdue = items.filter(i => i.target && !isNaN(Date.parse(i.target)) && new Date(i.target) < new Date() && norm(i.status) !== 'done').length;
+  const inPipeline = items.filter(i => norm(i.pipeline) !== 'delivered' && norm(i.status) !== 'done').length;
+
+  const stColor = (s) => { s = norm(s); return s === 'done' ? '#16A34A' : s === 'in review' ? '#D97706' : s === 'in progress' ? '#2563EB' : '#64748B'; };
+  const apColor = (a) => { a = norm(a); return a === 'approved' ? '#16A34A' : a === 'rejected' ? '#DC2626' : '#D97706'; };
+
+  const cards = [
+    { l: 'Overall progress', v: avgPct + '%', col: '#6366F1' },
+    { l: 'Approval rate', v: approvalRate + '%', col: approvalRate >= 70 ? '#16A34A' : approvalRate >= 40 ? '#D97706' : '#DC2626' },
+    { l: 'In pipeline / pending', v: inPipeline, col: '#0891B2' },
+    { l: 'Overdue', v: overdue, col: overdue ? '#DC2626' : '#16A34A' },
+  ];
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ fontSize: 12.5, color: c.mut }}>From <strong style={{ color: c.text }}>{report.filename}</strong> · uploaded {new Date(report.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{ display: 'none' }}/>
+          <Btn v="ghost" onClick={() => fileRef.current?.click()} loading={busy}>↻ Re-upload</Btn>
+          <button onClick={() => onUpdate({ report: null })} style={{ padding: '8px 12px', borderRadius: 10, border: `1px solid ${c.bord}`, background: 'transparent', color: c.mut, cursor: 'pointer', fontSize: 13 }}>Clear</button>
+        </div>
+      </div>
+      {err && <div style={{ fontSize: 12.5, color: '#F87171', marginBottom: 12 }}>{err}</div>}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 18 }}>
+        {cards.map(cd => (
+          <div key={cd.l} style={{ padding: '16px 18px', borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}` }}>
+            <div style={{ fontSize: 26, fontWeight: 800, color: cd.col }}>{cd.v}</div>
+            <div style={{ fontSize: 11.5, color: c.mut, marginTop: 3 }}>{cd.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Approval breakdown bar */}
+      <div style={{ borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}`, padding: 18, marginBottom: 18 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: c.text, marginBottom: 12 }}>Approval breakdown</div>
+        <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', marginBottom: 10 }}>
+          {approved > 0 && <div style={{ width: (approved / total * 100) + '%', background: '#16A34A' }}/>}
+          {pending > 0 && <div style={{ width: (pending / total * 100) + '%', background: '#D97706' }}/>}
+          {rejected > 0 && <div style={{ width: (rejected / total * 100) + '%', background: '#DC2626' }}/>}
+        </div>
+        <div style={{ display: 'flex', gap: 18, fontSize: 12, color: c.sub, flexWrap: 'wrap' }}>
+          <span>🟢 Approved {approved}</span><span>🟠 Pending {pending}</span><span>🔴 Rejected {rejected}</span><span>✓ Done {done}/{total}</span>
+        </div>
+      </div>
+
+      {/* Items table */}
+      <div style={{ borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}`, overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 100px 110px 100px 90px 70px', gap: 10, padding: '11px 16px', borderBottom: `1px solid ${c.bord}`, fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+          <span>Item</span><span>Status</span><span>Approval</span><span>Target</span><span>Pipeline</span><span>%</span>
+        </div>
+        {items.map((it, i) => {
+          const cls = classifyReportRow(it);
+          return (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.6fr 100px 110px 100px 90px 70px', gap: 10, padding: '11px 16px', borderBottom: `1px solid ${c.bord}`, alignItems: 'center', borderLeft: `3px solid ${cls === 'good' ? '#16A34A' : cls === 'focus' ? '#DC2626' : 'transparent'}` }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, color: c.text, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.item}</div>
+                {it.owner && <div style={{ fontSize: 11, color: c.mut }}>{it.owner}</div>}
+              </div>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: stColor(it.status) }}>{it.status}</span>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: apColor(it.approval) }}>{it.approval}</span>
+              <span style={{ fontSize: 11.5, color: c.sub }}>{it.target || '—'}</span>
+              <span style={{ fontSize: 11.5, color: c.sub }}>{it.pipeline}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ flex: 1, height: 5, borderRadius: 3, background: c.row, overflow: 'hidden' }}><div style={{ height: '100%', width: it.pct + '%', background: '#6366F1' }}/></div>
+                <span style={{ fontSize: 10.5, color: c.mut, width: 26 }}>{it.pct}%</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Loads SheetJS once from CDN. Returns the XLSX global or null if blocked.
+let _sheetJSPromise = null;
+function loadSheetJS() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (_sheetJSPromise) return _sheetJSPromise;
+  _sheetJSPromise = new Promise((resolve) => {
+    try {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+      s.onload = () => resolve(window.XLSX || null);
+      s.onerror = () => resolve(null);
+      document.head.appendChild(s);
+    } catch { resolve(null); }
+  });
+  return _sheetJSPromise;
+}
+
 
 function SpaceDocs({ space, onUpdate }) {
   const c = useC();
