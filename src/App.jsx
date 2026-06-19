@@ -910,7 +910,64 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
 }
 
 // ─── FLOATING AI BUBBLE ───────────────────────────────────────────────
-function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamName='Team' }) {
+// Assembles ALL team data the AI can answer from: tasks, attendance, performance,
+// spaces, schedule. Returns both structured fields and a readable `siteData` string
+// so the AI prompt can include it regardless of how ai.js consumes context.
+function buildSiteContext({ teamId = 'demo', tasks = [], members = [], history = [], teamName = 'Team', userName = 'User', myTasks = [] }) {
+  const day = new Date().toISOString().slice(0, 10);
+  let attendance = {}, spaces = [], schedule = {};
+  try { attendance = JSON.parse(localStorage.getItem('ss-attendance-' + teamId + '-' + day) || '{}'); } catch {}
+  try { spaces = JSON.parse(localStorage.getItem('ss-spaces-' + teamId) || '[]'); } catch {}
+  try { schedule = JSON.parse(localStorage.getItem('ss-schedule-' + teamId) || '{}'); } catch {}
+
+  const fmtT = (ts) => ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—';
+
+  // Performance per member
+  const perf = members.map(m => {
+    const mt = tasks.filter(t => t.assignee_email === m.email);
+    const done = mt.filter(t => t.status === 'done').length;
+    const blocked = mt.filter(t => t.status === 'blocked').length;
+    const open = mt.filter(t => t.status !== 'done').length;
+    const pct = mt.length ? Math.round(done / mt.length * 100) : 0;
+    return { name: m.name || m.email, role: m.role || 'member', total: mt.length, done, open, blocked, pct };
+  });
+
+  // Attendance lines
+  const attLines = members.map(m => {
+    const r = attendance[m.email] || {};
+    const breaks = (r.breaks || []);
+    const totalBreak = breaks.reduce((s, b) => s + (b.mins || 0), 0);
+    const online = r.online !== false && r.lastSeen && (Date.now() - r.lastSeen) < 70000;
+    const onBreak = breaks.some(b => !b.end);
+    return `${m.name || m.email}: ${onBreak ? 'on break' : online ? 'online' : 'offline'}, clocked in ${fmtT(r.clockIn)}${r.clockOut ? ', out ' + fmtT(r.clockOut) : ''}, ${totalBreak}m break, last seen ${fmtT(r.lastSeen)}`;
+  });
+
+  // Schedule (today's time blocks)
+  const schedLines = Object.entries(schedule)
+    .filter(([, b]) => b && b.date === day)
+    .map(([tid, b]) => { const t = tasks.find(x => x.id === tid); return `${t ? (t.title || t.text) : 'Task'} — ${b.start}–${b.end}${t?.assignee_name ? ' (' + t.assignee_name + ')' : ''}`; });
+
+  // Spaces
+  const spaceLines = (Array.isArray(spaces) ? spaces : []).map(s => `${s.name} [${s.key}]: ${(s.items || []).length} items, ${(s.items || []).filter(i => i.status !== 'done').length} open`);
+
+  const taskLines = tasks.slice(0, 40).map(t => `• ${t.title || t.text} — ${t.status || 'todo'}, ${t.priority || 'med'}${t.assignee_name ? ', ' + t.assignee_name : ''}${t.timeline ? ', due ' + t.timeline : ''}${t.blocker ? ', BLOCKER: ' + t.blocker : ''}`);
+
+  const siteData = [
+    `TEAM: ${teamName}. Current user: ${userName}. Date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}.`,
+    `MEMBERS (${members.length}): ${members.map(m => (m.name || m.email) + ' [' + (m.role || 'member') + ']').join(', ') || 'none'}.`,
+    `TASKS (${tasks.length} total, ${tasks.filter(t => t.status === 'done').length} done, ${tasks.filter(t => t.status === 'blocked').length} blocked):`,
+    taskLines.join('\n') || 'No tasks.',
+    `PERFORMANCE: ${perf.map(p => `${p.name} ${p.pct}% (${p.done}/${p.total} done, ${p.open} open${p.blocked ? ', ' + p.blocked + ' blocked' : ''})`).join('; ') || 'n/a'}.`,
+    `ATTENDANCE TODAY:\n${attLines.join('\n') || 'No attendance logged.'}`,
+    `SCHEDULE TODAY:\n${schedLines.join('\n') || 'No time blocks today.'}`,
+    `SPACES/PROJECTS:\n${spaceLines.join('\n') || 'No spaces.'}`,
+    `STANDUP HISTORY: ${history.length} past standups recorded.`,
+  ].join('\n\n');
+
+  return { tasks, members, history, teamName, userName, myTasks, attendance, spaces, schedule, performance: perf, siteData };
+}
+
+function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamName='Team', teamId='demo' }) {
   const c=useC(); const { dark }=useTheme();
   const [open,setOpen]=useState(false);
   const [msgs,setMsgs]=useState([{id:'w',role:'assistant',text:'Hi! Ask me about your tasks, team progress, or what to focus on today.'}]);
@@ -950,7 +1007,7 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
     if(!input.trim()||loading)return;
     setMsgs(p=>[...p,{id:'u'+Date.now(),role:'user',text:input.trim()}]);
     setInput(''); setLoading(true);
-    try{ const reply=await askAI(input.trim(),{tasks,members,history,teamName,userName:name,myTasks}); setMsgs(p=>[...p,{id:'a'+Date.now(),role:'assistant',text:reply}]); }
+    try{ const reply=await askAI(input.trim(),buildSiteContext({teamId,tasks,members,history,teamName,userName:name,myTasks})); setMsgs(p=>[...p,{id:'a'+Date.now(),role:'assistant',text:reply}]); }
     catch(e){ setMsgs(p=>[...p,{id:'e'+Date.now(),role:'assistant',text:'Try again!'}]); }
     setLoading(false);
   };
@@ -1074,7 +1131,7 @@ function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], te
     setMsgs(p=>[...p,{id:'u'+Date.now(),role:'user',text:msg}]);
     setInput(''); setLoading(true);
     try{
-      const reply=await askAI(msg,{tasks,members,history,teamName,userName:name,myTasks});
+      const reply=await askAI(msg,buildSiteContext({teamId,tasks,members,history,teamName,userName:name,myTasks}));
       setMsgs(p=>[...p,{id:'a'+Date.now(),role:'assistant',text:reply}]);
     }catch(e){
       setMsgs(p=>[...p,{id:'e'+Date.now(),role:'assistant',text:'Sorry, had trouble with that. Try again!'}]);
@@ -6772,7 +6829,7 @@ function ManagerView({
         onPip={(mode) => { setStandupModal(false); openPip && openPip(mode); }}/>}
 
       {/* Floating AI assistant — available on every area */}
-      <AIBubble tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name || 'Team'}/>
+      <AIBubble tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name || 'Team'} teamId={team?.id || 'demo'}/>
 
       {mailView && <MailPreviewModal mail={mailView} onClose={() => setMailView(null)}/>}
     </div>
