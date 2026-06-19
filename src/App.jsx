@@ -5939,7 +5939,7 @@ function AttendanceWidget({ teamId, email, shift, onOpenFull }) {
   const { dark } = useTheme();
   const { rec, status, activeBreak, clockIn, clockOut, startBreak, endBreak } = useAttendance(teamId, email);
   const [now, setNow] = useState(Date.now());
-  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(t); }, []);
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(t); }, []);
   const totalBreak = (rec.breaks || []).reduce((s, b) => s + (b.end ? (b.mins || 0) : Math.round((now - b.start) / 60000)), 0);
   const statusMap = { online: ['#34D399', 'Online'], break: ['#FBBF24', activeBreak ? `On ${activeBreak.label}` : 'On break'], offline: ['#94A3B8', rec.clockOut ? 'Clocked out' : 'Not clocked in'] };
   const [sc, sl] = statusMap[status];
@@ -5987,7 +5987,7 @@ function AttendancePanel({ team, members, session, isManager }) {
   const [now, setNow] = useState(Date.now());
   const [customMin, setCustomMin] = useState('');
 
-  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(t); }, []);
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(t); }, []);
 
   const save = (next) => { setLog(next); try { localStorage.setItem(KEY, JSON.stringify(next)); } catch {} };
   const myRec = log[myEmail] || {};
@@ -6027,7 +6027,7 @@ function AttendancePanel({ team, members, session, isManager }) {
   };
   const endBreak = () => { const next = { ...log }; const r = { ...(next[myEmail] || {}) }; r.breaks = (r.breaks || []).map(b => b.end ? b : { ...b, end: Date.now(), mins: Math.round((Date.now() - b.start) / 60000) }); next[myEmail] = r; save(next); };
 
-  const isOnline = (rec) => rec?.lastSeen && (now - rec.lastSeen) < 3 * 60000; // seen in last 3 min
+  const isOnline = (rec) => rec?.online !== false && rec?.lastSeen && (now - rec.lastSeen) < 70000; // explicit-offline OR not seen in 70s
   const totalBreakMins = (rec) => (rec?.breaks || []).reduce((s, b) => s + (b.end ? (b.mins || Math.round((b.end - b.start) / 60000)) : Math.round((now - b.start) / 60000)), 0);
 
   // ── Warnings (manager) ──
@@ -6368,6 +6368,8 @@ function ManagerView({
   const [insightsSub, setInsightsSub]   = useState('overview'); // overview | performance | history
   const [teamSub, setTeamSub]           = useState('directory'); // directory | attendance (manager only)
   const [calSub, setCalSub]             = useState('schedule');  // schedule | meetings
+  const [search, setSearch]             = useState('');
+  const [searchOpen, setSearchOpen]     = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
 
   // ── Home quick-action modals ──
@@ -6459,6 +6461,36 @@ function ManagerView({
   }, [messages, area]);
 
   const goArea = (a) => { setArea(a); setMobileNav(false); if (a === 'communication') setUnreadChat(0); };
+
+  // ── Global search ──
+  const NAV_TARGETS = [
+    { label: 'Home', area: 'home', kw: 'home dashboard' },
+    { label: 'Tasks', area: 'tasks', kw: 'tasks work' },
+    { label: 'Spaces', area: 'spaces', kw: 'spaces projects' },
+    { label: 'Team', area: 'team', kw: 'team members people attendance' },
+    { label: 'Communication', area: 'communication', kw: 'chat messages communication' },
+    { label: 'Knowledge', area: 'knowledge', kw: 'docs knowledge wiki brainstorm' },
+    { label: 'Calendar', area: 'calendar', kw: 'calendar schedule meetings' },
+    ...(canPerf ? [{ label: 'Insights', area: 'insights', kw: 'insights analytics performance' }] : []),
+  ];
+  const searchResults = (() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return [];
+    const out = [];
+    NAV_TARGETS.filter(n => n.label.toLowerCase().includes(q) || n.kw.includes(q)).forEach(n =>
+      out.push({ type: 'Page', icon: '◧', label: n.label, sub: 'Go to ' + n.label, act: () => goArea(n.area) }));
+    tasks.filter(t => (t.title || t.text || '').toLowerCase().includes(q)).slice(0, 6).forEach(t =>
+      out.push({ type: 'Task', icon: '◎', label: t.title || t.text, sub: (t.status || 'todo') + (t.assignee_name ? ' · ' + t.assignee_name : ''), act: () => goArea('tasks') }));
+    members.filter(m => (m.name || '').toLowerCase().includes(q) || (m.email || '').toLowerCase().includes(q)).slice(0, 5).forEach(m =>
+      out.push({ type: 'Person', icon: '◍', label: m.name || m.email, sub: m.email, act: () => goArea('team') }));
+    try {
+      const docs = JSON.parse(localStorage.getItem('ss-quicknotes-' + (team?.id || 'demo')) || '[]');
+      (Array.isArray(docs) ? docs : []).filter(d => (d.title || '').toLowerCase().includes(q)).slice(0, 4).forEach(d =>
+        out.push({ type: 'Doc', icon: '◈', label: d.title || 'Untitled', sub: 'Knowledge', act: () => goArea('knowledge') }));
+    } catch {}
+    return out.slice(0, 12);
+  })();
+  const runResult = (r) => { r.act(); setSearch(''); setSearchOpen(false); };
 
   const blocked = tasks.filter(t => t.status === 'blocked').length;
   const myTasks = tasks.filter(t => t.assignee_email === session?.user?.email);
@@ -6587,12 +6619,35 @@ function ManagerView({
           <h2 style={{ fontSize: 18, fontWeight: 700, color: c.text, margin: 0, flexShrink: 0 }}>{areaTitle[area]}</h2>
 
           {/* Search */}
-          <div style={{ flex: 1, maxWidth: 420, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, background: c.inp, border: `1px solid ${c.bord}`, marginLeft: 8 }}>
-            <span style={{ fontSize: 14, color: c.mut }}>⌕</span>
-            <input placeholder="Search tasks, docs, people…" style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: c.text, fontSize: 13, minWidth: 0 }}/>
+          <div style={{ flex: 1, maxWidth: 440, position: 'relative', marginLeft: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, background: c.inp, border: `1px solid ${searchOpen ? c.bordH : c.bord}` }}>
+              <span style={{ fontSize: 14, color: c.mut }}>⌕</span>
+              <input value={search} onChange={e => { setSearch(e.target.value); setSearchOpen(true); }} onFocus={() => setSearchOpen(true)}
+                onKeyDown={e => { if (e.key === 'Enter' && searchResults[0]) runResult(searchResults[0]); if (e.key === 'Escape') { setSearch(''); setSearchOpen(false); } }}
+                placeholder="Search tasks, people, pages…" style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: c.text, fontSize: 13, minWidth: 0 }}/>
+              {search && <button onClick={() => { setSearch(''); setSearchOpen(false); }} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 15, lineHeight: 1 }}>×</button>}
+            </div>
+            {searchOpen && search.trim() && (
+              <>
+                <div onClick={() => setSearchOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 199 }}/>
+                <div style={{ position: 'absolute', top: 46, left: 0, right: 0, background: dark ? '#12182B' : '#fff', border: `1px solid ${c.bord}`, borderRadius: 12, boxShadow: '0 16px 48px rgba(0,0,0,.35)', zIndex: 200, overflow: 'hidden', maxHeight: 380, overflowY: 'auto' }}>
+                  {searchResults.length === 0 ? (
+                    <div style={{ padding: '20px', textAlign: 'center', fontSize: 13, color: c.mut }}>No results for "{search}"</div>
+                  ) : searchResults.map((r, i) => (
+                    <button key={i} onClick={() => runResult(r)} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '10px 14px', background: 'transparent', border: 'none', borderBottom: `1px solid ${c.bord}`, cursor: 'pointer', textAlign: 'left' }}
+                      onMouseEnter={e => e.currentTarget.style.background = c.row} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <span style={{ width: 30, height: 30, borderRadius: 8, background: c.row, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: c.sub, flexShrink: 0 }}>{r.icon}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label}</div>
+                        <div style={{ fontSize: 11.5, color: c.mut, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sub}</div>
+                      </div>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.05em', flexShrink: 0 }}>{r.type}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-
-          <div style={{ flex: 1 }}/>
 
           {/* Attendance status tag */}
           <AttendanceTag teamId={team?.id || 'demo'} email={session?.user?.email || 'me@demo'} onClick={() => { setTeamSub('attendance'); goArea('team'); }}/>
@@ -7369,6 +7424,31 @@ export default function App() {
   const userForView={email:session?.user?.email||'tanisk.pandey@xtransmatrix.com',name:session?.user?.user_metadata?.name||'Tanisk Pandey'};
 
   useEffect(()=>{document.body.style.background=dark?'#060412':'#F4F6FB';},[dark]);
+
+  // ── Global presence: online while tab open & visible; offline on hide/close ──
+  useEffect(()=>{
+    const teamId=team?.id; const email=session?.user?.email;
+    if(!teamId||!email) return;
+    const key='ss-attendance-'+teamId+'-'+new Date().toISOString().slice(0,10);
+    const setPresence=(online)=>{
+      try{
+        const cur=JSON.parse(localStorage.getItem(key)||'{}');
+        const r={...(cur[email]||{})};
+        r.lastSeen=Date.now(); r.online=online;
+        cur[email]=r; localStorage.setItem(key,JSON.stringify(cur));
+      }catch(e){}
+      // Push to backend when available (won't break build if absent)
+      try{ const up=sbFn('upsertPresence'); if(SB.IS_LIVE&&up) up(teamId,email,Date.now(),online); }catch(e){}
+    };
+    setPresence(true);
+    const beat=setInterval(()=>{ if(document.visibilityState==='visible') setPresence(true); },25000);
+    const onVis=()=>setPresence(document.visibilityState==='visible');
+    const onLeave=()=>setPresence(false);
+    document.addEventListener('visibilitychange',onVis);
+    window.addEventListener('beforeunload',onLeave);
+    window.addEventListener('pagehide',onLeave);
+    return ()=>{ clearInterval(beat); document.removeEventListener('visibilitychange',onVis); window.removeEventListener('beforeunload',onLeave); window.removeEventListener('pagehide',onLeave); setPresence(false); };
+  },[team,session]);
 
   // authLoading removed — session is instant from sessionStorage
 
