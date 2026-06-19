@@ -5096,11 +5096,20 @@ function ProjectHighlights({ teamId, onGoto }) {
   try { spaces = JSON.parse(localStorage.getItem('ss-spaces-' + teamId) || '[]'); } catch {}
   const rows = [];
   (Array.isArray(spaces) ? spaces : []).forEach(s => {
-    if (s.report && Array.isArray(s.report.items)) s.report.items.forEach(it => rows.push({ ...it, space: s.name }));
+    const rep = s.report; if (!rep) return;
+    // Prefer the pre-computed summary's bottlenecks + wins
+    if (rep.summary) {
+      (rep.summary.bottlenecks || []).forEach(it => rows.push({ ...it, space: s.name, _focus: true }));
+      (rep.summary.wins || []).forEach(it => rows.push({ ...it, space: s.name, _good: true }));
+    } else if (Array.isArray(rep.items)) {
+      rep.items.filter(it => it.item && !/^[—\-–\s]*section\b/i.test(it.item)).forEach(it => rows.push({ ...it, space: s.name }));
+    }
   });
-  if (rows.length === 0) return null; // nothing to show until a report is uploaded
+  if (rows.length === 0) return null;
 
   const cls = (it) => {
+    if (it._focus) return 'focus';
+    if (it._good) return 'good';
     const ap = (it.approval || '').toLowerCase(), st = (it.status || '').toLowerCase();
     const overdue = it.target && !isNaN(Date.parse(it.target)) && new Date(it.target) < new Date() && st !== 'done';
     if (ap === 'rejected' || overdue) return 'focus';
@@ -5919,7 +5928,6 @@ function parseCSV(text) {
 const norm = (s) => (s || '').toString().trim().toLowerCase();
 function rowsToItems(rows) {
   if (!rows || rows.length < 2) return [];
-  // find header row (first row containing "item")
   let h = 0;
   for (let i = 0; i < Math.min(rows.length, 6); i++) { if (rows[i].some(c => norm(c) === 'item')) { h = i; break; } }
   const head = rows[h].map(norm);
@@ -5930,11 +5938,59 @@ function rowsToItems(rows) {
     const row = rows[r]; if (!row || !row.length) continue;
     const get = (k) => ci[k] >= 0 ? (row[ci[k]] || '').toString().trim() : '';
     const item = get('item'); if (!item) continue;
+    // Skip section-divider rows like "── SECTION A: ... ──"
+    if (/^[—\-–\s]*section\b/i.test(item) || /^[—\-–\s]+$/.test(item)) continue;
     let pct = parseFloat(get('pct')); if (isNaN(pct)) pct = 0; if (pct <= 1 && pct > 0 && get('pct').includes('.')) pct = Math.round(pct * 100);
     out.push({ item, owner: get('owner'), status: get('status') || 'Not Started', approval: get('approval') || 'Pending', pipeline: get('pipeline') || 'Backlog', target: get('target'), pct: Math.max(0, Math.min(100, Math.round(pct))), priority: get('priority') || 'Medium', notes: get('notes') });
   }
   return out;
 }
+
+// Build a clean summary + bottlenecks from raw rows. Detects "SECTION" dividers
+// to group, and otherwise classifies by approval/status. Capped output.
+function summarizeReport(rows) {
+  if (!rows || rows.length < 2) return null;
+  let h = 0;
+  for (let i = 0; i < Math.min(rows.length, 6); i++) { if (rows[i].some(c => norm(c) === 'item')) { h = i; break; } }
+  const head = rows[h].map(norm);
+  const idx = (names) => head.findIndex(c => names.some(n => c.includes(n)));
+  const ci = { item: idx(['item','deliverable','task']), owner: idx(['owner','assignee']), status: idx(['status']), approval: idx(['approval']), pipeline: idx(['pipeline','stage']), target: idx(['target','due','date']), pct: idx(['% done','percent','progress','%']) };
+  const get = (row, k) => ci[k] >= 0 ? (row[ci[k]] || '').toString().trim() : '';
+
+  let section = 'General';
+  const sections = {}; // name -> {count, approved, rejected, pending, done, blocked}
+  const all = [];
+  for (let r = h + 1; r < rows.length; r++) {
+    const row = rows[r]; if (!row || !row.length) continue;
+    const item = get(row, 'item'); if (!item) continue;
+    const secM = item.match(/section\s+[a-z]?\s*:?\s*(.+?)\s*[—\-–(]*$/i);
+    if (/^[—\-–\s]*section\b/i.test(item)) { section = (secM && secM[1] ? secM[1] : item).replace(/[—\-–(]+.*$/, '').replace(/[()]/g,'').trim() || 'Section'; sections[section] = { name: section, count: 0, approved: 0, rejected: 0, pending: 0, done: 0, blocked: 0 }; continue; }
+    if (/^[—\-–\s]+$/.test(item)) continue;
+    const ap = norm(get(row, 'approval')), st = norm(get(row, 'status')), pl = norm(get(row, 'pipeline'));
+    const rec = { item, owner: get(row, 'owner'), approval: get(row, 'approval'), status: get(row, 'status'), pipeline: get(row, 'pipeline'), target: get(row, 'target'), section };
+    all.push(rec);
+    if (!sections[section]) sections[section] = { name: section, count: 0, approved: 0, rejected: 0, pending: 0, done: 0, blocked: 0 };
+    const s = sections[section]; s.count++;
+    if (ap === 'approved') s.approved++;
+    if (ap === 'rejected') s.rejected++;
+    if (ap === 'pending') s.pending++;
+    if (st === 'done' || pl === 'delivered' || pl === 'completed') s.done++;
+    if (pl === 'blocked' || st.includes('action required')) s.blocked++;
+  }
+
+  const totals = Object.values(sections).reduce((a, s) => ({ count: a.count + s.count, approved: a.approved + s.approved, rejected: a.rejected + s.rejected, pending: a.pending + s.pending, done: a.done + s.done, blocked: a.blocked + s.blocked }), { count: 0, approved: 0, rejected: 0, pending: 0, done: 0, blocked: 0 });
+
+  // Bottlenecks: rows that are rejected / blocked / action-required / overdue — capped 20
+  const isBottleneck = (r) => { const ap = norm(r.approval), st = norm(r.status), pl = norm(r.pipeline); return ap === 'rejected' || pl === 'blocked' || st.includes('action required') || st.includes('high risk') || (r.target && !isNaN(Date.parse(r.target)) && new Date(r.target) < new Date() && ap !== 'approved' && st !== 'done'); };
+  const bottlenecks = all.filter(isBottleneck).slice(0, 20);
+
+  // Wins: approved / done — a few highlights
+  const wins = all.filter(r => norm(r.approval) === 'approved' || norm(r.status) === 'done').slice(0, 8);
+
+  const sectionList = Object.values(sections).filter(s => s.count > 0).sort((a, b) => b.count - a.count);
+  return { sections: sectionList, totals, bottlenecks, wins, totalRows: all.length };
+}
+
 
 // Classify a row as good / focus / neutral (shared with Home summary)
 function classifyReportRow(row) {
@@ -5955,12 +6011,27 @@ function agileItems(space) {
     id: it.id, title: it.title, status: it.status || 'todo', priority: it.priority || 'medium',
     due: it.due || '', pct: it.status === 'done' ? 100 : 0, source: 'task', owner: it.assignee || '',
   }));
-  if (space.report && Array.isArray(space.report.items)) {
-    space.report.items.forEach((r, i) => {
-      const st = (r.status || '').toLowerCase();
-      const status = st === 'done' ? 'done' : st === 'in review' ? 'review' : st === 'in progress' ? 'inprog' : 'todo';
-      out.push({ id: 'r' + i, title: r.item, status, priority: (r.priority || 'medium').toLowerCase(), due: r.target || '', pct: r.pct || 0, source: 'report', owner: r.owner || '', approval: r.approval, pipeline: r.pipeline });
-    });
+  // From a client report, only surface ACTIONABLE rows on the board (bottlenecks
+  // + in-progress/review), not every row — large reports have hundreds of records.
+  const rep = space.report;
+  if (rep) {
+    const rows = (rep.summary && rep.summary.bottlenecks && rep.summary.bottlenecks.length)
+      ? rep.summary.bottlenecks
+      : (Array.isArray(rep.items) ? rep.items : []);
+    rows
+      .filter(r => r && r.item && !/^[—\-–\s]*section\b/i.test(r.item) && !/^[—\-–\s]+$/.test(r.item))
+      .slice(0, 40)
+      .forEach((r, i) => {
+        const st = (r.status || '').toLowerCase();
+        const ap = (r.approval || '').toLowerCase();
+        const pl = (r.pipeline || '').toLowerCase();
+        let status = 'todo';
+        if (st === 'done' || ap === 'approved' || pl === 'delivered') status = 'done';
+        else if (st.includes('review') || ap === 'pending') status = 'review';
+        else if (st === 'in progress') status = 'inprog';
+        const priority = (ap === 'rejected' || pl === 'blocked' || st.includes('action')) ? 'high' : 'medium';
+        out.push({ id: 'r' + i, title: r.item, status, priority, due: r.target || '', pct: r.pct || 0, source: 'report', owner: r.owner || '', approval: r.approval, pipeline: r.pipeline });
+      });
   }
   return out;
 }
@@ -6144,9 +6215,11 @@ function SpaceClientReport({ space, onUpdate }) {
   };
   const importPaste = () => {
     setErr('');
-    const items = rowsToItems(parseCSV(pasteText.trim()));
-    if (items.length === 0) { setErr('Could not find rows. Paste rows including the header line (Item, Owner, Status, …).'); return; }
-    onUpdate({ report: { items, uploadedAt: Date.now(), filename: 'Pasted data' } });
+    const rows = parseCSV(pasteText.trim());
+    const items = rowsToItems(rows);
+    const summary = summarizeReport(rows);
+    if ((!summary || summary.totalRows === 0) && items.length === 0) { setErr('Could not find rows. Paste rows including the header line (Item, Owner, Status, …).'); return; }
+    onUpdate({ report: { items, summary, uploadedAt: Date.now(), filename: 'Pasted data' } });
     setShowPaste(false); setPasteText('');
   };
 
@@ -6154,21 +6227,22 @@ function SpaceClientReport({ space, onUpdate }) {
     const f = e.target.files?.[0]; if (!f) return;
     setErr(''); setBusy(true);
     try {
-      let items = [];
+      let rows = [];
       if (/\.csv$/i.test(f.name)) {
         const text = await f.text();
-        items = rowsToItems(parseCSV(text));
+        rows = parseCSV(text);
       } else if (/\.xlsx?$/i.test(f.name)) {
         const XLSX = await loadSheetJS();
         if (!XLSX) { setErr('Could not load the Excel reader. Please re-save your file as CSV and upload that.'); setBusy(false); return; }
         const buf = await f.arrayBuffer();
         const wb = XLSX.read(buf, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
-        items = rowsToItems(rows);
+        rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
       } else { setErr('Please upload a .xlsx or .csv file.'); setBusy(false); return; }
-      if (items.length === 0) { setErr('No rows found. Make sure the sheet has an "Item" header and at least one row.'); setBusy(false); return; }
-      onUpdate({ report: { items, uploadedAt: Date.now(), filename: f.name } });
+      const items = rowsToItems(rows);
+      const summary = summarizeReport(rows);
+      if ((!summary || summary.totalRows === 0) && items.length === 0) { setErr('No rows found. Make sure the sheet has an "Item" header and at least one row.'); setBusy(false); return; }
+      onUpdate({ report: { items, summary, uploadedAt: Date.now(), filename: f.name } });
     } catch (e2) {
       setErr('Could not read that file: ' + (e2.message || 'unknown error') + '. Try uploading as CSV.');
     }
@@ -6204,31 +6278,31 @@ function SpaceClientReport({ space, onUpdate }) {
     );
   }
 
-  const items = report.items;
-  const total = items.length;
-  const approved = items.filter(i => norm(i.approval) === 'approved').length;
-  const rejected = items.filter(i => norm(i.approval) === 'rejected').length;
-  const pending = items.filter(i => norm(i.approval) === 'pending').length;
-  const done = items.filter(i => norm(i.status) === 'done').length;
-  const avgPct = total ? Math.round(items.reduce((s, i) => s + (i.pct || 0), 0) / total) : 0;
+  // Prefer the rolled-up summary (handles multi-section sheets); fall back to items.
+  const sum = report.summary;
+  const t = sum ? sum.totals : null;
+  const total = t ? t.count : report.items.length;
+  const approved = t ? t.approved : 0;
+  const rejected = t ? t.rejected : 0;
+  const pending = t ? t.pending : 0;
+  const done = t ? t.done : 0;
+  const blocked = t ? t.blocked : 0;
   const approvalRate = (approved + rejected) ? Math.round(approved / (approved + rejected) * 100) : 0;
-  const overdue = items.filter(i => i.target && !isNaN(Date.parse(i.target)) && new Date(i.target) < new Date() && norm(i.status) !== 'done').length;
-  const inPipeline = items.filter(i => norm(i.pipeline) !== 'delivered' && norm(i.status) !== 'done').length;
+  const progressPct = total ? Math.round(done / total * 100) : 0;
 
-  const stColor = (s) => { s = norm(s); return s === 'done' ? '#16A34A' : s === 'in review' ? '#D97706' : s === 'in progress' ? '#2563EB' : '#64748B'; };
   const apColor = (a) => { a = norm(a); return a === 'approved' ? '#16A34A' : a === 'rejected' ? '#DC2626' : '#D97706'; };
 
   const cards = [
-    { l: 'Overall progress', v: avgPct + '%', col: '#6366F1' },
-    { l: 'Approval rate', v: approvalRate + '%', col: approvalRate >= 70 ? '#16A34A' : approvalRate >= 40 ? '#D97706' : '#DC2626' },
-    { l: 'In pipeline / pending', v: inPipeline, col: '#0891B2' },
-    { l: 'Overdue', v: overdue, col: overdue ? '#DC2626' : '#16A34A' },
+    { l: 'Delivered', v: progressPct + '%', col: '#6366F1', sub: `${done}/${total} items` },
+    { l: 'Approval rate', v: approvalRate + '%', col: approvalRate >= 70 ? '#16A34A' : approvalRate >= 40 ? '#D97706' : '#DC2626', sub: `${approved} approved · ${rejected} rejected` },
+    { l: 'Pending', v: pending, col: '#D97706', sub: 'awaiting decision' },
+    { l: 'Blocked / action', v: blocked, col: blocked ? '#DC2626' : '#16A34A', sub: 'need attention' },
   ];
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ fontSize: 12.5, color: c.mut }}>From <strong style={{ color: c.text }}>{report.filename}</strong> · uploaded {new Date(report.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
+        <div style={{ fontSize: 12.5, color: c.mut }}>From <strong style={{ color: c.text }}>{report.filename}</strong> · {total} items · uploaded {new Date(report.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
         <div style={{ display: 'flex', gap: 8 }}>
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{ display: 'none' }}/>
           <button onClick={downloadTemplate} style={{ padding: '8px 12px', borderRadius: 10, border: `1px solid ${c.bord}`, background: 'transparent', color: c.sub, cursor: 'pointer', fontSize: 13 }}>⬇ Template</button>
@@ -6238,52 +6312,82 @@ function SpaceClientReport({ space, onUpdate }) {
       </div>
       {err && <div style={{ fontSize: 12.5, color: '#F87171', marginBottom: 12 }}>{err}</div>}
 
+      {/* Headline cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 18 }}>
         {cards.map(cd => (
           <div key={cd.l} style={{ padding: '16px 18px', borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}` }}>
             <div style={{ fontSize: 26, fontWeight: 800, color: cd.col }}>{cd.v}</div>
-            <div style={{ fontSize: 11.5, color: c.mut, marginTop: 3 }}>{cd.l}</div>
+            <div style={{ fontSize: 12, color: c.text, fontWeight: 600, marginTop: 3 }}>{cd.l}</div>
+            <div style={{ fontSize: 11, color: c.mut, marginTop: 1 }}>{cd.sub}</div>
           </div>
         ))}
       </div>
 
-      {/* Approval breakdown bar */}
-      <div style={{ borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}`, padding: 18, marginBottom: 18 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 700, color: c.text, marginBottom: 12 }}>Approval breakdown</div>
-        <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', marginBottom: 10 }}>
-          {approved > 0 && <div style={{ width: (approved / total * 100) + '%', background: '#16A34A' }}/>}
-          {pending > 0 && <div style={{ width: (pending / total * 100) + '%', background: '#D97706' }}/>}
-          {rejected > 0 && <div style={{ width: (rejected / total * 100) + '%', background: '#DC2626' }}/>}
+      {/* Approval breakdown */}
+      {(approved + pending + rejected) > 0 && (
+        <div style={{ borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}`, padding: 18, marginBottom: 18 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: c.text, marginBottom: 12 }}>Approval breakdown</div>
+          <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', marginBottom: 10, background: c.row }}>
+            {approved > 0 && <div style={{ width: (approved / (approved+pending+rejected) * 100) + '%', background: '#16A34A' }}/>}
+            {pending > 0 && <div style={{ width: (pending / (approved+pending+rejected) * 100) + '%', background: '#D97706' }}/>}
+            {rejected > 0 && <div style={{ width: (rejected / (approved+pending+rejected) * 100) + '%', background: '#DC2626' }}/>}
+          </div>
+          <div style={{ display: 'flex', gap: 18, fontSize: 12, color: c.sub, flexWrap: 'wrap' }}>
+            <span>🟢 Approved {approved}</span><span>🟠 Pending {pending}</span><span>🔴 Rejected {rejected}</span>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 18, fontSize: 12, color: c.sub, flexWrap: 'wrap' }}>
-          <span>🟢 Approved {approved}</span><span>🟠 Pending {pending}</span><span>🔴 Rejected {rejected}</span><span>✓ Done {done}/{total}</span>
-        </div>
-      </div>
+      )}
 
-      {/* Items table */}
-      <div style={{ borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}`, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 100px 110px 100px 90px 70px', gap: 10, padding: '11px 16px', borderBottom: `1px solid ${c.bord}`, fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.05em' }}>
-          <span>Item</span><span>Status</span><span>Approval</span><span>Target</span><span>Pipeline</span><span>%</span>
-        </div>
-        {items.map((it, i) => {
-          const cls = classifyReportRow(it);
-          return (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.6fr 100px 110px 100px 90px 70px', gap: 10, padding: '11px 16px', borderBottom: `1px solid ${c.bord}`, alignItems: 'center', borderLeft: `3px solid ${cls === 'good' ? '#16A34A' : cls === 'focus' ? '#DC2626' : 'transparent'}` }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, color: c.text, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.item}</div>
-                {it.owner && <div style={{ fontSize: 11, color: c.mut }}>{it.owner}</div>}
-              </div>
-              <span style={{ fontSize: 11.5, fontWeight: 600, color: stColor(it.status) }}>{it.status}</span>
-              <span style={{ fontSize: 11.5, fontWeight: 600, color: apColor(it.approval) }}>{it.approval}</span>
-              <span style={{ fontSize: 11.5, color: c.sub }}>{it.target || '—'}</span>
-              <span style={{ fontSize: 11.5, color: c.sub }}>{it.pipeline}</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ flex: 1, height: 5, borderRadius: 3, background: c.row, overflow: 'hidden' }}><div style={{ height: '100%', width: it.pct + '%', background: '#6366F1' }}/></div>
-                <span style={{ fontSize: 10.5, color: c.mut, width: 26 }}>{it.pct}%</span>
-              </div>
+      {/* Section roll-up */}
+      {sum && sum.sections.length > 1 && (
+        <div style={{ borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}`, overflow: 'hidden', marginBottom: 18 }}>
+          <div style={{ padding: '12px 16px', borderBottom: `1px solid ${c.bord}`, fontSize: 13.5, fontWeight: 700, color: c.text }}>By section</div>
+          {sum.sections.map((s, i) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.6fr 70px 90px 90px 90px', gap: 8, padding: '10px 16px', borderBottom: `1px solid ${c.bord}`, alignItems: 'center', fontSize: 12.5 }}>
+              <span style={{ color: c.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+              <span style={{ color: c.mut }}>{s.count} items</span>
+              <span style={{ color: '#16A34A' }}>{s.approved} ok</span>
+              <span style={{ color: '#D97706' }}>{s.pending} pending</span>
+              <span style={{ color: s.rejected || s.blocked ? '#DC2626' : c.mut }}>{s.rejected + s.blocked} stuck</span>
             </div>
-          );
-        })}
+          ))}
+        </div>
+      )}
+
+      {/* Bottlenecks */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div style={{ borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}`, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px', borderBottom: `1px solid ${c.bord}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#DC2626' }}/>
+            <span style={{ fontSize: 13.5, fontWeight: 700, color: c.text }}>Bottlenecks — needs focus</span>
+            <span style={{ fontSize: 12, color: c.mut, marginLeft: 'auto' }}>{sum ? sum.bottlenecks.length : 0}</span>
+          </div>
+          <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+            {sum && sum.bottlenecks.length ? sum.bottlenecks.map((r, i) => (
+              <div key={i} style={{ padding: '10px 16px', borderBottom: `1px solid ${c.bord}`, borderLeft: '3px solid #DC2626' }}>
+                <div style={{ fontSize: 12.5, color: c.text, fontWeight: 500 }}>{r.item}</div>
+                <div style={{ fontSize: 11, color: c.mut, marginTop: 2 }}>{r.section}{r.owner ? ' · ' + r.owner : ''} · <span style={{ color: apColor(r.approval) }}>{r.approval || r.status}</span>{r.target ? ' · ' + r.target : ''}</div>
+              </div>
+            )) : <div style={{ padding: '20px 16px', fontSize: 12.5, color: c.mut }}>No blockers or rejections. 🎉</div>}
+          </div>
+        </div>
+
+        {/* Wins */}
+        <div style={{ borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}`, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px', borderBottom: `1px solid ${c.bord}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#16A34A' }}/>
+            <span style={{ fontSize: 13.5, fontWeight: 700, color: c.text }}>Doing well</span>
+            <span style={{ fontSize: 12, color: c.mut, marginLeft: 'auto' }}>{sum ? sum.wins.length : 0}</span>
+          </div>
+          <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+            {sum && sum.wins.length ? sum.wins.map((r, i) => (
+              <div key={i} style={{ padding: '10px 16px', borderBottom: `1px solid ${c.bord}`, borderLeft: '3px solid #16A34A' }}>
+                <div style={{ fontSize: 12.5, color: c.text, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.item}</div>
+                <div style={{ fontSize: 11, color: c.mut, marginTop: 2 }}>{r.section}{r.owner ? ' · ' + r.owner : ''} · <span style={{ color: '#16A34A' }}>{r.approval || r.status}</span></div>
+              </div>
+            )) : <div style={{ padding: '20px 16px', fontSize: 12.5, color: c.mut }}>No approved items yet.</div>}
+          </div>
+        </div>
       </div>
     </div>
   );
