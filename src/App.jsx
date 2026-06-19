@@ -5681,6 +5681,7 @@ function SpaceWorkspace({ space, members, session, onBack, onUpdate, onDelete })
     { id: 'list',     label: 'List',     icon: '☰' },
     { id: 'calendar', label: 'Calendar', icon: '⊟' },
     { id: 'timeline', label: 'Timeline', icon: '↔' },
+    { id: 'agile',    label: 'Agile', icon: '🌀' },
     { id: 'report',   label: 'Client Report', icon: '📊' },
     { id: 'docs',     label: 'Docs',     icon: '◈' },
   ];
@@ -5801,6 +5802,7 @@ function SpaceWorkspace({ space, members, session, onBack, onUpdate, onDelete })
         </div>
       )}
 
+      {tab === 'agile' && <SpaceAgile space={space} onUpdate={onUpdate}/>}
       {tab === 'report' && <SpaceClientReport space={space} onUpdate={onUpdate}/>}
       {tab === 'docs' && <SpaceDocs space={space} onUpdate={onUpdate}/>}
 
@@ -5944,6 +5946,178 @@ function classifyReportRow(row) {
   return 'neutral';
 }
 
+// ─── AGILE: Scrum / Kanban boards + auto targets ──────────────────────────────
+// Auto-built from the space's work items AND uploaded client-report rows. No
+// manual board setup — it derives columns and cards from existing data.
+function agileItems(space) {
+  const out = [];
+  (space.items || []).forEach(it => out.push({
+    id: it.id, title: it.title, status: it.status || 'todo', priority: it.priority || 'medium',
+    due: it.due || '', pct: it.status === 'done' ? 100 : 0, source: 'task', owner: it.assignee || '',
+  }));
+  if (space.report && Array.isArray(space.report.items)) {
+    space.report.items.forEach((r, i) => {
+      const st = (r.status || '').toLowerCase();
+      const status = st === 'done' ? 'done' : st === 'in review' ? 'review' : st === 'in progress' ? 'inprog' : 'todo';
+      out.push({ id: 'r' + i, title: r.item, status, priority: (r.priority || 'medium').toLowerCase(), due: r.target || '', pct: r.pct || 0, source: 'report', owner: r.owner || '', approval: r.approval, pipeline: r.pipeline });
+    });
+  }
+  return out;
+}
+
+// Map to scrum columns: Backlog → To Do → In Progress → In Review → Done
+const SCRUM_COLS = [
+  { id: 'backlog', label: 'Backlog', match: ['todo'], filt: (i) => i.status === 'todo' && i.pct === 0, color: '#64748B' },
+  { id: 'todo', label: 'Sprint To Do', match: ['todo'], filt: (i) => i.status === 'todo' && i.pct > 0, color: '#6366F1' },
+  { id: 'inprog', label: 'In Progress', filt: (i) => i.status === 'inprog', color: '#2563EB' },
+  { id: 'review', label: 'In Review', filt: (i) => i.status === 'review', color: '#D97706' },
+  { id: 'done', label: 'Done', filt: (i) => i.status === 'done', color: '#16A34A' },
+];
+// Kanban: continuous flow with WIP limits
+const KANBAN_COLS = [
+  { id: 'todo', label: 'To Do', filt: (i) => i.status === 'todo', color: '#64748B', wip: 0 },
+  { id: 'inprog', label: 'Doing', filt: (i) => i.status === 'inprog', color: '#2563EB', wip: 3 },
+  { id: 'review', label: 'Review', filt: (i) => i.status === 'review', color: '#D97706', wip: 2 },
+  { id: 'done', label: 'Done', filt: (i) => i.status === 'done', color: '#16A34A', wip: 0 },
+];
+
+function deriveTargets(items) {
+  const open = items.filter(i => i.status !== 'done');
+  const today = new Date(); const in7 = new Date(Date.now() + 7 * 864e5); const in30 = new Date(Date.now() + 30 * 864e5);
+  const dueBy = (d) => open.filter(i => i.due && !isNaN(Date.parse(i.due)) && new Date(i.due) <= d);
+  const overdue = open.filter(i => i.due && !isNaN(Date.parse(i.due)) && new Date(i.due) < today);
+  const review = items.filter(i => i.status === 'review');
+  const inprog = items.filter(i => i.status === 'inprog');
+  const daily = [];
+  if (overdue.length) daily.push(`Clear ${overdue.length} overdue item${overdue.length > 1 ? 's' : ''} first: ${overdue.slice(0, 2).map(i => i.title).join(', ')}${overdue.length > 2 ? '…' : ''}`);
+  if (review.length) daily.push(`Push ${review.length} in-review item${review.length > 1 ? 's' : ''} to done (get sign-off)`);
+  if (inprog.length) daily.push(`Advance ${Math.min(inprog.length, 2)} in-progress item${inprog.length > 1 ? 's' : ''} today`);
+  if (daily.length === 0) daily.push('No urgent items — pull the top backlog item into progress.');
+  const weekly = [];
+  const dueWeek = dueBy(in7);
+  if (dueWeek.length) weekly.push(`Deliver ${dueWeek.length} item${dueWeek.length > 1 ? 's' : ''} due this week`);
+  weekly.push(`Move sprint completion toward 80%+ (currently ${items.length ? Math.round(items.filter(i => i.status === 'done').length / items.length * 100) : 0}%)`);
+  if (review.length) weekly.push('Resolve all pending client approvals');
+  const monthly = [];
+  const dueMonth = dueBy(in30);
+  if (dueMonth.length) monthly.push(`Complete ${dueMonth.length} item${dueMonth.length > 1 ? 's' : ''} due within 30 days`);
+  monthly.push('Keep rejection rate at 0 — review acceptance criteria before submitting');
+  monthly.push('Close out the backlog or re-prioritize stale items');
+  return { daily, weekly, monthly };
+}
+
+function SpaceAgile({ space, onUpdate }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const [mode, setMode] = useState('scrum');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiTargets, setAiTargets] = useState(space.aiTargets || null);
+  const items = agileItems(space);
+  const cols = mode === 'scrum' ? SCRUM_COLS : KANBAN_COLS;
+  const targets = deriveTargets(items);
+
+  const prioColor = p => p === 'critical' ? '#EF4444' : p === 'high' ? '#F87171' : p === 'medium' ? '#FBBF24' : '#818CF8';
+
+  const refineWithAI = async () => {
+    setAiBusy(true);
+    try {
+      const summary = items.map(i => `${i.title} [${i.status}, ${i.pct}%${i.due ? ', due ' + i.due : ''}${i.approval ? ', ' + i.approval : ''}]`).join('; ');
+      const prompt = `You are a scrum master following agile SOP. Project "${space.name}" has these work items: ${summary || 'none'}. Today is ${new Date().toDateString()}. Produce concrete targets in JSON exactly like {"daily":["..."],"weekly":["..."],"monthly":["..."]} with 2-3 short, actionable bullets each, prioritizing overdue items, client approvals, and sprint flow. Return ONLY the JSON.`;
+      const res = await askAI(prompt, { teamName: space.name });
+      const txt = typeof res === 'string' ? res : (res?.text || '');
+      const m = txt.match(/\{[\s\S]*\}/);
+      if (m) { const parsed = JSON.parse(m[0]); setAiTargets(parsed); onUpdate({ aiTargets: parsed }); }
+      else setAiTargets({ daily: [txt.slice(0, 200)], weekly: [], monthly: [] });
+    } catch (e) {
+      setAiTargets(null);
+    }
+    setAiBusy(false);
+  };
+
+  const shown = aiTargets || targets;
+
+  return (
+    <div>
+      {/* Mode toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div style={{ display: 'inline-flex', background: c.row, borderRadius: 10, padding: 3 }}>
+          {[['scrum', '🏃 Scrum'], ['kanban', '📋 Kanban']].map(([id, l]) => (
+            <button key={id} onClick={() => setMode(id)} style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: mode === id ? (dark ? '#1E2536' : '#fff') : 'transparent', color: mode === id ? c.text : c.mut, fontWeight: mode === id ? 700 : 500, fontSize: 13, cursor: 'pointer', boxShadow: mode === id ? '0 1px 3px rgba(0,0,0,.1)' : 'none' }}>{l}</button>
+          ))}
+        </div>
+        <div style={{ fontSize: 12.5, color: c.mut }}>
+          {mode === 'scrum' ? 'Sprint flow — auto-built from your items & client report.' : 'Continuous flow with WIP limits.'}
+        </div>
+        <div style={{ flex: 1 }}/>
+        <span style={{ fontSize: 12, color: c.mut }}>{items.length} items</span>
+      </div>
+
+      {items.length === 0 && (
+        <div style={{ padding: '24px', borderRadius: 12, border: `1.5px dashed ${c.bord}`, fontSize: 13, color: c.mut, textAlign: 'center', marginBottom: 18 }}>
+          Add work items (Board tab) or upload a client report — the Agile board fills itself automatically.
+        </div>
+      )}
+
+      {/* Board */}
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols.length},1fr)`, gap: 12, alignItems: 'flex-start', marginBottom: 22 }}>
+        {cols.map(col => {
+          const list = items.filter(col.filt);
+          const overWip = col.wip > 0 && list.length > col.wip;
+          return (
+            <div key={col.id} style={{ background: c.surf, border: `1px solid ${overWip ? '#F87171' : c.bord}`, borderRadius: 14, padding: 12, minHeight: 100 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12, padding: '0 4px' }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: col.color }}/>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: c.text }}>{col.label}</span>
+                <span style={{ fontSize: 11, color: overWip ? '#F87171' : c.mut, marginLeft: 'auto' }}>{list.length}{col.wip ? '/' + col.wip : ''}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {list.map(it => (
+                  <div key={it.id} style={{ background: dark ? 'rgba(255,255,255,.03)' : '#fff', border: `1px solid ${c.bord}`, borderRadius: 10, padding: '9px 11px', borderLeft: `3px solid ${prioColor(it.priority)}` }}>
+                    <div style={{ fontSize: 12.5, color: c.text, fontWeight: 500, marginBottom: 5, lineHeight: 1.4 }}>{it.title}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      {it.owner && <span style={{ fontSize: 10, color: c.mut }}>{it.owner}</span>}
+                      {it.due && <span style={{ fontSize: 10, color: c.mut }}>· {it.due}</span>}
+                      {it.source === 'report' && <span style={{ fontSize: 9, fontWeight: 700, color: '#6366F1', background: 'rgba(99,102,241,.12)', padding: '1px 5px', borderRadius: 4 }}>CLIENT</span>}
+                      {it.pct > 0 && it.pct < 100 && <span style={{ fontSize: 10, color: c.mut, marginLeft: 'auto' }}>{it.pct}%</span>}
+                    </div>
+                  </div>
+                ))}
+                {list.length === 0 && <div style={{ fontSize: 11, color: c.mut, textAlign: 'center', padding: '14px 0' }}>—</div>}
+              </div>
+              {overWip && <div style={{ fontSize: 10, color: '#F87171', marginTop: 8, textAlign: 'center' }}>⚠ Over WIP limit</div>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Targets */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: c.text }}>Targets {aiTargets && <span style={{ fontSize: 11, fontWeight: 600, color: '#6366F1', background: 'rgba(99,102,241,.12)', padding: '2px 8px', borderRadius: 20, marginLeft: 6 }}>AI refined</span>}</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {aiTargets && <button onClick={() => { setAiTargets(null); onUpdate({ aiTargets: null }); }} style={{ fontSize: 12, color: c.mut, background: 'none', border: 'none', cursor: 'pointer' }}>Reset to auto</button>}
+          <Btn v="ghost" onClick={refineWithAI} loading={aiBusy} style={{ fontSize: 12.5 }}>✦ Ask AI to refine</Btn>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
+        {[['Daily', shown.daily, '☀️'], ['Weekly', shown.weekly, '📅'], ['Monthly', shown.monthly, '🗓️']].map(([label, list, icon]) => (
+          <div key={label} style={{ borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}`, padding: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 10 }}>{icon} {label}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {(list || []).map((t, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12.5, color: c.sub, lineHeight: 1.5 }}>
+                  <span style={{ color: '#6366F1', flexShrink: 0 }}>▸</span><span>{t}</span>
+                </div>
+              ))}
+              {(!list || list.length === 0) && <div style={{ fontSize: 12, color: c.mut }}>—</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
 function SpaceClientReport({ space, onUpdate }) {
   const c = useC();
   const { dark } = useTheme();
@@ -5951,6 +6125,30 @@ function SpaceClientReport({ space, onUpdate }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const report = space.report || null; // { items:[], uploadedAt, filename }
+  const [showPaste, setShowPaste] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+
+  const TEMPLATE_HEADERS = ['Item', 'Owner', 'Status', 'Approval', 'Pipeline Stage', 'Target Date', '% Done', 'Priority', 'Notes'];
+  const TEMPLATE_SAMPLE = [
+    ['Homepage redesign', 'Aarav', 'In Progress', 'Pending', 'Active', '2026-07-10', '60', 'High', 'Client wants hero refresh'],
+    ['API integration', 'Meera', 'Done', 'Approved', 'Delivered', '2026-06-15', '100', 'High', 'Signed off'],
+    ['Onboarding flow', 'Dev', 'In Review', 'Pending', 'Active', '2026-06-12', '90', 'Medium', 'Awaiting feedback'],
+  ];
+  const downloadTemplate = () => {
+    const esc = (v) => /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+    const csv = [TEMPLATE_HEADERS, ...TEMPLATE_SAMPLE].map(r => r.map(esc).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'StandSync_Project_Report_Template.csv'; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const importPaste = () => {
+    setErr('');
+    const items = rowsToItems(parseCSV(pasteText.trim()));
+    if (items.length === 0) { setErr('Could not find rows. Paste rows including the header line (Item, Owner, Status, …).'); return; }
+    onUpdate({ report: { items, uploadedAt: Date.now(), filename: 'Pasted data' } });
+    setShowPaste(false); setPasteText('');
+  };
 
   const handleFile = async (e) => {
     const f = e.target.files?.[0]; if (!f) return;
@@ -5988,7 +6186,20 @@ function SpaceClientReport({ space, onUpdate }) {
         </div>
         {err && <div style={{ fontSize: 12.5, color: '#F87171', marginBottom: 12 }}>{err}</div>}
         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{ display: 'none' }}/>
-        <Btn onClick={() => fileRef.current?.click()} loading={busy}>⬆ Upload report</Btn>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+          <Btn onClick={() => fileRef.current?.click()} loading={busy}>⬆ Upload file</Btn>
+          <Btn v="ghost" onClick={() => setShowPaste(s => !s)}>📋 Paste data</Btn>
+        </div>
+        <div style={{ fontSize: 12.5, color: c.mut }}>
+          Don't have the format? <button onClick={downloadTemplate} style={{ background: 'none', border: 'none', color: c.accent, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, textDecoration: 'underline', padding: 0 }}>Download the template</button>, fill it in Excel or Google Sheets, then upload or paste it back.
+        </div>
+        {showPaste && (
+          <div style={{ marginTop: 16, textAlign: 'left', maxWidth: 520, marginLeft: 'auto', marginRight: 'auto' }}>
+            <div style={{ fontSize: 12, color: c.mut, marginBottom: 6 }}>Paste rows from your sheet (include the header line):</div>
+            <textarea value={pasteText} onChange={e => setPasteText(e.target.value)} placeholder={'Item,Owner,Status,Approval,Pipeline Stage,Target Date,% Done,Priority,Notes\nHomepage,Aarav,In Progress,Pending,Active,2026-07-10,60,High,...'} style={{ width: '100%', minHeight: 120, background: c.inp, border: `1px solid ${c.inpB}`, borderRadius: 10, padding: '10px 12px', color: c.text, fontSize: 12, fontFamily: 'monospace', outline: 'none', boxSizing: 'border-box', resize: 'vertical' }}/>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}><Btn onClick={importPaste} disabled={!pasteText.trim()}>Import pasted data</Btn></div>
+          </div>
+        )}
       </div>
     );
   }
@@ -6020,6 +6231,7 @@ function SpaceClientReport({ space, onUpdate }) {
         <div style={{ fontSize: 12.5, color: c.mut }}>From <strong style={{ color: c.text }}>{report.filename}</strong> · uploaded {new Date(report.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
         <div style={{ display: 'flex', gap: 8 }}>
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{ display: 'none' }}/>
+          <button onClick={downloadTemplate} style={{ padding: '8px 12px', borderRadius: 10, border: `1px solid ${c.bord}`, background: 'transparent', color: c.sub, cursor: 'pointer', fontSize: 13 }}>⬇ Template</button>
           <Btn v="ghost" onClick={() => fileRef.current?.click()} loading={busy}>↻ Re-upload</Btn>
           <button onClick={() => onUpdate({ report: null })} style={{ padding: '8px 12px', borderRadius: 10, border: `1px solid ${c.bord}`, background: 'transparent', color: c.mut, cursor: 'pointer', fontSize: 13 }}>Clear</button>
         </div>
