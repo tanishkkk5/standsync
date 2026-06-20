@@ -1346,7 +1346,190 @@ function SpaceSettingsModal({ spaceId, customSpaces, members, isManager, onClose
 }
 
 
-function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='default', onChangeTheme, isManager=false }) {
+// Modern line icons for the chat composer
+function chatIcon(name){
+  const p={width:18,height:18,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'};
+  switch(name){
+    case 'plus': return <svg {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+    case 'smile': return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>;
+    case 'send': return <svg {...p}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>;
+    case 'paperclip': return <svg {...p}><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>;
+    case 'image': return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
+    case 'gif': return <svg {...p} strokeWidth={1.8}><rect x="3" y="5" width="18" height="14" rx="2"/><text x="12" y="15.5" fontSize="7" fontWeight="700" textAnchor="middle" fill="currentColor" stroke="none">GIF</text></svg>;
+    case 'at': return <svg {...p}><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg>;
+    case 'poll': return <svg {...p}><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="6"/><line x1="18" y1="20" x2="18" y2="14"/></svg>;
+    case 'task': return <svg {...p}><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>;
+    default: return null;
+  }
+}
+
+function PollModal({ onClose, onCreate }){
+  const c=useC();
+  const [q,setQ]=useState(''); const [opts,setOpts]=useState(['','']);
+  const setOpt=(i,v)=>setOpts(o=>o.map((x,j)=>j===i?v:x));
+  const valid=q.trim()&&opts.filter(o=>o.trim()).length>=2;
+  return (
+    <Modal onClose={onClose} title="Create a poll" width={440}>
+      <Inp value={q} onChange={e=>setQ(e.target.value)} placeholder="Ask a question..." style={{ marginBottom:14 }} autoFocus/>
+      <div style={{ display:'flex',flexDirection:'column',gap:8,marginBottom:14 }}>
+        {opts.map((o,i)=>(
+          <div key={i} style={{ display:'flex',gap:8,alignItems:'center' }}>
+            <Inp value={o} onChange={e=>setOpt(i,e.target.value)} placeholder={'Option '+(i+1)} style={{ flex:1 }}/>
+            {opts.length>2&&<button onClick={()=>setOpts(o=>o.filter((_,j)=>j!==i))} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:18 }}>×</button>}
+          </div>
+        ))}
+      </div>
+      {opts.length<6&&<button onClick={()=>setOpts(o=>[...o,''])} style={{ background:'none',border:'none',color:'#6366F1',cursor:'pointer',fontSize:13,fontWeight:600,padding:0,marginBottom:18 }}>+ Add option</button>}
+      <div style={{ display:'flex',justifyContent:'flex-end',gap:8 }}>
+        <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={()=>onCreate({question:q.trim(),options:opts.filter(o=>o.trim()).map(o=>({text:o.trim(),votes:[]}))})} disabled={!valid}>Post poll</Btn>
+      </div>
+    </Modal>
+  );
+}
+
+function ChatTaskModal({ members, onClose, onCreate }){
+  const c=useC();
+  const [title,setTitle]=useState(''); const [assignee,setAssignee]=useState(members[0]?.email||''); const [priority,setPriority]=useState('medium');
+  return (
+    <Modal onClose={onClose} title="Create task from chat" width={440}>
+      <Inp value={title} onChange={e=>setTitle(e.target.value)} placeholder="Task description..." style={{ marginBottom:12 }} autoFocus/>
+      <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:18 }}>
+        <Sel label="Assign to" value={assignee} onChange={e=>setAssignee(e.target.value)}>{members.map(m=><option key={m.email} value={m.email}>{m.name||m.email}</option>)}</Sel>
+        <Sel label="Priority" value={priority} onChange={e=>setPriority(e.target.value)}>{['critical','high','medium','low'].map(v=><option key={v} value={v}>{v.charAt(0).toUpperCase()+v.slice(1)}</option>)}</Sel>
+      </div>
+      <div style={{ display:'flex',justifyContent:'flex-end',gap:8 }}>
+        <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={()=>{ const m=members.find(x=>x.email===assignee); onCreate({title:title.trim(),assignee_email:assignee,assignee_name:m?.name||assignee,priority,status:'todo',timeline:'Today EOD (6 PM)',notes:'',manager_note:'',blocker:''}); }} disabled={!title.trim()}>Create task</Btn>
+      </div>
+    </Modal>
+  );
+}
+
+function GroupCreateModal({ members, myEmail, onClose, onCreate }){
+  const c=useC(); const { dark }=useTheme(); const dpRef=useRef();
+  const [name,setName]=useState(''); const [desc,setDesc]=useState('');
+  const [dp,setDp]=useState(null); const [color,setColor]=useState('#6366F1');
+  const [visibility,setVisibility]=useState('public');
+  const [basedOn,setBasedOn]=useState('team');
+  const [type,setType]=useState('collaboration');
+  const [welcome,setWelcome]=useState('');
+  const [tags,setTags]=useState(''); const [step,setStep]=useState(1);
+  const [selected,setSelected]=useState(members.map(m=>m.email));
+  const [admins,setAdmins]=useState([myEmail]);
+  const [canSend,setCanSend]=useState('members');
+  const [canAddMembers,setCanAddMembers]=useState('admins');
+  const [canEditInfo,setCanEditInfo]=useState('admins');
+  const [canPin,setCanPin]=useState('admins');
+  const [notifications,setNotifications]=useState('all');
+
+  const COLORS=['#6366F1','#8B5CF6','#EC4899','#F59E0B','#10B981','#06B6D4','#EF4444','#64748B'];
+  const handleDp=(e)=>{ const f=e.target.files?.[0]; if(!f)return; const r=new FileReader(); r.onload=ev=>setDp(ev.target.result); r.readAsDataURL(f); };
+  const toggleMember=(email)=>setSelected(s=>s.includes(email)?s.filter(x=>x!==email):[...s,email]);
+  const toggleAdmin=(email)=>setAdmins(a=>a.includes(email)?a.filter(x=>x!==email):[...a,email]);
+
+  const VIS=[
+    {v:'public',l:'Public',d:'Anyone in the workspace can find and join'},
+    {v:'private',l:'Private',d:'Invite-only; visible but requires approval'},
+    {v:'secret',l:'Secret',d:'Hidden; only added members can see it'},
+  ];
+  const BASED=[{v:'team',l:'Team'},{v:'department',l:'Department'},{v:'project',l:'Project'},{v:'role',l:'Role-based'}];
+  const PERM=[{v:'everyone',l:'Everyone'},{v:'members',l:'Members'},{v:'admins',l:'Admins only'}];
+
+  const submit=()=>{ if(!name.trim())return; onCreate({ name,description:desc,dp,color,visibility,basedOn,type,welcome,tags:tags.split(',').map(t=>t.trim()).filter(Boolean),members:members.filter(m=>selected.includes(m.email)),admins,canSend,canAddMembers,canEditInfo,canPin,notifications }); };
+
+  return (
+    <Modal onClose={onClose} title="Create a group" width={560}>
+      {/* Step tabs */}
+      <div style={{ display:'flex',gap:6,marginBottom:18 }}>
+        {['Details','Members','Permissions'].map((s,i)=>(
+          <button key={s} onClick={()=>setStep(i+1)} style={{ flex:1,padding:'8px',borderRadius:9,border:'none',background:step===i+1?'rgba(99,102,241,.14)':c.row,color:step===i+1?'#6366F1':c.mut,fontWeight:step===i+1?700:500,fontSize:12.5,cursor:'pointer' }}>{i+1}. {s}</button>
+        ))}
+      </div>
+
+      {step===1&&<div style={{ display:'flex',flexDirection:'column',gap:14 }}>
+        {/* DP + name */}
+        <div style={{ display:'flex',gap:14,alignItems:'center' }}>
+          <button onClick={()=>dpRef.current?.click()} style={{ width:64,height:64,borderRadius:16,flexShrink:0,border:`2px dashed ${c.bord}`,background:dp?'transparent':color+'22',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',position:'relative' }}>
+            {dp?<img src={dp} alt="dp" style={{ width:'100%',height:'100%',objectFit:'cover' }}/>:<span style={{ fontSize:24,color }}>{name?name[0].toUpperCase():'+'}</span>}
+          </button>
+          <input ref={dpRef} type="file" accept="image/*" onChange={handleDp} style={{ display:'none' }}/>
+          <div style={{ flex:1 }}>
+            <Inp value={name} onChange={e=>setName(e.target.value)} placeholder="Group name" autoFocus/>
+            <button onClick={()=>dpRef.current?.click()} style={{ fontSize:11.5,color:'#6366F1',background:'none',border:'none',cursor:'pointer',padding:0,marginTop:6 }}>Upload group picture</button>
+          </div>
+        </div>
+        <Textarea value={desc} onChange={e=>setDesc(e.target.value)} placeholder="What's this group about? (description)" rows={2}/>
+        {/* Color/theme */}
+        <div>
+          <div style={{ fontSize:11.5,fontWeight:600,color:c.mut,marginBottom:7 }}>Group color</div>
+          <div style={{ display:'flex',gap:8 }}>{COLORS.map(col=><button key={col} onClick={()=>setColor(col)} style={{ width:26,height:26,borderRadius:8,background:col,border:color===col?'2px solid '+c.text:'2px solid transparent',cursor:'pointer' }}/>)}</div>
+        </div>
+        {/* Visibility */}
+        <div>
+          <div style={{ fontSize:11.5,fontWeight:600,color:c.mut,marginBottom:7 }}>Visibility</div>
+          <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
+            {VIS.map(o=>(
+              <div key={o.v} onClick={()=>setVisibility(o.v)} style={{ display:'flex',gap:10,padding:'9px 12px',borderRadius:10,cursor:'pointer',border:`1px solid ${visibility===o.v?'rgba(99,102,241,.4)':c.bord}`,background:visibility===o.v?'rgba(99,102,241,.07)':'transparent' }}>
+                <div style={{ width:15,height:15,borderRadius:'50%',marginTop:1,flexShrink:0,border:`2px solid ${visibility===o.v?'#6366F1':c.mut}`,background:visibility===o.v?'#6366F1':'transparent' }}/>
+                <div><div style={{ fontSize:12.5,fontWeight:600,color:c.text }}>{o.l}</div><div style={{ fontSize:11,color:c.mut }}>{o.d}</div></div>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Based on + type + tags */}
+        <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10 }}>
+          <Sel label="Based on" value={basedOn} onChange={e=>setBasedOn(e.target.value)}>{BASED.map(b=><option key={b.v} value={b.v}>{b.l}</option>)}</Sel>
+          <Sel label="Type" value={type} onChange={e=>setType(e.target.value)}><option value="collaboration">Collaboration</option><option value="announcements">Announcements</option></Sel>
+        </div>
+        <Inp label="Tags / categories (comma-separated)" value={tags} onChange={e=>setTags(e.target.value)} placeholder="engineering, q3, urgent"/>
+        <Inp label="Welcome message (optional)" value={welcome} onChange={e=>setWelcome(e.target.value)} placeholder="Posted when the group is created"/>
+      </div>}
+
+      {step===2&&<div>
+        <div style={{ fontSize:12,color:c.mut,marginBottom:10 }}>{selected.length} of {members.length} selected · tap the shield to make someone an admin</div>
+        <div style={{ display:'flex',flexDirection:'column',gap:4,maxHeight:320,overflowY:'auto' }}>
+          {members.map(m=>{ const sel=selected.includes(m.email); const adm=admins.includes(m.email); return (
+            <div key={m.email} style={{ display:'flex',alignItems:'center',gap:11,padding:'9px 10px',borderRadius:10,background:sel?'rgba(99,102,241,.06)':'transparent',border:`1px solid ${sel?'rgba(99,102,241,.2)':c.bord}` }}>
+              <input type="checkbox" checked={sel} onChange={()=>toggleMember(m.email)} style={{ accentColor:'#6366F1' }}/>
+              <Av member={m} size={32} url={m.avatar_url}/>
+              <div style={{ flex:1,minWidth:0 }}><div style={{ fontSize:13,fontWeight:600,color:c.text }}>{m.name||m.email}</div><div style={{ fontSize:11,color:c.mut }}>{m.email}</div></div>
+              <button onClick={()=>toggleAdmin(m.email)} disabled={!sel} title="Toggle admin" style={{ fontSize:11,fontWeight:700,padding:'4px 10px',borderRadius:20,border:`1px solid ${adm?'#A78BFA':c.bord}`,background:adm?'rgba(167,139,250,.15)':'transparent',color:adm?'#A78BFA':c.mut,cursor:sel?'pointer':'not-allowed',opacity:sel?1:.4 }}>{adm?'Admin':'Make admin'}</button>
+            </div>
+          ); })}
+        </div>
+      </div>}
+
+      {step===3&&<div style={{ display:'flex',flexDirection:'column',gap:14 }}>
+        {[
+          {l:'Who can send messages',v:canSend,set:setCanSend},
+          {l:'Who can add members',v:canAddMembers,set:setCanAddMembers},
+          {l:'Who can edit group info',v:canEditInfo,set:setCanEditInfo},
+          {l:'Who can pin messages',v:canPin,set:setCanPin},
+        ].map(p=>(
+          <div key={p.l} style={{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:12 }}>
+            <span style={{ fontSize:13,color:c.text }}>{p.l}</span>
+            <select value={p.v} onChange={e=>p.set(e.target.value)} style={{ background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:8,padding:'6px 10px',color:c.text,fontSize:12.5,outline:'none' }}>{PERM.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}</select>
+          </div>
+        ))}
+        <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,paddingTop:6,borderTop:`1px solid ${c.bord}` }}>
+          <span style={{ fontSize:13,color:c.text }}>Default notifications</span>
+          <select value={notifications} onChange={e=>setNotifications(e.target.value)} style={{ background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:8,padding:'6px 10px',color:c.text,fontSize:12.5,outline:'none' }}><option value="all">All messages</option><option value="mentions">Mentions only</option><option value="none">Muted</option></select>
+        </div>
+      </div>}
+
+      <div style={{ display:'flex',justifyContent:'space-between',gap:8,marginTop:20 }}>
+        <div>{step>1&&<Btn v="ghost" onClick={()=>setStep(step-1)}>Back</Btn>}</div>
+        <div style={{ display:'flex',gap:8 }}>
+          <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+          {step<3?<Btn onClick={()=>setStep(step+1)} disabled={step===1&&!name.trim()}>Next</Btn>:<Btn onClick={submit} disabled={!name.trim()}>Create group</Btn>}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='default', onChangeTheme, isManager=false, onCreateTask }) {
   const c=useC();
   const [msg,setMsg]=useState('');
   const [activeSpace,setActiveSpace]=useState('general');
@@ -1378,7 +1561,12 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
   const [showFiles,setShowFiles]=useState(false);
   const [contextMenu,setContextMenu]=useState(null);
   const [reactions,setReactions]=useState({}); // {msgId: {emoji: [email,...]}}
+  const [pollVotes,setPollVotes]=useState({}); // {msgId: optionIndex} — this user's vote per poll
   const [replyTo,setReplyTo]=useState(null);
+  const [showQuick,setShowQuick]=useState(false);
+  const [showMention,setShowMention]=useState(false);
+  const [showPoll,setShowPoll]=useState(false);
+  const [showTaskModal,setShowTaskModal]=useState(false);
   const bottomRef=useRef(); const fileRef=useRef(); const attachRef=useRef(); const inputRef=useRef();
 
   const myEmail=session?.user?.email||'demo@standsync.app';
@@ -1414,6 +1602,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
 
   const fmtSize=(b)=>b>1048576?(b/1048576).toFixed(1)+'MB':b>1024?(b/1024).toFixed(0)+'KB':b+'B';
 
+  const votePoll=(msgId,optIdx)=>setPollVotes(p=>({...p,[msgId]:p[msgId]===optIdx?undefined:optIdx}));
   const addReaction=(msgId,emoji)=>{
     setReactions(prev=>{
       const r={...prev};
@@ -1449,7 +1638,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
     const dmTo=isDM?activeSpace.slice(3):null;
     onSend({
       id:'m'+Date.now(),
-      text:type==='text'?text.trim():'',
+      text:(type==='text'||type==='poll'||type==='tasknote')?text.trim():'',
       type,url,filename,filesize,
       sender_email:myEmail,
       sender_name:myName,
@@ -1484,6 +1673,25 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
     setCustomSpaces(updated);
     try{localStorage.setItem('ss-spaces',JSON.stringify(updated));}catch{}
     setActiveSpace(id); setShowNewSpace(false); setNewSpaceName(''); setNewSpaceType('collaboration');
+  };
+  // Rich group creation from the GroupCreateModal
+  const createGroup=(cfg)=>{
+    const id='space-'+(cfg.name||'group').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')+'-'+Date.now().toString(36).slice(-4);
+    const space={ id, name:cfg.name.trim(), label:cfg.name.trim(), type:cfg.type==='announcements'?'announcements':'collaboration',
+      description:cfg.description||'', dp:cfg.dp||null, color:cfg.color||'#6366F1', visibility:cfg.visibility||'public',
+      basedOn:cfg.basedOn||'team', tags:cfg.tags||[], welcome:cfg.welcome||'',
+      settings:{ access:cfg.visibility==='public'?'organisation':'invite', allowRequests:cfg.visibility!=='secret',
+        canSend:cfg.canSend||'members', whoManages:cfg.canAddMembers||'admins', canModify:cfg.canEditInfo||'admins',
+        canPin:cfg.canPin||'admins', canHistory:'members', canAtAll:'members', canManageApps:'admins', canManageWebhooks:'admins',
+        notifications:cfg.notifications||'all',
+        members:(cfg.members&&cfg.members.length?cfg.members:members.map(m=>({email:m.email,name:m.name||m.email}))).map(m=>({email:m.email,name:m.name||m.email,role:(cfg.admins||[]).includes(m.email)?'admin':'member'}))
+      }
+    };
+    const updated=[...customSpaces,space];
+    setCustomSpaces(updated);
+    try{localStorage.setItem('ss-spaces',JSON.stringify(updated));}catch{}
+    if(cfg.welcome) onSend?.({space:id,text:cfg.welcome,type:'text'});
+    setActiveSpace(id); setShowNewSpace(false);
   };
   const updateSpaceSettings=(spaceId, newSettings)=>{
     // Update in unified spaceSettings store (works for both default and custom spaces)
@@ -1524,6 +1732,28 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
   };
 
   const renderMsg=(m)=>{
+    if(m.type==='poll'){
+      let poll; try{ poll=JSON.parse(m.text); }catch{ return <span>{m.text}</span>; }
+      const myVote=pollVotes[m.id];
+      // Overlay this user's local vote onto the counts
+      const opts=poll.options.map((o,i)=>{ const base=(o.votes||[]).filter(v=>v!==myEmail); const list=myVote===i?[...base,myEmail]:base; return {...o,votes:list}; });
+      const total=opts.reduce((s,o)=>s+o.votes.length,0);
+      return (
+        <div style={{ minWidth:240,maxWidth:340,background:c.surf,border:`1px solid ${c.bord}`,borderRadius:12,padding:'12px 14px' }}>
+          <div style={{ display:'flex',alignItems:'center',gap:7,marginBottom:10 }}><span style={{ color:'#6366F1' }}>{chatIcon('poll')}</span><span style={{ fontSize:13.5,fontWeight:700,color:c.text }}>{poll.question}</span></div>
+          <div style={{ display:'flex',flexDirection:'column',gap:7 }}>
+            {opts.map((o,i)=>{ const votes=o.votes.length; const pctv=total?Math.round(votes/total*100):0; const voted=myVote===i; return (
+              <button key={i} onClick={()=>votePoll(m.id,i)} style={{ position:'relative',textAlign:'left',padding:'8px 11px',borderRadius:9,border:`1px solid ${voted?'#6366F1':c.bord}`,background:'transparent',cursor:'pointer',overflow:'hidden' }}>
+                <div style={{ position:'absolute',inset:0,width:pctv+'%',background:voted?'rgba(99,102,241,.16)':'rgba(128,128,128,.08)',transition:'width .3s' }}/>
+                <div style={{ position:'relative',display:'flex',justifyContent:'space-between',fontSize:12.5,color:c.text }}><span>{o.text}{voted?' ✓':''}</span><span style={{ color:c.mut,fontWeight:600 }}>{pctv}%</span></div>
+              </button>
+            ); })}
+          </div>
+          <div style={{ fontSize:11,color:c.mut,marginTop:8 }}>{total} vote{total!==1?'s':''} · tap to vote</div>
+        </div>
+      );
+    }
+    if(m.type==='tasknote') return <div style={{ display:'inline-flex',alignItems:'center',gap:8,background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.25)',borderRadius:10,padding:'8px 12px',fontSize:13,color:c.text }}><span style={{ color:'#6366F1' }}>{chatIcon('task')}</span>{m.text.replace('📋 ','')}</div>;
     if(m.type==='image') return <img src={m.url} alt="img" onClick={()=>openFile(m.url,m.filename)} style={{ maxWidth:260,maxHeight:260,borderRadius:10,objectFit:'cover',cursor:'pointer',display:'block' }}/>;
     if(m.type==='gif') return <img src={m.url} alt="gif" style={{ maxWidth:260,borderRadius:10,display:'block' }}/>;
     if(m.type==='video') return <video src={m.url} controls style={{ maxWidth:280,borderRadius:10,display:'block' }}/>;
@@ -1575,26 +1805,6 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
             <span style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em' }}>Spaces</span>
             {isManager&&<button onClick={()=>setShowNewSpace(!showNewSpace)} style={{ width:20,height:20,borderRadius:5,background:'transparent',border:'none',color:c.mut,cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700 }} title="Create space">+</button>}
           </div>
-          {showNewSpace&&isManager&&(
-            <div style={{ margin:'4px 6px 8px',padding:'12px',background:c.surf,borderRadius:12,border:`1px solid ${c.bord}` }}>
-              <div style={{ fontSize:12,fontWeight:700,color:c.text,marginBottom:8 }}>Create a space</div>
-              <input value={newSpaceName} onChange={e=>setNewSpaceName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')addCustomSpace();if(e.key==='Escape')setShowNewSpace(false);}} placeholder="Space name..." autoFocus style={{ width:'100%',background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:7,padding:'6px 10px',color:c.text,fontSize:12,outline:'none',boxSizing:'border-box',marginBottom:8 }}/>
-              <div style={{ fontSize:11,fontWeight:600,color:c.mut,marginBottom:5 }}>What is this space for?</div>
-              {[{v:'collaboration',l:'Collaboration',d:'Share files, assign tasks and organise conversations'},{v:'announcements',l:'Announcements',d:'Broadcast and share updates with your group'}].map(t=>(
-                <div key={t.v} onClick={()=>setNewSpaceType(t.v)} style={{ display:'flex',alignItems:'flex-start',gap:8,padding:'7px 8px',borderRadius:8,cursor:'pointer',background:newSpaceType===t.v?'rgba(99,102,241,.1)':'transparent',marginBottom:4,border:newSpaceType===t.v?`1px solid rgba(99,102,241,.3)`:`1px solid transparent` }}>
-                  <div style={{ width:14,height:14,borderRadius:'50%',border:`2px solid ${newSpaceType===t.v?'#818CF8':'rgba(128,128,128,.4)'}`,background:newSpaceType===t.v?'#818CF8':'transparent',marginTop:1,flexShrink:0 }}/>
-                  <div>
-                    <div style={{ fontSize:12,fontWeight:600,color:c.text }}>{t.l}</div>
-                    <div style={{ fontSize:10,color:c.mut }}>{t.d}</div>
-                  </div>
-                </div>
-              ))}
-              <div style={{ display:'flex',gap:5,marginTop:8 }}>
-                <button onClick={addCustomSpace} disabled={!newSpaceName.trim()} style={{ flex:1,padding:'6px',borderRadius:7,background:'#6366F1',border:'none',color:'#fff',cursor:'pointer',fontSize:12,fontWeight:600 }}>Create</button>
-                <button onClick={()=>setShowNewSpace(false)} style={{ padding:'6px 10px',borderRadius:7,background:'transparent',border:`1px solid ${c.bord}`,color:c.mut,cursor:'pointer',fontSize:12 }}>Cancel</button>
-              </div>
-            </div>
-          )}
           {[...DEFAULT_SPACES,...customSpaces].map(sp=>(
             <div key={sp.id} style={{ display:'flex',alignItems:'center',gap:1 }}
               onMouseEnter={e=>e.currentTarget.querySelector('.sp-actions')&&(e.currentTarget.querySelector('.sp-actions').style.opacity='1')}
@@ -1856,19 +2066,53 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
             </div>
           )}
 
+          {/* Quick-actions popup */}
+          {showQuick&&(
+            <div onClick={e=>e.stopPropagation()} style={{ position:'absolute',bottom:54,left:12,zIndex:30,background:c.dark?'#161B2E':'#fff',border:`1px solid ${c.bord}`,borderRadius:14,boxShadow:'0 12px 40px rgba(0,0,0,.3)',padding:8,width:230 }}>
+              {[
+                {ic:'paperclip',label:'Attach file',act:()=>{attachRef.current.click();}},
+                {ic:'image',label:'Photo or video',act:()=>{fileRef.current.click();}},
+                {ic:'gif',label:'GIF',act:()=>{setShowGif(true);setShowEmoji(false);}},
+                {ic:'at',label:'Mention someone',act:()=>{setShowMention(true);}},
+                {ic:'poll',label:'Create poll',act:()=>setShowPoll(true)},
+                {ic:'task',label:'Create task from chat',act:()=>setShowTaskModal(true)},
+              ].map(a=>(
+                <button key={a.label} onClick={()=>{a.act();setShowQuick(false);}} style={{ display:'flex',alignItems:'center',gap:11,width:'100%',padding:'9px 10px',background:'transparent',border:'none',borderRadius:9,cursor:'pointer',color:c.text,fontSize:13,textAlign:'left' }}
+                  onMouseEnter={e=>e.currentTarget.style.background=c.row} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                  <span style={{ width:30,height:30,borderRadius:8,background:c.row,display:'flex',alignItems:'center',justifyContent:'center',color:'#6366F1',flexShrink:0 }}>{chatIcon(a.ic)}</span>
+                  {a.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Mention picker */}
+          {showMention&&(
+            <div onClick={e=>e.stopPropagation()} style={{ position:'absolute',bottom:54,left:12,zIndex:30,background:c.dark?'#161B2E':'#fff',border:`1px solid ${c.bord}`,borderRadius:14,boxShadow:'0 12px 40px rgba(0,0,0,.3)',padding:8,width:240,maxHeight:240,overflowY:'auto' }}>
+              <div style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.05em',padding:'4px 8px 8px' }}>Mention</div>
+              {members.map(m=>(
+                <button key={m.email} onClick={()=>{setMsg(x=>x+'@'+(m.name||m.email.split('@')[0])+' ');setShowMention(false);inputRef.current?.focus();}} style={{ display:'flex',alignItems:'center',gap:10,width:'100%',padding:'7px 8px',background:'transparent',border:'none',borderRadius:9,cursor:'pointer',color:c.text,fontSize:13,textAlign:'left' }}
+                  onMouseEnter={e=>e.currentTarget.style.background=c.row} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                  <Av member={m} size={26} url={m.avatar_url}/>{m.name||m.email.split('@')[0]}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Main input */}
-          <div style={{ display:'flex',alignItems:'center',gap:7,padding:'8px 12px',background:c.surf,border:`1px solid ${c.bord}`,borderRadius:(replyTo||showGif||showEmoji)?'0 0 12px 12px':'12px',boxShadow:'0 1px 4px rgba(0,0,0,.06)' }}>
+          <div style={{ position:'relative',display:'flex',alignItems:'center',gap:5,padding:'8px 12px',background:c.surf,border:`1px solid ${c.bord}`,borderRadius:(replyTo||showGif||showEmoji)?'0 0 12px 12px':'12px',boxShadow:'0 1px 4px rgba(0,0,0,.06)' }}>
             <input ref={fileRef} type="file" accept="image/*,video/*" onChange={handleFile} style={{ display:'none' }}/>
             <input ref={attachRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.mp3,.wav,.ogg,video/*,image/*,application/*" onChange={handleFile} style={{ display:'none' }}/>
-            <button onClick={e=>{e.stopPropagation();setShowEmoji(!showEmoji);setShowGif(false);}} title="Emoji" style={{ width:32,height:32,borderRadius:8,border:'none',background:'transparent',cursor:'pointer',fontSize:20,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>😊</button>
-            <button onClick={()=>{attachRef.current.click();}} title="Attach file" style={{ width:32,height:32,borderRadius:8,border:'none',background:'transparent',cursor:'pointer',fontSize:17,display:'flex',alignItems:'center',justifyContent:'center',color:c.mut,flexShrink:0 }}>📎</button>
-            <button onClick={()=>{fileRef.current.click();}} title="Image" style={{ width:32,height:32,borderRadius:8,border:'none',background:'transparent',cursor:'pointer',fontSize:17,display:'flex',alignItems:'center',justifyContent:'center',color:c.mut,flexShrink:0 }}>🖼️</button>
-            <button onClick={e=>{e.stopPropagation();setShowGif(!showGif);setShowEmoji(false);}} title="GIF" style={{ height:28,padding:'0 8px',borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',fontSize:11,fontWeight:700,color:c.mut,flexShrink:0 }}>GIF</button>
+            <button onClick={e=>{e.stopPropagation();setShowQuick(!showQuick);setShowMention(false);setShowEmoji(false);setShowGif(false);}} title="More" style={{ width:34,height:34,borderRadius:9,border:'none',background:showQuick?'rgba(99,102,241,.14)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:showQuick?'#6366F1':c.mut,flexShrink:0,transition:'all .15s' }}>{chatIcon('plus')}</button>
+            <button onClick={e=>{e.stopPropagation();setShowEmoji(!showEmoji);setShowGif(false);setShowQuick(false);}} title="Emoji" style={{ width:34,height:34,borderRadius:9,border:'none',background:showEmoji?'rgba(99,102,241,.14)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:showEmoji?'#6366F1':c.mut,flexShrink:0 }}>{chatIcon('smile')}</button>
             <input ref={inputRef} value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg(msg);}}} placeholder={'Message '+(activeSpace.startsWith('dm-')?'@ ':'# ')+activeLabel} style={{ flex:1,background:'transparent',border:'none',color:c.text,fontSize:14,outline:'none',lineHeight:1.4 }}/>
-            <button onClick={()=>sendMsg(msg)} disabled={!msg.trim()} style={{ width:34,height:34,borderRadius:9,background:msg.trim()?'#6366F1':'transparent',border:msg.trim()?'none':`1px solid ${c.bord}`,color:msg.trim()?'#fff':c.mut,cursor:msg.trim()?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',fontSize:17,flexShrink:0,transition:'all .15s' }}>↑</button>
+            <button onClick={()=>sendMsg(msg)} disabled={!msg.trim()} style={{ width:34,height:34,borderRadius:9,background:msg.trim()?'#6366F1':'transparent',border:msg.trim()?'none':`1px solid ${c.bord}`,color:msg.trim()?'#fff':c.mut,cursor:msg.trim()?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all .15s' }}>{chatIcon('send')}</button>
           </div>
         </div>
       </div>
+      {showPoll&&<PollModal onClose={()=>setShowPoll(false)} onCreate={(poll)=>{sendMsg(JSON.stringify(poll),'poll');setShowPoll(false);}}/>}
+      {showTaskModal&&<ChatTaskModal members={members} onClose={()=>setShowTaskModal(false)} onCreate={(t)=>{ if(onCreateTask)onCreateTask(t); sendMsg('📋 Created task: '+t.title,'tasknote'); setShowTaskModal(false); }}/>}
+      {showNewSpace&&isManager&&<GroupCreateModal members={members} myEmail={myEmail} onClose={()=>setShowNewSpace(false)} onCreate={createGroup}/>}
     </div>
   );
 }
@@ -3024,28 +3268,82 @@ function AssignModal({ members, onClose, onAdd }) {
     <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}><Btn v="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={submit} disabled={!title.trim()}>Assign task</Btn></div></Modal>;
 }
 
-function TeamTab({ tasks, members, isManager = true }) {
+function TeamTab({ tasks, members, isManager = true, teamId = 'demo' }) {
   const c=useC();
-  if (!isManager) {
-    // Read-only directory for members: names, roles, no performance/tracking
-    return (
-      <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:14 }}>
-        {members.map(member=>(
-          <Card key={member.id||member.email} style={{ padding:'18px 20px' }}>
-            <div style={{ display:'flex',alignItems:'center',gap:12 }}>
-              <Av member={member} size={44} url={member.avatar_url}/>
-              <div style={{ flex:1,minWidth:0 }}>
-                <div style={{ fontSize:14,fontWeight:700,color:c.text,marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{member.name||member.email}</div>
-                <div style={{ fontSize:11.5,color:c.mut,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{member.email}</div>
-                <div style={{ display:'inline-block',marginTop:7,fontSize:10.5,fontWeight:700,color:member.role==='manager'?'#A78BFA':c.sub,background:member.role==='manager'?'rgba(124,92,255,.14)':'rgba(128,128,128,.1)',padding:'2px 9px',borderRadius:20,textTransform:'capitalize' }}>{member.designation||member.role||'Member'}</div>
-              </div>
-            </div>
+  const { dark } = useTheme();
+  const [now,setNow]=useState(Date.now());
+  useEffect(()=>{ const t=setInterval(()=>setNow(Date.now()),20000); return ()=>clearInterval(t); },[]);
+
+  // Live availability from attendance store (online / on break / clocked-in)
+  const day=new Date().toISOString().slice(0,10);
+  let att={};
+  try{ att=JSON.parse(localStorage.getItem('ss-attendance-'+teamId+'-'+day)||'{}'); }catch{}
+  const presence=(email)=>{
+    const r=att[email]||{};
+    const online=r.online!==false && r.lastSeen && (now-r.lastSeen)<70000;
+    const onBreak=(r.breaks||[]).some(b=>!b.end);
+    if(onBreak) return {label:'On break',col:'#F59E0B',dot:'#F59E0B'};
+    if(online) return {label:'Online',col:'#34D399',dot:'#34D399'};
+    if(r.clockIn && !r.clockOut) return {label:'Away',col:'#94A3B8',dot:'#FBBF24'};
+    return {label:'Offline',col:'#94A3B8',dot:'#94A3B8'};
+  };
+  const roleLabel=(m)=> m.role==='manager'?'Manager':m.role==='team_lead'?'Team Lead':(m.designation||'Member');
+  const roleColor=(m)=> m.role==='manager'?'#A78BFA':m.role==='team_lead'?'#38BDF8':c.sub;
+
+  // Reporting structure: managers at top
+  const sorted=[...members].sort((a,b)=>{ const rank=r=>r==='manager'?0:r==='team_lead'?1:2; return rank(a.role)-rank(b.role); });
+  const managers=sorted.filter(m=>m.role==='manager');
+  const leads=sorted.filter(m=>m.role==='team_lead');
+
+  return (
+    <div>
+      {/* Team summary strip — composition & availability (NOT task metrics) */}
+      <div style={{ display:'flex',gap:12,flexWrap:'wrap',marginBottom:18 }}>
+        {[
+          {l:'Members',v:members.length,col:'#818CF8'},
+          {l:'Managers',v:managers.length,col:'#A78BFA'},
+          {l:'Team leads',v:leads.length,col:'#38BDF8'},
+          {l:'Online now',v:members.filter(m=>presence(m.email).label==='Online').length,col:'#34D399'},
+        ].map(s=>(
+          <Card key={s.l} style={{ flex:'1 1 140px',padding:'14px 18px' }}>
+            <div style={{ fontSize:24,fontWeight:800,color:s.col }}>{s.v}</div>
+            <div style={{ fontSize:11,color:c.mut,textTransform:'uppercase',letterSpacing:'.05em',marginTop:2 }}>{s.l}</div>
           </Card>
         ))}
       </div>
-    );
-  }
-  return <div style={{ display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:14 }}>{members.map(member=>{ const mt=tasks.filter(t=>t.assignee_email===member.email); const done=mt.filter(t=>t.status==='done').length,inProg=mt.filter(t=>t.status==='in-progress').length,blocked=mt.filter(t=>t.status==='blocked').length; const pct=mt.length?Math.round(done/mt.length*100):0,pc=pct===100?'#34D399':pct>=50?'#818CF8':'#F97316'; return(<Card key={member.id||member.email} style={{ padding:'20px 22px',border:blocked>0?'1px solid rgba(239,68,68,.3)':`1px solid ${c.bord}` }}><div style={{ display:'flex',alignItems:'center',gap:12,marginBottom:14 }}><Av member={member} size={44} url={member.avatar_url}/><div style={{ flex:1 }}><div style={{ fontSize:14,fontWeight:700,color:c.text,marginBottom:2 }}>{member.name||member.email}</div><div style={{ fontSize:11,color:c.mut }}>{member.email}</div></div><div style={{ textAlign:'right' }}><div style={{ fontSize:22,fontWeight:800,color:pc }}>{pct}%</div><div style={{ fontSize:10,color:c.mut }}>{done}/{mt.length}</div></div></div><Bar pct={pct} color={`linear-gradient(90deg,${member.color||'#818CF8'}80,${member.color||'#818CF8'})`} h={5} style={{ marginBottom:12 }}/><div style={{ display:'flex',gap:8,marginBottom:12 }}>{[{l:'In prog',v:inProg,col:'#38BDF8'},{l:'Done',v:done,col:'#34D399'},{l:'Blocked',v:blocked,col:'#EF4444'}].map(s=><div key={s.l} style={{ flex:1,background:s.v>0?s.col+'15':'rgba(128,128,128,.07)',border:`1px solid ${s.v>0?s.col+'30':c.bord}`,borderRadius:8,padding:'8px 6px',textAlign:'center' }}><div style={{ fontSize:16,fontWeight:700,color:s.v>0?s.col:c.mut }}>{s.v}</div><div style={{ fontSize:9,color:c.mut,textTransform:'uppercase',letterSpacing:'.05em',marginTop:2 }}>{s.l}</div></div>)}</div>{mt.length===0?<div style={{ fontSize:12,color:c.mut,textAlign:'center',padding:'8px 0' }}>No tasks yet</div>:mt.slice(0,3).map(t=><div key={t.id} style={{ display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderTop:`1px solid ${c.bord}` }}><div style={{ width:6,height:6,borderRadius:'50%',background:getPriority(t.priority).color,flexShrink:0 }}/><span style={{ flex:1,fontSize:12,color:t.status==='done'?c.mut:c.sub,textDecoration:t.status==='done'?'line-through':'none' }}>{t.title}</span><SBadge status={t.status}/></div>)}{mt.length>3&&<div style={{ fontSize:11,color:c.mut,textAlign:'center',marginTop:8 }}>+{mt.length-3} more</div>}{blocked>0&&<div style={{ marginTop:10,padding:'8px 12px',background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:8,fontSize:12,color:'#F87171' }}>⚠️ {blocked} blocked</div>}</Card>);})}</div>;
+
+      {/* Directory — identity, role, availability, current workload as a COUNT */}
+      <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:14 }}>
+        {sorted.map(member=>{
+          const p=presence(member.email);
+          const openCount=tasks.filter(t=>t.assignee_email===member.email && t.status!=='done').length;
+          return (
+            <Card key={member.id||member.email} style={{ padding:'18px 20px' }}>
+              <div style={{ display:'flex',alignItems:'flex-start',gap:12 }}>
+                <div style={{ position:'relative',flexShrink:0 }}>
+                  <Av member={member} size={46} url={member.avatar_url}/>
+                  <span style={{ position:'absolute',bottom:0,right:0,width:13,height:13,borderRadius:'50%',background:p.dot,border:`2px solid ${c.surf}` }}/>
+                </div>
+                <div style={{ flex:1,minWidth:0 }}>
+                  <div style={{ fontSize:14,fontWeight:700,color:c.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{member.name||member.email}</div>
+                  <div style={{ fontSize:11.5,color:c.mut,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{member.email}</div>
+                  <div style={{ display:'flex',alignItems:'center',gap:6,marginTop:8,flexWrap:'wrap' }}>
+                    <span style={{ fontSize:10.5,fontWeight:700,color:roleColor(member),background:member.role==='manager'?'rgba(124,92,255,.14)':member.role==='team_lead'?'rgba(56,189,248,.14)':'rgba(128,128,128,.1)',padding:'2px 9px',borderRadius:20 }}>{roleLabel(member)}</span>
+                    <span style={{ fontSize:10.5,fontWeight:600,color:p.col,display:'inline-flex',alignItems:'center',gap:4 }}><span style={{ width:6,height:6,borderRadius:'50%',background:p.dot }}/>{p.label}</span>
+                  </div>
+                </div>
+              </div>
+              <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:14,paddingTop:12,borderTop:`1px solid ${c.bord}` }}>
+                <span style={{ fontSize:11.5,color:c.mut }}>Current workload</span>
+                <span style={{ fontSize:12.5,fontWeight:700,color:openCount===0?'#34D399':openCount>=5?'#F59E0B':c.text }}>{openCount===0?'Clear':openCount+' open task'+(openCount>1?'s':'')}</span>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+      <p style={{ fontSize:11.5,color:c.mut,marginTop:14 }}>Looking for completion rates, scores, or task lists? Those live in the <strong style={{ color:c.sub }}>Performance</strong> and <strong style={{ color:c.sub }}>Tasks</strong> tabs.</p>
+    </div>
+  );
 }
 
 function PerfTab({ tasks, history, members }) {
@@ -3056,8 +3354,8 @@ function PerfTab({ tasks, history, members }) {
 }
 
 function HistTab({ history, members }) {
-  const c=useC(); const [open,setOpen]=useState(null); const fmt=d=>new Date(d+'T12:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); const totAll=history.reduce((a,s)=>a+(s.tasks?.length||0),0),doneAll=history.reduce((a,s)=>a+(s.tasks?.filter(t=>t.status==='done').length||0),0),avgPct=history.length?Math.round(doneAll/Math.max(totAll,1)*100):0;
-  return(<div><div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20 }}><StatCard label="Standups" value={history.length} color="#818CF8" icon="📅"/><StatCard label="Total tasks" value={totAll} color="#38BDF8" icon="📋"/><StatCard label="Total done" value={doneAll} color="#34D399" icon="✅"/><StatCard label="Avg completion" value={avgPct+'%'} color="#F472B6" icon="🎯"/></div>{history.length===0?<Card style={{ padding:'40px',textAlign:'center' }}><div style={{ fontSize:36,marginBottom:12 }}>📅</div><div style={{ color:c.mut,fontSize:14 }}>History appears after your first standup</div></Card>:history.map(s=>{ const t=s.tasks||[],d=t.filter(x=>x.status==='done').length,b=t.filter(x=>x.status==='blocked').length,pct=t.length?Math.round(d/t.length*100):0,isOpen=open===s.id; return(<Card key={s.id} style={{ marginBottom:10,overflow:'hidden' }}><button onClick={()=>setOpen(isOpen?null:s.id)} style={{ width:'100%',display:'flex',alignItems:'center',gap:12,padding:'14px 18px',background:'transparent',border:'none',cursor:'pointer',color:c.text }}><div style={{ width:7,height:7,borderRadius:'50%',background:pct===100?'#34D399':'#818CF8',flexShrink:0 }}/><span style={{ flex:1,fontSize:14,fontWeight:500,textAlign:'left' }}>{fmt(s.date)}</span>{b>0&&<span style={{ fontSize:11,color:'#F87171',background:'rgba(239,68,68,.12)',padding:'2px 8px',borderRadius:20 }}>⚠️ {b}</span>}<span style={{ fontSize:11,color:c.mut,background:'rgba(128,128,128,.1)',padding:'2px 10px',borderRadius:20 }}>{d}/{t.length} · {pct}%</span><span style={{ color:c.mut,transform:isOpen?'rotate(180deg)':'none',transition:'transform .2s',fontSize:16 }}>⌃</span></button>{isOpen&&<div style={{ borderTop:`1px solid ${c.bord}` }}>{t.map(task=>{ const m=members.find(x=>x.email===task.assignee_email); return(<div key={task.id} style={{ display:'flex',alignItems:'center',gap:10,padding:'9px 18px',borderBottom:`1px solid ${c.bord}` }}><div style={{ width:6,height:6,borderRadius:'50%',background:getPriority(task.priority).color,flexShrink:0 }}/><span style={{ flex:1,fontSize:12,color:task.status==='done'?c.mut:c.sub,textDecoration:task.status==='done'?'line-through':'none' }}>{task.title}</span>{task.timeline&&<span style={{ fontSize:10,color:c.mut }}>{task.timeline}</span>}{m&&<Av member={m} size={22}/>}<SBadge status={task.status}/></div>); })}</div>}</Card>); })}</div>);
+  const c=useC(); const [open,setOpen]=useState(null); const fmt=d=>new Date(d+'T12:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  return(<div><div style={{ marginBottom:18 }}><h2 style={{ fontSize:18,fontWeight:700,color:c.text,marginBottom:4 }}>🕓 Standup history</h2><p style={{ fontSize:12.5,color:c.mut }}>A day-by-day archive of past standups. Open any day to see exactly what each person committed to and whether it was completed — your audit trail and time machine, distinct from Overview (today) and Performance (cumulative scores).</p></div>{history.length===0?<Card style={{ padding:'40px',textAlign:'center' }}><div style={{ fontSize:36,marginBottom:12 }}>📅</div><div style={{ color:c.mut,fontSize:14 }}>History appears after your first standup</div></Card>:history.map(s=>{ const t=s.tasks||[],d=t.filter(x=>x.status==='done').length,b=t.filter(x=>x.status==='blocked').length,pct=t.length?Math.round(d/t.length*100):0,isOpen=open===s.id; return(<Card key={s.id} style={{ marginBottom:10,overflow:'hidden' }}><button onClick={()=>setOpen(isOpen?null:s.id)} style={{ width:'100%',display:'flex',alignItems:'center',gap:12,padding:'14px 18px',background:'transparent',border:'none',cursor:'pointer',color:c.text }}><div style={{ width:7,height:7,borderRadius:'50%',background:pct===100?'#34D399':'#818CF8',flexShrink:0 }}/><span style={{ flex:1,fontSize:14,fontWeight:500,textAlign:'left' }}>{fmt(s.date)}</span>{b>0&&<span style={{ fontSize:11,color:'#F87171',background:'rgba(239,68,68,.12)',padding:'2px 8px',borderRadius:20 }}>⚠️ {b}</span>}<span style={{ fontSize:11,color:c.mut,background:'rgba(128,128,128,.1)',padding:'2px 10px',borderRadius:20 }}>{d}/{t.length} · {pct}%</span><span style={{ color:c.mut,transform:isOpen?'rotate(180deg)':'none',transition:'transform .2s',fontSize:16 }}>⌃</span></button>{isOpen&&<div style={{ borderTop:`1px solid ${c.bord}` }}>{t.map(task=>{ const m=members.find(x=>x.email===task.assignee_email); return(<div key={task.id} style={{ display:'flex',alignItems:'center',gap:10,padding:'9px 18px',borderBottom:`1px solid ${c.bord}` }}><div style={{ width:6,height:6,borderRadius:'50%',background:getPriority(task.priority).color,flexShrink:0 }}/><span style={{ flex:1,fontSize:12,color:task.status==='done'?c.mut:c.sub,textDecoration:task.status==='done'?'line-through':'none' }}>{task.title}</span>{task.timeline&&<span style={{ fontSize:10,color:c.mut }}>{task.timeline}</span>}{m&&<Av member={m} size={22}/>}<SBadge status={task.status}/></div>); })}</div>}</Card>); })}</div>);
 }
 
 function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
@@ -7340,7 +7638,7 @@ function ManagerView({
                 <SubTabs value={tasksSub} onChange={setTasksSub}
                   tabs={[{ id: 'board', label: 'Tasks' }, { id: 'overview', label: 'Overview' }, { id: 'performance', label: 'Performance' }, { id: 'ai', label: 'Ask AI' }, { id: 'history', label: 'History' }]}/>
                 {tasksSub === 'board' && <LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} onDelete={onDeleteTask} session={session} isManager={isManager}/>}
-                {tasksSub === 'overview' && <TeamAnalysisTab tasks={tasks} members={members}/>}
+                {tasksSub === 'overview' && <TeamAnalysisTab tasks={tasks} members={members} history={history}/>}
                 {tasksSub === 'performance' && <PerfTab tasks={tasks} history={history} members={members}/>}
                 {tasksSub === 'ai' && <AIAssistant tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name || 'Team'}/>}
                 {tasksSub === 'history' && <HistTab history={history} members={members}/>}
@@ -7355,28 +7653,28 @@ function ManagerView({
               <>
                 <SubTabs value={teamSub} onChange={setTeamSub}
                   tabs={[{ id: 'directory', label: 'Directory' }, { id: 'attendance', label: 'Attendance & breaks' }]}/>
-                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={true}/>}
+                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={true} teamId={team?.id || "demo"}/>}
                 {teamSub === 'attendance' && <AttendancePanel team={team} members={members} session={session} isManager={true}/>}
               </>
             ) : canPerf ? (
               <>
                 <SubTabs value={teamSub} onChange={setTeamSub}
                   tabs={[{ id: 'directory', label: 'Directory' }, { id: 'attendance', label: 'My shift & breaks' }]}/>
-                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={true}/>}
+                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={true} teamId={team?.id || "demo"}/>}
                 {teamSub === 'attendance' && <AttendancePanel team={team} members={members} session={session} isManager={false}/>}
               </>
             ) : (
               <>
                 <SubTabs value={teamSub} onChange={setTeamSub}
                   tabs={[{ id: 'directory', label: 'Directory' }, { id: 'attendance', label: 'My shift & breaks' }]}/>
-                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={false}/>}
+                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={false} teamId={team?.id || "demo"}/>}
                 {teamSub === 'attendance' && <AttendancePanel team={team} members={members} session={session} isManager={false}/>}
               </>
             )
           )}
 
           {area === 'communication' && (
-            <RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme} isManager={true}/>
+            <RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme} isManager={true} onCreateTask={onAddTask}/>
           )}
 
           {area === 'spaces' && <SpacesArea team={team} session={session} members={members}/>}
@@ -8277,82 +8575,105 @@ function NotesTab({ session, team, role='manager' }) {
 function ManagerNotesTab({ session, team }) { return <NotesTab session={session} team={team} role="manager"/>; }
 
 // ─── TEAM ANALYSIS TAB ───────────────────────────────────────────────────────
-function TeamAnalysisTab({ tasks, members }) {
-  const c=useC();
-  const total=tasks.length, done=tasks.filter(t=>t.status==='done').length;
-  const inProg=tasks.filter(t=>t.status==='in-progress').length;
-  const blocked=tasks.filter(t=>t.status==='blocked').length;
-  const pct=total?Math.round(done/total*100):0;
+function TeamAnalysisTab({ tasks, members, history = [] }) {
+  const c = useC();
+  const total = tasks.length, done = tasks.filter(t => t.status === 'done').length;
+  const inProg = tasks.filter(t => t.status === 'in-progress').length;
+  const blocked = tasks.filter(t => t.status === 'blocked').length;
+  const todo = tasks.filter(t => t.status === 'todo').length;
+  const pct = total ? Math.round(done / total * 100) : 0;
 
-  // Per-member stats
-  const memberStats=members.map(m=>{
-    const mt=tasks.filter(t=>t.assignee_email===m.email);
-    const md=mt.filter(t=>t.status==='done').length;
-    const mb=mt.filter(t=>t.status==='blocked').length;
-    const mp=mt.length?Math.round(md/mt.length*100):0;
-    return {...m,total:mt.length,done:md,blocked:mb,pct:mp};
-  }).sort((a,b)=>b.pct-a.pct);
+  // Trend vs the previous standup (from history)
+  const yd = history[0];
+  const ydTasks = yd?.tasks || [];
+  const ydPct = ydTasks.length ? Math.round(ydTasks.filter(t => t.status === 'done').length / ydTasks.length * 100) : null;
+  const trend = ydPct == null ? null : pct - ydPct;
 
-  // Priority distribution
-  const byPri={critical:tasks.filter(t=>t.priority==='critical').length,high:tasks.filter(t=>t.priority==='high').length,medium:tasks.filter(t=>t.priority==='medium').length,low:tasks.filter(t=>t.priority==='low').length};
-  const priColors={critical:'#EF4444',high:'#F97316',medium:'#F59E0B',low:'#10B981'};
+  // Alerts — things a leader needs to act on
+  const blockedTasks = tasks.filter(t => t.status === 'blocked');
+  const overdue = tasks.filter(t => t.status !== 'done' && /today|eod|noon|3 ?pm/i.test(t.timeline || '') && new Date().getHours() >= 17);
+  const unassigned = tasks.filter(t => !t.assignee_email);
+  const idleMembers = members.filter(m => !tasks.some(t => t.assignee_email === m.email));
+  const criticalOpen = tasks.filter(t => t.priority === 'critical' && t.status !== 'done');
 
-  return(
+  const alerts = [];
+  blockedTasks.forEach(t => alerts.push({ sev: 'high', icon: '🚧', text: 'Blocked: ' + t.title, who: (t.assignee_email || '').split('@')[0] }));
+  criticalOpen.forEach(t => alerts.push({ sev: 'high', icon: '🔴', text: 'Critical open: ' + t.title, who: (t.assignee_email || '').split('@')[0] }));
+  overdue.slice(0, 3).forEach(t => alerts.push({ sev: 'med', icon: '⏰', text: 'Past due: ' + t.title, who: (t.assignee_email || '').split('@')[0] }));
+  if (unassigned.length) alerts.push({ sev: 'med', icon: '👤', text: unassigned.length + ' unassigned task' + (unassigned.length > 1 ? 's' : ''), who: '' });
+  idleMembers.slice(0, 3).forEach(m => alerts.push({ sev: 'low', icon: '💤', text: (m.name || m.email.split('@')[0]) + ' has no tasks today', who: '' }));
+
+  // Highlights — what's going well
+  const highlights = [];
+  if (pct >= 80 && total > 0) highlights.push("Strong day — " + pct + "% of today's tasks done");
+  if (trend != null && trend > 0) highlights.push('Completion up ' + trend + '% vs last standup');
+  if (blocked === 0 && total > 0) highlights.push('No blockers right now');
+  const topMember = members.map(m => { const mt = tasks.filter(t => t.assignee_email === m.email); return { m, done: mt.filter(t => t.status === 'done').length, total: mt.length }; }).filter(x => x.total > 0).sort((a, b) => (b.done / b.total) - (a.done / a.total))[0];
+  if (topMember && topMember.done > 0) highlights.push((topMember.m.name || topMember.m.email.split('@')[0]) + ' leading with ' + topMember.done + '/' + topMember.total + ' done');
+  if (highlights.length === 0) highlights.push(total === 0 ? 'No tasks yet today — assign work to get started' : 'Day in progress — keep momentum going');
+
+  const sevColor = (s) => s === 'high' ? '#EF4444' : s === 'med' ? '#F59E0B' : '#64748B';
+
+  return (
     <div>
-      <h2 style={{ fontSize:18,fontWeight:700,color:c.text,marginBottom:16 }}>📈 Team analysis</h2>
-      {/* Summary cards */}
-      <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20 }}>
-        {[{l:'Completion',v:pct+'%',c:'#818CF8'},{l:'Done',v:done+'/'+total,c:'#34D399'},{l:'In progress',v:inProg,c:'#38BDF8'},{l:'Blocked',v:blocked,c:blocked>0?'#EF4444':'#34D399'}].map(s=>(
-          <Card key={s.l} style={{ padding:'16px',textAlign:'center' }}>
-            <div style={{ fontSize:26,fontWeight:800,color:s.c,marginBottom:4 }}>{s.v}</div>
-            <div style={{ fontSize:11,color:c.mut,textTransform:'uppercase',letterSpacing:'.06em' }}>{s.l}</div>
-          </Card>
-        ))}
-      </div>
-      {/* Team completion bar */}
-      <Card style={{ padding:'18px 20px',marginBottom:16 }}>
-        <div style={{ display:'flex',justifyContent:'space-between',marginBottom:8 }}><span style={{ fontSize:13,fontWeight:600,color:c.text }}>Overall team progress</span><span style={{ fontSize:13,fontWeight:700,color:pct>=80?'#34D399':pct>=50?'#818CF8':'#F97316' }}>{pct}%</span></div>
-        <Bar pct={pct} h={10} color="linear-gradient(90deg,#6366F1,#34D399)"/>
-      </Card>
-      {/* Priority breakdown */}
-      <Card style={{ padding:'18px 20px',marginBottom:16 }}>
-        <div style={{ fontSize:13,fontWeight:700,color:c.text,marginBottom:14 }}>Priority breakdown</div>
-        <div style={{ display:'flex',flexDirection:'column',gap:8 }}>
-          {Object.entries(byPri).map(([p,v])=>(
-            <div key={p} style={{ display:'flex',alignItems:'center',gap:12 }}>
-              <span style={{ width:70,fontSize:12,fontWeight:600,color:priColors[p],textTransform:'capitalize' }}>{p}</span>
-              <div style={{ flex:1,height:8,borderRadius:4,background:'rgba(128,128,128,.15)',overflow:'hidden' }}>
-                <div style={{ height:'100%',borderRadius:4,background:priColors[p],width:(total?v/total*100:0)+'%',transition:'width .4s' }}/>
-              </div>
-              <span style={{ fontSize:12,color:c.mut,width:20,textAlign:'right' }}>{v}</span>
-            </div>
-          ))}
-        </div>
-      </Card>
-      {/* Per-member performance */}
-      <Card style={{ overflow:'hidden' }}>
-        <div style={{ padding:'14px 18px',borderBottom:`1px solid ${c.bord}`,fontSize:13,fontWeight:700,color:c.text }}>Member performance</div>
-        {memberStats.length===0&&<div style={{ padding:'24px',textAlign:'center',color:c.mut,fontSize:13 }}>Add team members to see analysis</div>}
-        {memberStats.map((m,i)=>(
-          <div key={m.email} style={{ padding:'14px 18px',borderBottom:i<memberStats.length-1?`1px solid ${c.bord}`:'none',display:'flex',alignItems:'center',gap:14 }}>
-            <div style={{ width:28,height:28,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:'rgba(255,255,255,.5)' }}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</div>
-            <Av member={m} size={34} url={m.avatar_url}/>
-            <div style={{ flex:1,minWidth:0 }}>
-              <div style={{ fontSize:14,fontWeight:600,color:c.text,marginBottom:4 }}>{m.name||m.email}</div>
-              <div style={{ display:'flex',alignItems:'center',gap:8 }}>
-                <div style={{ flex:1,height:6,borderRadius:3,background:'rgba(128,128,128,.15)',overflow:'hidden' }}>
-                  <div style={{ height:'100%',borderRadius:3,background:m.pct>=80?'#34D399':m.pct>=50?'#818CF8':'#F97316',width:m.pct+'%',transition:'width .4s' }}/>
-                </div>
-                <span style={{ fontSize:11,color:c.mut }}>{m.done}/{m.total}</span>
-              </div>
-            </div>
-            <div style={{ textAlign:'right',flexShrink:0 }}>
-              <div style={{ fontSize:18,fontWeight:800,color:m.pct>=80?'#34D399':m.pct>=50?'#818CF8':'#F97316' }}>{m.pct}%</div>
-              {m.blocked>0&&<div style={{ fontSize:10,color:'#F87171' }}>⚠️ {m.blocked} blocked</div>}
+      <h2 style={{ fontSize: 18, fontWeight: 700, color: c.text, marginBottom: 4 }}>📊 Executive summary</h2>
+      <p style={{ fontSize: 12.5, color: c.mut, marginBottom: 18 }}>A high-level snapshot of today — what needs attention and what's going well. Detailed per-member metrics live in Performance.</p>
+
+      {/* Today at a glance — one hero strip (does NOT duplicate the Tasks tab cards) */}
+      <Card style={{ padding: '20px 22px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+          <div>
+            <div style={{ fontSize: 12, color: c.mut, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>Today's completion</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+              <span style={{ fontSize: 36, fontWeight: 800, color: pct >= 80 ? '#34D399' : pct >= 50 ? '#818CF8' : '#F97316' }}>{pct}%</span>
+              {trend != null && <span style={{ fontSize: 13, fontWeight: 700, color: trend > 0 ? '#34D399' : trend < 0 ? '#F87171' : c.mut }}>{trend > 0 ? '▲' : trend < 0 ? '▼' : '–'} {Math.abs(trend)}% vs last</span>}
             </div>
           </div>
-        ))}
+          <div style={{ display: 'flex', gap: 24 }}>
+            {[{ l: 'Done', v: done, col: '#34D399' }, { l: 'Active', v: inProg, col: '#38BDF8' }, { l: 'To do', v: todo, col: '#94A3B8' }, { l: 'Blocked', v: blocked, col: blocked ? '#EF4444' : '#34D399' }].map(s => (
+              <div key={s.l} style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 22, fontWeight: 800, color: s.col }}>{s.v}</div>
+                <div style={{ fontSize: 10, color: c.mut, textTransform: 'uppercase', letterSpacing: '.05em' }}>{s.l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ marginTop: 16 }}><Bar pct={pct} h={8} color="linear-gradient(90deg,#6366F1,#34D399)"/></div>
       </Card>
+
+      {/* Alerts + Highlights side by side */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <Card style={{ overflow: 'hidden' }}>
+          <div style={{ padding: '13px 18px', borderBottom: '1px solid ' + c.bord, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: alerts.length ? '#EF4444' : '#34D399' }}/>
+            <span style={{ fontSize: 13, fontWeight: 700, color: c.text }}>Needs attention</span>
+            <span style={{ fontSize: 12, color: c.mut, marginLeft: 'auto' }}>{alerts.length}</span>
+          </div>
+          <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+            {alerts.length === 0 ? <div style={{ padding: '24px 18px', fontSize: 13, color: c.mut, textAlign: 'center' }}>✅ Nothing urgent. Team is on track.</div>
+              : alerts.map((a, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 18px', borderBottom: i < alerts.length - 1 ? '1px solid ' + c.bord : 'none', borderLeft: '3px solid ' + sevColor(a.sev) }}>
+                  <span style={{ fontSize: 15 }}>{a.icon}</span>
+                  <span style={{ flex: 1, fontSize: 12.5, color: c.text }}>{a.text}</span>
+                  {a.who && <span style={{ fontSize: 11, color: c.mut }}>{a.who}</span>}
+                </div>
+              ))}
+          </div>
+        </Card>
+        <Card style={{ overflow: 'hidden' }}>
+          <div style={{ padding: '13px 18px', borderBottom: '1px solid ' + c.bord, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#34D399' }}/>
+            <span style={{ fontSize: 13, fontWeight: 700, color: c.text }}>Highlights</span>
+          </div>
+          <div style={{ padding: '6px 0' }}>
+            {highlights.map((h, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, padding: '11px 18px', fontSize: 12.5, color: c.sub, lineHeight: 1.5 }}>
+                <span style={{ color: '#34D399', flexShrink: 0 }}>✦</span><span>{h}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }
