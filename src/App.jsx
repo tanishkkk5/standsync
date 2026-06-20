@@ -4492,6 +4492,207 @@ function ProjectWiki({ team, session, members = [] }) {
 
 
 // ─── BRAINSTORM SPACE ─────────────────────────────────────────────────────────
+// ─── BRAINSTORM: welcome screen + template library ───────────────────────────
+const BS_TEMPLATES = [
+  // Strategy & Planning
+  { id:'swot', cat:'Strategy & Planning', name:'SWOT Analysis', icon:'🎯', desc:'Strengths, Weaknesses, Opportunities, Threats',
+    nodes:[
+      {k:'t',type:'text',x:300,y:0,w:240,h:36,text:'SWOT Analysis',fontSize:20,fontWeight:700,textAlign:'center'},
+      {k:'s',type:'sticky',x:60,y:60,w:230,h:180,text:'STRENGTHS\n\n• \n• \n• ',color:'#BBF7D0'},
+      {k:'w',type:'sticky',x:320,y:60,w:230,h:180,text:'WEAKNESSES\n\n• \n• \n• ',color:'#FECACA'},
+      {k:'o',type:'sticky',x:60,y:260,w:230,h:180,text:'OPPORTUNITIES\n\n• \n• \n• ',color:'#BFDBFE'},
+      {k:'th',type:'sticky',x:320,y:260,w:230,h:180,text:'THREATS\n\n• \n• \n• ',color:'#FDE68A'},
+    ]},
+  { id:'okr', cat:'Strategy & Planning', name:'OKR Planning', icon:'📈', desc:'Objective with measurable key results',
+    nodes:[
+      {k:'o',type:'shape',shape:'pill',x:180,y:0,w:300,h:70,text:'OBJECTIVE\nWhat we want to achieve',fill:'#6366F1',color:'#fff',fontSize:13,fontWeight:700,textAlign:'center'},
+      {k:'k1',type:'sticky',x:40,y:160,w:200,h:130,text:'Key Result 1\n\nMeasure: ',color:'#BFDBFE'},
+      {k:'k2',type:'sticky',x:260,y:160,w:200,h:130,text:'Key Result 2\n\nMeasure: ',color:'#BFDBFE'},
+      {k:'k3',type:'sticky',x:480,y:160,w:200,h:130,text:'Key Result 3\n\nMeasure: ',color:'#BFDBFE'},
+    ],connections:[{from:'o',to:'k1'},{from:'o',to:'k2'},{from:'o',to:'k3'}]},
+  { id:'roadmap', cat:'Strategy & Planning', name:'Roadmap', icon:'🛣️', desc:'Quarterly delivery timeline',
+    nodes:[
+      {k:'q1',type:'sticky',x:20,y:60,w:180,h:200,text:'Q1\n\n• \n• ',color:'#DDD6FE'},
+      {k:'q2',type:'sticky',x:220,y:60,w:180,h:200,text:'Q2\n\n• \n• ',color:'#BFDBFE'},
+      {k:'q3',type:'sticky',x:420,y:60,w:180,h:200,text:'Q3\n\n• \n• ',color:'#BBF7D0'},
+      {k:'q4',type:'sticky',x:620,y:60,w:180,h:200,text:'Q4\n\n• \n• ',color:'#FDE68A'},
+    ],connections:[{from:'q1',to:'q2',type:'straight'},{from:'q2',to:'q3',type:'straight'},{from:'q3',to:'q4',type:'straight'}]},
+  // Product & UX
+  { id:'journey', cat:'Product & UX', name:'User Journey Map', icon:'🧭', desc:'Stages, actions, emotions, pain points',
+    nodes:[
+      {k:'h',type:'text',x:0,y:0,w:200,h:30,text:'User Journey',fontSize:18,fontWeight:700},
+      {k:'s1',type:'sticky',x:20,y:50,w:170,h:120,text:'AWARENESS\n\nActions:\nFeeling:',color:'#BFDBFE'},
+      {k:'s2',type:'sticky',x:210,y:50,w:170,h:120,text:'CONSIDERATION\n\nActions:\nFeeling:',color:'#DDD6FE'},
+      {k:'s3',type:'sticky',x:400,y:50,w:170,h:120,text:'DECISION\n\nActions:\nFeeling:',color:'#BBF7D0'},
+      {k:'s4',type:'sticky',x:590,y:50,w:170,h:120,text:'RETENTION\n\nActions:\nFeeling:',color:'#FDE68A'},
+    ],connections:[{from:'s1',to:'s2',type:'straight'},{from:'s2',to:'s3',type:'straight'},{from:'s3',to:'s4',type:'straight'}]},
+  { id:'userflow', cat:'Product & UX', name:'User Flow', icon:'🔀', desc:'Screen-to-screen navigation flow',
+    nodes:[
+      {k:'a',type:'shape',shape:'rect',x:40,y:80,w:140,h:70,text:'Landing',fill:'#818CF8',color:'#fff',textAlign:'center'},
+      {k:'b',type:'shape',shape:'diamond',x:240,y:70,w:150,h:90,text:'Signed in?',fill:'#FBBF24',color:'#1a1a1a',textAlign:'center'},
+      {k:'c',type:'shape',shape:'rect',x:450,y:20,w:140,h:70,text:'Dashboard',fill:'#34D399',color:'#fff',textAlign:'center'},
+      {k:'d',type:'shape',shape:'rect',x:450,y:140,w:140,h:70,text:'Login',fill:'#F87171',color:'#fff',textAlign:'center'},
+    ],connections:[{from:'a',to:'b',type:'straight'},{from:'b',to:'c',type:'straight'},{from:'b',to:'d',type:'straight'}]},
+  // Agile & PM
+  { id:'retro', cat:'Agile & Project', name:'Retrospective', icon:'🔄', desc:'What went well / didn’t / actions',
+    nodes:[
+      {k:'g',type:'sticky',x:40,y:40,w:220,h:240,text:'😀 WENT WELL\n\n• ',color:'#BBF7D0'},
+      {k:'b',type:'sticky',x:290,y:40,w:220,h:240,text:'😕 TO IMPROVE\n\n• ',color:'#FECACA'},
+      {k:'a',type:'sticky',x:540,y:40,w:220,h:240,text:'✅ ACTION ITEMS\n\n• ',color:'#BFDBFE'},
+    ]},
+  { id:'sprint', cat:'Agile & Project', name:'Sprint Planning', icon:'🏃', desc:'Backlog → To do → Doing → Done',
+    nodes:[
+      {k:'a',type:'sticky',x:20,y:40,w:175,h:260,text:'BACKLOG\n\n• ',color:'#E5E7EB'},
+      {k:'b',type:'sticky',x:210,y:40,w:175,h:260,text:'TO DO\n\n• ',color:'#BFDBFE'},
+      {k:'c',type:'sticky',x:400,y:40,w:175,h:260,text:'IN PROGRESS\n\n• ',color:'#FDE68A'},
+      {k:'d',type:'sticky',x:590,y:40,w:175,h:260,text:'DONE\n\n• ',color:'#BBF7D0'},
+    ]},
+  { id:'risk', cat:'Agile & Project', name:'Risk Matrix', icon:'⚠️', desc:'Likelihood × impact grid',
+    nodes:[
+      {k:'h',type:'text',x:0,y:0,w:300,h:30,text:'Risk Matrix (Impact × Likelihood)',fontSize:15,fontWeight:700},
+      {k:'hl',type:'sticky',x:40,y:50,w:200,h:140,text:'HIGH impact\nLOW likelihood\n\nMonitor',color:'#FDE68A'},
+      {k:'hh',type:'sticky',x:260,y:50,w:200,h:140,text:'HIGH impact\nHIGH likelihood\n\nMitigate now',color:'#FECACA'},
+      {k:'ll',type:'sticky',x:40,y:210,w:200,h:140,text:'LOW impact\nLOW likelihood\n\nAccept',color:'#BBF7D0'},
+      {k:'lh',type:'sticky',x:260,y:210,w:200,h:140,text:'LOW impact\nHIGH likelihood\n\nPlan',color:'#BFDBFE'},
+    ]},
+  // Brainstorming
+  { id:'mindmap', cat:'Brainstorming', name:'Mind Map', icon:'🧠', desc:'Central idea with branches',
+    nodes:[
+      {k:'c',type:'shape',shape:'circle',x:300,y:160,w:140,h:140,text:'CENTRAL\nIDEA',fill:'#6366F1',color:'#fff',fontWeight:700,textAlign:'center'},
+      {k:'b1',type:'sticky',x:60,y:40,w:150,h:90,text:'Branch 1',color:'#BFDBFE'},
+      {k:'b2',type:'sticky',x:540,y:40,w:150,h:90,text:'Branch 2',color:'#BBF7D0'},
+      {k:'b3',type:'sticky',x:60,y:340,w:150,h:90,text:'Branch 3',color:'#FDE68A'},
+      {k:'b4',type:'sticky',x:540,y:340,w:150,h:90,text:'Branch 4',color:'#FBCFE8'},
+    ],connections:[{from:'c',to:'b1'},{from:'c',to:'b2'},{from:'c',to:'b3'},{from:'c',to:'b4'}]},
+  { id:'fishbone', cat:'Brainstorming', name:'Fishbone (Cause & Effect)', icon:'🐟', desc:'Root-cause analysis',
+    nodes:[
+      {k:'e',type:'shape',shape:'pill',x:560,y:170,w:180,h:70,text:'PROBLEM /\nEFFECT',fill:'#F87171',color:'#fff',fontWeight:700,textAlign:'center'},
+      {k:'c1',type:'sticky',x:60,y:40,w:160,h:90,text:'People',color:'#BFDBFE'},
+      {k:'c2',type:'sticky',x:260,y:40,w:160,h:90,text:'Process',color:'#DDD6FE'},
+      {k:'c3',type:'sticky',x:60,y:280,w:160,h:90,text:'Tools',color:'#BBF7D0'},
+      {k:'c4',type:'sticky',x:260,y:280,w:160,h:90,text:'Environment',color:'#FDE68A'},
+    ],connections:[{from:'c1',to:'e'},{from:'c2',to:'e'},{from:'c3',to:'e'},{from:'c4',to:'e'}]},
+  { id:'sixhats', cat:'Brainstorming', name:'Six Thinking Hats', icon:'🎩', desc:'Six perspectives on a decision',
+    nodes:[
+      {k:'w',type:'sticky',x:20,y:40,w:160,h:120,text:'⚪ WHITE\nFacts & data',color:'#F3F4F6'},
+      {k:'r',type:'sticky',x:200,y:40,w:160,h:120,text:'🔴 RED\nFeelings',color:'#FECACA'},
+      {k:'b',type:'sticky',x:380,y:40,w:160,h:120,text:'⚫ BLACK\nRisks',color:'#D1D5DB'},
+      {k:'y',type:'sticky',x:20,y:180,w:160,h:120,text:'🟡 YELLOW\nBenefits',color:'#FDE68A'},
+      {k:'g',type:'sticky',x:200,y:180,w:160,h:120,text:'🟢 GREEN\nIdeas',color:'#BBF7D0'},
+      {k:'bl',type:'sticky',x:380,y:180,w:160,h:120,text:'🔵 BLUE\nProcess',color:'#BFDBFE'},
+    ]},
+  // Team & Ops
+  { id:'decision', cat:'Team & Operations', name:'Decision Matrix', icon:'⚖️', desc:'Score options against criteria',
+    nodes:[
+      {k:'h',type:'text',x:0,y:0,w:300,h:30,text:'Decision Matrix',fontSize:16,fontWeight:700},
+      {k:'o1',type:'sticky',x:20,y:50,w:200,h:160,text:'OPTION A\n\nPros:\nCons:\nScore: /10',color:'#BFDBFE'},
+      {k:'o2',type:'sticky',x:240,y:50,w:200,h:160,text:'OPTION B\n\nPros:\nCons:\nScore: /10',color:'#DDD6FE'},
+      {k:'o3',type:'sticky',x:460,y:50,w:200,h:160,text:'OPTION C\n\nPros:\nCons:\nScore: /10',color:'#BBF7D0'},
+    ]},
+  { id:'process', cat:'Team & Operations', name:'Process Map', icon:'🔧', desc:'Step-by-step workflow',
+    nodes:[
+      {k:'s',type:'shape',shape:'pill',x:20,y:120,w:130,h:60,text:'Start',fill:'#34D399',color:'#fff',textAlign:'center'},
+      {k:'a',type:'shape',shape:'rect',x:190,y:115,w:140,h:70,text:'Step 1',fill:'#818CF8',color:'#fff',textAlign:'center'},
+      {k:'b',type:'shape',shape:'rect',x:370,y:115,w:140,h:70,text:'Step 2',fill:'#818CF8',color:'#fff',textAlign:'center'},
+      {k:'e',type:'shape',shape:'pill',x:550,y:120,w:130,h:60,text:'End',fill:'#F87171',color:'#fff',textAlign:'center'},
+    ],connections:[{from:'s',to:'a',type:'straight'},{from:'a',to:'b',type:'straight'},{from:'b',to:'e',type:'straight'}]},
+];
+
+function BrainstormWelcome({ c, dark, onPick }) {
+  const [picking, setPicking] = useState(null); // null | 'template'
+  if (picking === 'template') {
+    return <TemplateGallery c={c} dark={dark} forShared onClose={()=>setPicking(null)}
+      onApply={(tpl)=>onPick({ mode:'shared', template:tpl })}/>;
+  }
+  const Card3 = ({ icon, title, lines, badge, badgeCol, onClick }) => (
+    <button onClick={onClick} style={{ flex:'1 1 240px',minWidth:240,textAlign:'left',background:c.surf,border:`1px solid ${c.bord}`,borderRadius:16,padding:'22px 22px 20px',cursor:'pointer',transition:'all .15s' }}
+      onMouseEnter={e=>{e.currentTarget.style.borderColor='#6366F1';e.currentTarget.style.transform='translateY(-3px)';}}
+      onMouseLeave={e=>{e.currentTarget.style.borderColor=c.bord;e.currentTarget.style.transform='none';}}>
+      <div style={{ fontSize:34,marginBottom:12 }}>{icon}</div>
+      <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:8 }}>
+        <span style={{ fontSize:16,fontWeight:700,color:c.text }}>{title}</span>
+        {badge && <span style={{ fontSize:10,fontWeight:700,color:badgeCol,background:badgeCol+'1f',padding:'2px 8px',borderRadius:20 }}>{badge}</span>}
+      </div>
+      <ul style={{ margin:0,padding:'0 0 0 16px',color:c.sub,fontSize:12.5,lineHeight:1.7 }}>{lines.map((l,i)=><li key={i}>{l}</li>)}</ul>
+    </button>
+  );
+  return (
+    <div style={{ height:'calc(100vh - 62px)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',borderRadius:14,border:`1px solid ${c.bord}`,background:dark?c.bg:'#fff',padding:24 }}>
+      <div style={{ fontSize:13,fontWeight:600,color:'#6366F1',letterSpacing:'.08em',textTransform:'uppercase',marginBottom:8 }}>Brainstorm</div>
+      <h2 style={{ fontSize:26,fontWeight:800,color:c.text,marginBottom:6,textAlign:'center' }}>What would you like to work on today?</h2>
+      <p style={{ fontSize:13.5,color:c.mut,marginBottom:28,textAlign:'center' }}>Pick a workspace to get started. You can switch any time.</p>
+      <div style={{ display:'flex',gap:16,flexWrap:'wrap',maxWidth:840,justifyContent:'center' }}>
+        <Card3 icon="🔒" title="Personal" badge="Private" badgeCol="#94A3B8"
+          lines={['Rough work & scratch ideas','Only visible to you','Never synced to team boards']}
+          onClick={()=>onPick({ mode:'personal' })}/>
+        <Card3 icon="👥" title="Shared" badge="Team" badgeCol="#34D399"
+          lines={['Team & project collaboration','Visible to authorized members','Activity tracking enabled']}
+          onClick={()=>onPick({ mode:'shared' })}/>
+        <Card3 icon="▦" title="Start from template" badge="Shared only" badgeCol="#6366F1"
+          lines={['Structured frameworks','SWOT, OKR, retros & more','Team collaboration ready']}
+          onClick={()=>setPicking('template')}/>
+      </div>
+    </div>
+  );
+}
+
+function TemplateGallery({ c, dark, onClose, onApply, forShared }) {
+  const [q, setQ] = useState('');
+  const [favs, setFavs] = useState(()=>{ try{return JSON.parse(localStorage.getItem('ss-bs-favtpl')||'[]');}catch{return [];} });
+  const toggleFav = (id)=>setFavs(f=>{ const nf=f.includes(id)?f.filter(x=>x!==id):[...f,id]; try{localStorage.setItem('ss-bs-favtpl',JSON.stringify(nf));}catch{} return nf; });
+  const cats = [...new Set(BS_TEMPLATES.map(t=>t.cat))];
+  const ql = q.trim().toLowerCase();
+  const match = (t)=> !ql || t.name.toLowerCase().includes(ql) || t.cat.toLowerCase().includes(ql) || t.desc.toLowerCase().includes(ql);
+  const favTpls = BS_TEMPLATES.filter(t=>favs.includes(t.id)&&match(t));
+  return (
+    <div onMouseDown={onClose} style={{ position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.45)',display:'flex',alignItems:'center',justifyContent:'center',padding:24 }}>
+      <div onMouseDown={e=>e.stopPropagation()} style={{ width:'min(940px,96vw)',maxHeight:'88vh',background:dark?'#0F1322':'#fff',border:`1px solid ${c.bord}`,borderRadius:18,overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 24px 70px rgba(0,0,0,.4)' }}>
+        <div style={{ padding:'18px 22px',borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',gap:14 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:17,fontWeight:800,color:c.text }}>Template library</div>
+            {forShared && <div style={{ fontSize:11.5,color:c.mut,marginTop:2 }}>Templates open in a Shared workspace for team collaboration.</div>}
+          </div>
+          <div style={{ display:'flex',alignItems:'center',gap:8,background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:10,padding:'7px 12px',width:240 }}>
+            <span style={{ color:c.mut,fontSize:13 }}>⌕</span>
+            <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search templates..." style={{ flex:1,background:'transparent',border:'none',outline:'none',color:c.text,fontSize:13 }}/>
+          </div>
+          <button onClick={onClose} style={{ width:32,height:32,borderRadius:9,border:`1px solid ${c.bord}`,background:'transparent',color:c.mut,cursor:'pointer',fontSize:16 }}>×</button>
+        </div>
+        <div style={{ flex:1,overflowY:'auto',padding:'18px 22px' }}>
+          {favTpls.length>0 && <TplRow title="★ Favorites" list={favTpls} c={c} dark={dark} favs={favs} toggleFav={toggleFav} onApply={onApply}/>}
+          {cats.map(cat=>{ const list=BS_TEMPLATES.filter(t=>t.cat===cat&&match(t)); if(!list.length)return null;
+            return <TplRow key={cat} title={cat} list={list} c={c} dark={dark} favs={favs} toggleFav={toggleFav} onApply={onApply}/>; })}
+          {BS_TEMPLATES.filter(match).length===0 && <div style={{ padding:'40px',textAlign:'center',color:c.mut,fontSize:13 }}>No templates match "{q}"</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TplRow({ title, list, c, dark, favs, toggleFav, onApply }) {
+  return (
+    <div style={{ marginBottom:22 }}>
+      <div style={{ fontSize:12,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:12 }}>{title}</div>
+      <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(210px,1fr))',gap:12 }}>
+        {list.map(t=>(
+          <div key={t.id} style={{ position:'relative',border:`1px solid ${c.bord}`,borderRadius:14,overflow:'hidden',background:c.surf,transition:'all .15s' }}
+            onMouseEnter={e=>e.currentTarget.style.borderColor='#6366F1'} onMouseLeave={e=>e.currentTarget.style.borderColor=c.bord}>
+            <button onClick={()=>toggleFav(t.id)} title="Favorite" style={{ position:'absolute',top:8,right:8,zIndex:2,background:'rgba(0,0,0,.25)',border:'none',borderRadius:'50%',width:26,height:26,cursor:'pointer',fontSize:13,color:favs.includes(t.id)?'#FCD34D':'#fff' }}>{favs.includes(t.id)?'★':'☆'}</button>
+            <button onClick={()=>onApply(t)} style={{ display:'block',width:'100%',textAlign:'left',border:'none',background:'transparent',cursor:'pointer',padding:0 }}>
+              <div style={{ height:84,background:`linear-gradient(135deg, ${dark?'#1B2236':'#EEF1FF'}, ${dark?'#141A2B':'#F8FAFF'})`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:34 }}>{t.icon}</div>
+              <div style={{ padding:'11px 13px' }}>
+                <div style={{ fontSize:13.5,fontWeight:700,color:c.text,marginBottom:3 }}>{t.name}</div>
+                <div style={{ fontSize:11.5,color:c.mut,lineHeight:1.4 }}>{t.desc}</div>
+              </div>
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
 // Full Miro-like infinite canvas. Personal + Shared modes. Auto-saved.
 // Features: sticky notes (stack/copy/paste/del), text boxes, shapes (rect/circle/diamond/pill),
 // free-draw pen (color + thickness), connectors (straight/curved/elbow), node drag,
@@ -4517,6 +4718,15 @@ function BrainstormSpace({ team, session, members=[] }) {
   const userId = session?.user?.id || 'anon';
   const teamId = team?.id || 'demo';
   const [mode, setMode] = useState('personal');
+  const [started, setStarted] = useState(false);       // welcome screen gate
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [showSens, setShowSens] = useState(false);
+  // Sensitivity controls (persisted)
+  const [zoomSens, setZoomSens] = useState(()=>{ try{return parseFloat(localStorage.getItem('ss-bs-zoomsens'))||0.0022;}catch{return 0.0022;} });
+  const [panSens, setPanSens]   = useState(()=>{ try{return parseFloat(localStorage.getItem('ss-bs-pansens'))||1;}catch{return 1;} });
+  const zoomSensRef = useRef(zoomSens); const panSensRef = useRef(panSens);
+  useEffect(()=>{ zoomSensRef.current=zoomSens; try{localStorage.setItem('ss-bs-zoomsens',zoomSens);}catch{} },[zoomSens]);
+  useEffect(()=>{ panSensRef.current=panSens; try{localStorage.setItem('ss-bs-pansens',panSens);}catch{} },[panSens]);
   const BOARD_KEY = `ss-bs-${mode === 'personal' ? userId : 'shared-' + teamId}`;
 
   const [pan, setPan]   = useState({ x: 80, y: 60 });
@@ -4606,8 +4816,14 @@ function BrainstormSpace({ team, session, members=[] }) {
   const bsIdxRef = useRef(-1);
   useEffect(() => { bsIdxRef.current = bsIdx; }, [bsIdx]);
 
-  // ── Load ──
+  // ── Load ── (clears state first so personal/shared can NEVER leak across)
+  const loadedKeyRef = useRef(null);
   useEffect(() => {
+    setNodes([]); nodesRef.current = [];
+    setConnections([]); connectionsRef.current = [];
+    setDrawPaths([]); drawPathsRef.current = [];
+    setSelected(new Set()); setEditingId(null);
+    loadedKeyRef.current = BOARD_KEY;
     try {
       const raw = localStorage.getItem(BOARD_KEY);
       if (raw) {
@@ -4625,6 +4841,7 @@ function BrainstormSpace({ team, session, members=[] }) {
   }, [BOARD_KEY]);
 
   const saveToStorage = useCallback((n, co, dp) => {
+    if (loadedKeyRef.current !== BOARD_KEY) return;
     try { localStorage.setItem(BOARD_KEY, JSON.stringify({ nodes: n, connections: co, drawPaths: dp, savedAt: Date.now() })); } catch(e) {}
   }, [BOARD_KEY]);
 
@@ -4680,7 +4897,7 @@ function BrainstormSpace({ team, session, members=[] }) {
         const mx = e.clientX - rect.left, my = e.clientY - rect.top;
         // Sensitivity: lower = gentler zoom. Scale by actual delta but clamp each
         // step so a fast trackpad swipe can't jump the zoom dramatically.
-        const SENS = 0.0022;
+        const SENS = zoomSensRef.current || 0.0022;
         let step = -e.deltaY * SENS;            // up = zoom in
         step = Math.max(-0.08, Math.min(0.08, step)); // clamp per-event change
         const factor = Math.exp(step);          // smooth multiplicative zoom
@@ -4691,7 +4908,7 @@ function BrainstormSpace({ team, session, members=[] }) {
           return nz;
         });
       } else {
-        setPan(p => { const np = { x: p.x - e.deltaX, y: p.y - e.deltaY }; panStateRef.current = np; return np; });
+        setPan(p => { const ps=panSensRef.current||1; const np = { x: p.x - e.deltaX*ps, y: p.y - e.deltaY*ps }; panStateRef.current = np; return np; });
       }
     };
     el.addEventListener('wheel', handler, { passive: false });
@@ -5037,6 +5254,33 @@ function BrainstormSpace({ team, session, members=[] }) {
     {id:'connect',label:'Connect  C', ico:'⤳'},
   ];
 
+  // Apply a template: lay its nodes/connections onto the board
+  const applyTemplate = (tpl) => {
+    let id = nextId.current;
+    const idMap = {};
+    const newNodes = (tpl.nodes||[]).map(n => { const nid = id++; idMap[n.k] = nid; return { id: nid, type: n.type||'sticky', x: n.x, y: n.y, w: n.w||180, h: n.h||120, text: n.text||'', color: n.color||'#FDE68A', fill: n.fill, fontSize: n.fontSize||13, fontWeight: n.fontWeight||400, fontStyle:'normal', textAlign: n.textAlign||'left', shape: n.shape }; });
+    const newConns = (tpl.connections||[]).map(co => ({ id: 'c'+(id++), from: idMap[co.from], to: idMap[co.to], type: co.type||'curve', color: co.color||(dark?'#94A3B8':'#64748B') })).filter(co=>co.from&&co.to);
+    nextId.current = id;
+    const allN = [...nodesRef.current.filter(n=>!(n.id===1&&/Welcome/.test(n.text||''))), ...newNodes];
+    const allC = [...connectionsRef.current, ...newConns];
+    setNodes(allN); nodesRef.current = allN;
+    setConnections(allC); connectionsRef.current = allC;
+    pushHist(allN, allC, drawPathsRef.current);
+    saveToStorage(allN, allC, drawPathsRef.current);
+    setShowTemplates(false);
+    setTimeout(()=>fitView&&fitView(), 60);
+  };
+
+  // ── Welcome screen gate ──
+  if (!started) {
+    return <BrainstormWelcome c={c} dark={dark} onPick={(picked)=>{
+      if (picked.mode) setMode(picked.mode);
+      setStarted(true);
+      if (picked.template) setTimeout(()=>applyTemplate(picked.template), 120);
+      else if (picked.openTemplates) setTimeout(()=>setShowTemplates(true), 120);
+    }}/>;
+  }
+
   return (
     <div style={{display:'flex',flexDirection:'column',height:'calc(100vh - 62px)',borderRadius:14,overflow:'hidden',border:`1px solid ${c.bord}`,userSelect:'none',position:'relative'}}>
 
@@ -5158,6 +5402,31 @@ function BrainstormSpace({ team, session, members=[] }) {
         {connectFrom&&<span style={{fontSize:11,color:'#34D399',background:'rgba(52,211,153,.1)',padding:'4px 10px',borderRadius:8,border:'1px solid rgba(52,211,153,.2)',flexShrink:0}}>✓ Now click another node · Esc to cancel</span>}
 
         <div style={{flex:1}}/>
+        <div style={{position:'relative',flexShrink:0}}>
+          <button onClick={()=>setShowTemplates(true)} style={{padding:'5px 11px',borderRadius:7,border:`1px solid ${c.bord}`,background:'transparent',color:c.sub,cursor:'pointer',fontSize:11.5,fontWeight:600,display:'flex',alignItems:'center',gap:5}}>▦ Templates</button>
+        </div>
+        <div style={{position:'relative',flexShrink:0}}>
+          <button onClick={()=>setShowSens(s=>!s)} title="Board sensitivity" style={{width:30,height:30,borderRadius:7,border:`1px solid ${showSens?'#6366F1':c.bord}`,background:showSens?'rgba(99,102,241,.1)':'transparent',color:showSens?'#6366F1':c.mut,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>⚙</button>
+          {showSens&&(
+            <div onMouseDown={e=>e.stopPropagation()} style={{position:'absolute',top:38,right:0,zIndex:60,width:260,background:dark?'#161B2E':'#fff',border:`1px solid ${c.bord}`,borderRadius:14,boxShadow:'0 14px 44px rgba(0,0,0,.3)',padding:16}}>
+              <div style={{fontSize:13,fontWeight:700,color:c.text,marginBottom:14}}>Board sensitivity</div>
+              <div style={{marginBottom:14}}>
+                <div style={{display:'flex',justifyContent:'space-between',fontSize:11.5,color:c.sub,marginBottom:6}}><span>Zoom speed</span><span style={{color:c.mut}}>{zoomSens<=0.0015?'Slow':zoomSens>=0.0035?'Fast':'Balanced'}</span></div>
+                <input type="range" min="0.0008" max="0.005" step="0.0002" value={zoomSens} onChange={e=>setZoomSens(parseFloat(e.target.value))} style={{width:'100%',accentColor:'#6366F1'}}/>
+              </div>
+              <div style={{marginBottom:14}}>
+                <div style={{display:'flex',justifyContent:'space-between',fontSize:11.5,color:c.sub,marginBottom:6}}><span>Pan speed</span><span style={{color:c.mut}}>{panSens<=0.7?'Slow':panSens>=1.4?'Fast':'Balanced'}</span></div>
+                <input type="range" min="0.4" max="2" step="0.1" value={panSens} onChange={e=>setPanSens(parseFloat(e.target.value))} style={{width:'100%',accentColor:'#6366F1'}}/>
+              </div>
+              <div style={{display:'flex',gap:6}}>
+                {[['Precision',{z:0.0012,p:0.6}],['Balanced',{z:0.0022,p:1}],['Fast',{z:0.004,p:1.6}]].map(([l,v])=>(
+                  <button key={l} onClick={()=>{setZoomSens(v.z);setPanSens(v.p);}} style={{flex:1,padding:'7px 4px',borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',color:c.sub,cursor:'pointer',fontSize:11,fontWeight:600}}>{l}</button>
+                ))}
+              </div>
+              <button onClick={()=>setShowSens(false)} style={{width:'100%',marginTop:12,padding:'7px',borderRadius:8,border:'none',background:'#6366F1',color:'#fff',cursor:'pointer',fontSize:12,fontWeight:600}}>Done</button>
+            </div>
+          )}
+        </div>
         <div style={{display:'flex',gap:3,alignItems:'center',flexShrink:0}}>
           <button onClick={undo} title="Undo Ctrl+Z" style={{width:28,height:28,borderRadius:7,border:`1px solid ${c.bord}`,background:'transparent',color:c.mut,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>↩</button>
           <button onClick={redo} title="Redo Ctrl+Y" style={{width:28,height:28,borderRadius:7,border:`1px solid ${c.bord}`,background:'transparent',color:c.mut,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>↪</button>
@@ -5384,6 +5653,7 @@ function BrainstormSpace({ team, session, members=[] }) {
           {mode==='personal'?'🔒 Personal':'👥 Shared'} · Auto-saved
         </div>
       </div>
+      {showTemplates && <TemplateGallery c={c} dark={dark} onClose={()=>setShowTemplates(false)} onApply={applyTemplate}/>}
     </div>
   );
 }
