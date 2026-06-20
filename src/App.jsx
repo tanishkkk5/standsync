@@ -2946,7 +2946,7 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
 }
 
 // ─── MANAGER TABS ─────────────────────────────────────────────────────────────
-function LiveTab({ tasks, members, onStatus, onPriority, onNote, onAddTask, session }) {
+function LiveTab({ tasks, members, onStatus, onPriority, onNote, onAddTask, onDelete, session, isManager = true }) {
   const c=useC(); const [fu,setFu]=useState('all'); const [fs,setFs]=useState('all'); const [showModal,setShowModal]=useState(false);
   const filtered=tasks.filter(t=>fu==='all'||t.assignee_email===fu).filter(t=>fs==='all'||t.status===fs);
   const total=tasks.length,done=tasks.filter(t=>t.status==='done').length,inProg=tasks.filter(t=>t.status==='in-progress').length,blocked=tasks.filter(t=>t.status==='blocked').length,todo=tasks.filter(t=>t.status==='todo').length,pct=total?Math.round(done/total*100):0;
@@ -2963,35 +2963,41 @@ function LiveTab({ tasks, members, onStatus, onPriority, onNote, onAddTask, sess
           <Btn onClick={()=>setShowModal(true)} style={{ padding:'7px 14px',fontSize:12,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',flexShrink:0 }}>+ Assign task</Btn>
         </div>
         {filtered.length===0?<div style={{ padding:'40px',textAlign:'center',color:c.mut,fontSize:14 }}>{total===0?'⏳ Waiting for team to add tasks...':'No tasks match this filter'}</div>
-          :filtered.map(t=><MgrRow key={t.id} task={t} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} session={session}/>)}
+          :filtered.map(t=><MgrRow key={t.id} task={t} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onDelete={onDelete} session={session} isManager={isManager}/>)}
       </Card>
       {showModal&&<AssignModal members={members} onClose={()=>setShowModal(false)} onAdd={onAddTask}/>}
     </div>
   );
 }
 
-function MgrRow({ task, members, onStatus, onPriority, onNote, session }) {
+function MgrRow({ task, members, onStatus, onPriority, onNote, onDelete, session, isManager = true }) {
   const c=useC(); const [showN,setShowN]=useState(false); const [note,setNote]=useState(task.manager_note||'');
   const member=members.find(m=>m.email===task.assignee_email); const p=getPriority(task.priority);
-  // Managers can start tasks and unblock them, but ONLY employees mark tasks done
-  const next={'todo':'in-progress','in-progress':'in-progress','done':'todo','blocked':'todo'};
-  const canToggle=task.status!=='in-progress'||task.assignee_email===session?.user?.email;
+  // Proper status cycle: todo → in-progress → done → todo. Managers and the
+  // assigned member can both move a task through any status.
+  const cycle={'todo':'in-progress','in-progress':'done','done':'todo','blocked':'in-progress'};
+  const setStatusTo=(s)=>onStatus(task.id,s);
   return (
     <div style={{ borderBottom:`1px solid ${c.bord}`,transition:'background .15s' }} onMouseEnter={e=>e.currentTarget.style.background=c.row} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
       <div style={{ display:'flex',alignItems:'center',gap:10,padding:'11px 16px' }}>
-        <button onClick={()=>canToggle&&onStatus(task.id,next[task.status])} title={task.status==='in-progress'&&!canToggle?'Only the assigned member can mark this done':''} style={{ width:20,height:20,borderRadius:'50%',flexShrink:0,border:`2px solid ${task.status==='done'?'#34D399':'rgba(128,128,128,.3)'}`,background:task.status==='done'?'#34D399':'transparent',cursor:canToggle?'pointer':'not-allowed',opacity:task.status==='in-progress'&&!canToggle?.45:1,display:'flex',alignItems:'center',justifyContent:'center',transition:'all .2s' }}>
+        <button onClick={()=>setStatusTo(cycle[task.status]||'in-progress')} title={`Mark ${cycle[task.status]==='done'?'done':cycle[task.status]==='in-progress'?'in progress':'to do'}`} style={{ width:20,height:20,borderRadius:'50%',flexShrink:0,border:`2px solid ${task.status==='done'?'#34D399':task.status==='in-progress'?'#38BDF8':'rgba(128,128,128,.3)'}`,background:task.status==='done'?'#34D399':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .2s' }}>
           {task.status==='done'&&<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+          {task.status==='in-progress'&&<span style={{ width:7,height:7,borderRadius:'50%',background:'#38BDF8' }}/>}
         </button>
         <div style={{ width:7,height:7,borderRadius:'50%',background:p.color,flexShrink:0 }}/>
         <span style={{ flex:1,fontSize:13,color:task.status==='done'?c.mut:c.text,textDecoration:task.status==='done'?'line-through':'none',lineHeight:1.4 }}>{task.title}</span>
         {task.blocker&&<span style={{ fontSize:10,color:'#F87171',background:'rgba(239,68,68,.12)',border:'1px solid rgba(239,68,68,.25)',padding:'2px 7px',borderRadius:6,whiteSpace:'nowrap' }}>⚠️ Blocked</span>}
         {task.timeline&&<span style={{ fontSize:11,color:c.mut,whiteSpace:'nowrap' }}>🕐 {task.timeline}</span>}
         {member&&<Av member={member} size={24} url={member.avatar_url}/>}
-        <SBadge status={task.status}/>
+        {/* Status dropdown — explicit control for every status */}
+        <select value={task.status} onChange={e=>setStatusTo(e.target.value)} style={{ background:'transparent',border:`1px solid ${c.bord}`,borderRadius:6,color:c.sub,fontSize:10.5,cursor:'pointer',outline:'none',fontWeight:600,padding:'3px 5px' }}>
+          {['todo','in-progress','done','blocked'].map(s=><option key={s} value={s} style={{ background:c.dark?'#0D0B24':'#fff',color:c.text }}>{s==='todo'?'To do':s==='in-progress'?'In progress':s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+        </select>
         <select value={task.priority} onChange={e=>onPriority(task.id,e.target.value)} style={{ background:'transparent',border:'none',color:p.color,fontSize:10,cursor:'pointer',outline:'none',fontWeight:700,letterSpacing:'.05em',textTransform:'uppercase' }}>
           {['critical','high','medium','low'].map(v=><option key={v} value={v} style={{ background:c.dark?'#0D0B24':'#fff',color:c.text }}>{v}</option>)}
         </select>
         <button onClick={()=>setShowN(!showN)} style={{ background:task.manager_note?'rgba(129,140,248,.15)':'transparent',border:task.manager_note?'1px solid rgba(129,140,248,.3)':`1px solid ${c.bord}`,borderRadius:6,cursor:'pointer',padding:'3px 6px',color:task.manager_note?'#818CF8':c.mut,fontSize:12 }}>📌</button>
+        {onDelete&&<button onClick={()=>{ if(window.confirm('Delete this task?')) onDelete(task.id); }} title="Delete task" style={{ background:'transparent',border:`1px solid ${c.bord}`,borderRadius:6,cursor:'pointer',padding:'3px 7px',color:c.mut,fontSize:12 }} onMouseEnter={e=>{e.currentTarget.style.color='#F87171';e.currentTarget.style.borderColor='rgba(239,68,68,.3)';}} onMouseLeave={e=>{e.currentTarget.style.color=c.mut;e.currentTarget.style.borderColor=c.bord;}}>🗑</button>}
       </div>
       {task.blocker&&<div style={{ padding:'0 16px 10px 54px' }}><div style={{ fontSize:12,color:'#F87171',background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.2)',borderRadius:8,padding:'8px 12px' }}>⚠️ {task.blocker}</div></div>}
       {showN&&<div style={{ padding:'0 16px 12px 54px',display:'flex',gap:8 }}><input value={note} onChange={e=>setNote(e.target.value)} placeholder="Add a note..." style={{ flex:1,background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:8,padding:'8px 12px',color:c.text,fontSize:13,outline:'none' }}/><Btn onClick={()=>{onNote(task.id,note);setShowN(false);}} style={{ flexShrink:0,padding:'8px 14px' }}>Save</Btn></div>}
@@ -7000,7 +7006,7 @@ function MailPreviewModal({ mail, onClose }) {
 }
 
 function ManagerView({
- session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers, openPip, pipOpen, isManager = true, canViewPerformance, myRole = 'member' }) {
+ session, team, tasks, members, history, standup, onStatus, onPriority, onNote, onAddTask, onDeleteTask, onBack, onSettings, onLogout, emailBusy, onDigest, onEOD, messages, onSendMessage, chatTheme, onChangeTheme, setMembers, openPip, pipOpen, isManager = true, canViewPerformance, myRole = 'member' }) {
   // Team leads see performance/insights even though they aren't full managers.
   const canPerf = canViewPerformance !== undefined ? canViewPerformance : isManager;
 
@@ -7014,6 +7020,7 @@ function ManagerView({
   const [insightsSub, setInsightsSub]   = useState('overview'); // overview | performance | history
   const [teamSub, setTeamSub]           = useState('directory'); // directory | attendance (manager only)
   const [calSub, setCalSub]             = useState('schedule');  // schedule | meetings
+  const [tasksSub, setTasksSub]         = useState('board');     // board | overview | performance | ai | history
   const [search, setSearch]             = useState('');
   const [searchOpen, setSearchOpen]     = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
@@ -7117,7 +7124,7 @@ function ManagerView({
     { label: 'Communication', area: 'communication', kw: 'chat messages communication' },
     { label: 'Knowledge', area: 'knowledge', kw: 'docs knowledge wiki brainstorm' },
     { label: 'Calendar', area: 'calendar', kw: 'calendar schedule meetings' },
-    ...(canPerf ? [{ label: 'Insights', area: 'insights', kw: 'insights analytics performance' }] : []),
+    ...(canPerf ? [{ label: 'Insights & Performance', area: 'tasks', kw: 'insights analytics performance' }] : []),
   ];
   const searchResults = (() => {
     const q = search.trim().toLowerCase();
@@ -7149,7 +7156,6 @@ function ManagerView({
     { id: 'team',          label: 'Team',          icon: '⚇' },
     { id: 'communication', label: 'Communication', icon: '◌', badge: unreadChat },
     { id: 'knowledge',     label: 'Knowledge',     icon: '◈' },
-    ...(canPerf ? [{ id: 'insights', label: 'Insights', icon: '▤' }] : []),
   ];
   const NAV_YOU = [
     { id: 'calendar',      label: 'Calendar',      icon: '⊟' },
@@ -7329,7 +7335,19 @@ function ManagerView({
           )}
 
           {area === 'tasks' && (
-            <LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} session={session}/>
+            canPerf ? (
+              <>
+                <SubTabs value={tasksSub} onChange={setTasksSub}
+                  tabs={[{ id: 'board', label: 'Tasks' }, { id: 'overview', label: 'Overview' }, { id: 'performance', label: 'Performance' }, { id: 'ai', label: 'Ask AI' }, { id: 'history', label: 'History' }]}/>
+                {tasksSub === 'board' && <LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} onDelete={onDeleteTask} session={session} isManager={isManager}/>}
+                {tasksSub === 'overview' && <TeamAnalysisTab tasks={tasks} members={members}/>}
+                {tasksSub === 'performance' && <PerfTab tasks={tasks} history={history} members={members}/>}
+                {tasksSub === 'ai' && <AIAssistant tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name || 'Team'}/>}
+                {tasksSub === 'history' && <HistTab history={history} members={members}/>}
+              </>
+            ) : (
+              <LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} onDelete={onDeleteTask} session={session} isManager={isManager}/>
+            )
           )}
 
           {area === 'team' && (
@@ -7370,17 +7388,6 @@ function ManagerView({
               {knowledgeSub === 'docs' && <ProjectWiki team={team} session={session} members={members}/>}
               {knowledgeSub === 'brainstorm' && <BrainstormSpace team={team} session={session} members={members}/>}
               {knowledgeSub === 'meetings' && <ManagerNotesTab session={session} team={team}/>}
-            </>
-          )}
-
-          {area === 'insights' && canPerf && (
-            <>
-              <SubTabs value={insightsSub} onChange={setInsightsSub}
-                tabs={[{ id: 'overview', label: 'Overview' }, { id: 'performance', label: 'Performance' }, { id: 'ai', label: 'Ask AI' }, { id: 'history', label: 'History' }]}/>
-              {insightsSub === 'overview' && <TeamAnalysisTab tasks={tasks} members={members}/>}
-              {insightsSub === 'performance' && <PerfTab tasks={tasks} history={history} members={members}/>}
-              {insightsSub === 'ai' && <AIAssistant tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name || 'Team'}/>}
-              {insightsSub === 'history' && <HistTab history={history} members={members}/>}
             </>
           )}
 
@@ -7948,12 +7955,23 @@ export default function App() {
     load();
   },[team]);
 
-  useEffect(()=>{ if(!standup||!SB.IS_LIVE)return; return SB.subscribeToTasks(standup.id,({eventType:et,new:n,old:o})=>{setTasks(p=>et==='INSERT'?[...p,n]:et==='UPDATE'?p.map(t=>t.id===n.id?n:t):p.filter(t=>t.id!==o.id));}); },[standup]);
+  useEffect(()=>{ if(!standup||!SB.IS_LIVE)return; return SB.subscribeToTasks(standup.id,({eventType:et,new:n,old:o})=>{setTasks(p=>{ if(et==='INSERT') return p.find(t=>t.id===n.id)?p:[...p,n]; if(et==='UPDATE') return p.map(t=>t.id===n.id?n:t); return p.filter(t=>t.id!==o.id); });}); },[standup]);
+  // Safety net: refresh tasks periodically and on window focus so a manager always
+  // sees members' newly-added tasks even if a realtime event was missed.
+  useEffect(()=>{
+    if(!standup||!SB.IS_LIVE)return;
+    const refresh=async()=>{ try{ const t=await SB.getTasks(standup.id); if(Array.isArray(t)) setTasks(t); }catch(e){} };
+    const iv=setInterval(refresh,30000);
+    const onFocus=()=>refresh();
+    window.addEventListener('focus',onFocus);
+    return ()=>{ clearInterval(iv); window.removeEventListener('focus',onFocus); };
+  },[standup]);
   // Real-time chat subscription
   useEffect(()=>{ if(!team||!SB.IS_LIVE)return; return SB.subscribeToMessages(team.id,(msg)=>{setMessages(p=>{if(p.find(m=>m.id===msg.id))return p;return [...p,msg];});}); },[team]);
 
   const handleAddTask=useCallback(async(d)=>{ if(!d?.title?.trim()) return; const {_timeBlock,...task}=d; const persistBlock=(tid)=>{ if(_timeBlock&&_timeBlock.start&&_timeBlock.end){ try{ const k='ss-schedule-'+(team?.id||'demo'); const cur=JSON.parse(localStorage.getItem(k)||'{}'); cur[tid]=_timeBlock; localStorage.setItem(k,JSON.stringify(cur)); }catch(e){} } }; if(!SB.IS_LIVE){const nt={id:'demo_'+Date.now(),...task,created_at:new Date().toISOString()};setTasks(p=>[...p,nt]);persistBlock(nt.id);return;} const{data}=await SB.addTask({...task,standup_id:standup?.id}); if(data){setTasks(p=>[...p,data]);persistBlock(data.id);} },[standup,team]);
-  const handleStatus=useCallback(async(id,status)=>{ const u={status,...(status==='done'?{completed_at:new Date().toISOString()}:{})}; if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));return;} await SB.updateTask(id,u); },[]);
+  const handleStatus=useCallback(async(id,status)=>{ const u={status,...(status==='done'?{completed_at:new Date().toISOString()}:{})}; if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));return;} await SB.updateTask(id,u); setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t)); },[]);
+  const handleDeleteTask=useCallback(async(id)=>{ setTasks(p=>p.filter(t=>t.id!==id)); if(SB.IS_LIVE){ try{ const del=sbFn('deleteTask'); if(del){ await del(id); } else if(SB.supabase){ await SB.supabase.from('tasks').delete().eq('id',id); } }catch(e){} } },[]);
   const handlePriority=useCallback(async(id,priority)=>{ if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,priority}:t));return;} await SB.updateTask(id,{priority}); },[]);
   const handleNote=useCallback(async(id,manager_note)=>{ if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,manager_note}:t));return;} await SB.updateTask(id,{manager_note}); },[]);
   const handleBlocker=useCallback(async(id,blocker)=>{ const u={status:'blocked',blocker}; if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));showToast('⚠️ Blocker reported');return;} await SB.updateTask(id,u); const task=tasks.find(t=>t.id===id),manager=members.find(m=>m.role==='manager'); if(task&&manager)await Email.sendBlockerAlert(manager.email,{email:session.user.email,name:session.user.user_metadata?.name},{...task,blocker}); showToast('⚠️ Blocker reported — manager notified'); },[tasks,members,session,showToast]);
@@ -8115,9 +8133,9 @@ export default function App() {
       {/* App views */}
       {(session||!SB.IS_LIVE)&&view==='home'&&<HomeView key={homeKey} session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onSelectTeam={handleSelectTeam} onLogout={handleLogout} onSettings={()=>setView('settings')}/>}
       {(session||!SB.IS_LIVE)&&view==='settings'&&<SettingsPage session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onBack={()=>setView(team?'standup':'home')} onSaved={d=>showToast('Profile saved')}/>}
-      {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView canViewPerformance={canViewPerformance} myRole={myRole} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
+      {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView canViewPerformance={canViewPerformance} myRole={myRole} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
       {/* PiP is a real popup window — no DOM element needed */}
-      {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<ManagerView isManager={false} canViewPerformance={canViewPerformance} myRole={myRole} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
+      {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<ManagerView isManager={false} canViewPerformance={canViewPerformance} myRole={myRole} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
     </ThemeCtx.Provider>
   );
 }
