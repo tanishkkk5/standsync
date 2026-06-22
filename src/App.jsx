@@ -2120,20 +2120,23 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
 // ─── REMINDERS ─────────────────────────────────────────────────────────────
 function RemindersPanel() {
   const c=useC();
-  const [reminders,setReminders]=useState([
-    {id:'r1',label:'Standup starting soon',enabled:true,minutes:10},
-    {id:'r2',label:'Task deadline reminder',enabled:true,minutes:60},
-    {id:'r3',label:'EOD incomplete tasks',enabled:true,time:'18:00'},
-    {id:'r4',label:'Blocker follow-up',enabled:false,minutes:120},
-  ]);
+  const [reminders,setReminders]=useState(()=>{
+    try{ const raw=localStorage.getItem('ss-reminders'); if(raw) return JSON.parse(raw); }catch{}
+    return [
+      {id:'r1',label:'Standup starting soon',enabled:true,minutes:10},
+      {id:'r2',label:'Task deadline reminder',enabled:true,minutes:60},
+      {id:'r3',label:'EOD incomplete tasks',enabled:true,time:'18:00'},
+      {id:'r4',label:'Blocker follow-up',enabled:false,minutes:120},
+    ];
+  });
   const [saved,setSaved]=useState(false);
   const toggle=id=>setReminders(p=>p.map(r=>r.id===id?{...r,enabled:!r.enabled}:r));
   const updateMins=(id,v)=>setReminders(p=>p.map(r=>r.id===id?{...r,minutes:parseInt(v)||0}:r));
-  const save=()=>{setSaved(true);setTimeout(()=>setSaved(false),2000);};
+  const save=()=>{ try{ localStorage.setItem('ss-reminders',JSON.stringify(reminders)); }catch{} setSaved(true);setTimeout(()=>setSaved(false),2000);};
   return(
     <div>
       <div style={{ fontSize:15,fontWeight:700,color:c.text,marginBottom:4 }}>Reminders</div>
-      <div style={{ fontSize:13,color:c.mut,marginBottom:18 }}>Email reminders for your team. Requires REACT_APP_RESEND_KEY.</div>
+      <div style={{ fontSize:13,color:c.mut,marginBottom:18 }}>Choose which reminders your team gets and when. These send by email through the server once email delivery is set up.</div>
       <div style={{ display:'flex',flexDirection:'column',gap:10,marginBottom:18 }}>
         {reminders.map(r=>(
           <Card key={r.id} style={{ padding:'14px 16px' }}>
@@ -2146,6 +2149,7 @@ function RemindersPanel() {
         ))}
       </div>
       <Btn onClick={save}>{saved?'✓ Saved!':'Save reminders'}</Btn>
+      <p style={{ fontSize:11.5,color:c.mut,marginTop:10,lineHeight:1.6 }}>Your preferences are saved. Automatic timed delivery (e.g. "10 min before standup") runs from a scheduled server job — the same Vercel Cron + email setup used for the daily report. Until that's deployed, these are saved but won't fire on their own.</p>
     </div>
   );
 }
