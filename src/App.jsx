@@ -1559,7 +1559,7 @@ function GroupCreateModal({ members, myEmail, onClose, onCreate }){
   );
 }
 
-function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='default', onChangeTheme, isManager=false, onCreateTask }) {
+function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='default', onChangeTheme, isManager=false, onCreateTask, teamId='demo' }) {
   const c=useC();
   const [msg,setMsg]=useState('');
   const [activeSpace,setActiveSpace]=useState('general');
@@ -1810,7 +1810,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
     acc[acc.length-1].msgs.push(m); return acc;
   },[]);
 
-  const DEFAULT_SPACES=[{id:'general',label:'general',icon:'#'},{id:'announcements',label:'announcements',icon:'#'},{id:'random',label:'random',icon:'#'}]; // kept for chat sidebar
+  const DEFAULT_SPACES=[{id:'teamboard',label:'team board',icon:'📋'},{id:'general',label:'general',icon:'#'},{id:'announcements',label:'announcements',icon:'#'},{id:'random',label:'random',icon:'#'}]; // kept for chat sidebar
   // ── Per-DM unread tracking ──
   const [dmReads,setDmReads]=useState(()=>{ try{ return JSON.parse(localStorage.getItem('ss-dm-reads-'+myEmail)||'{}'); }catch{ return {}; } });
   const dmUnread=useMemo(()=>{
@@ -1923,7 +1923,8 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
         <div style={{ padding:'0 16px',height:52,display:'flex',alignItems:'center',gap:10,borderBottom:`1px solid ${c.bord}`,background:c.nav,flexShrink:0 }}>
           <span style={{ fontSize:13,fontWeight:700,color:c.mut }}>{activeSpace.startsWith('dm-')?'@':'#'}</span>
           <span style={{ fontSize:14,fontWeight:700,color:c.text }}>{activeLabel}</span>
-          {!activeSpace.startsWith('dm-')&&<span style={{ fontSize:12,color:c.mut }}>· {members.length} members</span>}
+          {!activeSpace.startsWith('dm-')&&activeSpace!=='teamboard'&&<span style={{ fontSize:12,color:c.mut }}>· {members.length} members</span>}
+          {activeSpace==='teamboard'&&<span style={{ fontSize:12,color:c.mut }}>· everyone can post, reply & claim (✋) tasks</span>}
           <div style={{ flex:1 }}/>
           {pinnedMsgs.length>0&&<button onClick={()=>setShowPinned(!showPinned)} style={{ display:'flex',alignItems:'center',gap:5,padding:'4px 10px',borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',color:c.mut,fontSize:12 }}>📌 {pinnedMsgs.length}</button>}
           <button onClick={()=>setShowFiles(!showFiles)} title="Files & links" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:showFiles?'rgba(99,102,241,.12)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:showFiles?'#818CF8':c.mut }}>🗂️</button>
@@ -1941,6 +1942,34 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
             ))}
           </div>
         )}
+
+        {/* DM status banner — shows if the person you're messaging is on break/away */}
+        {activeSpace.startsWith('dm-')&&(()=>{
+          const who=activeSpace.slice(3);
+          let att={}; try{ att=JSON.parse(localStorage.getItem('ss-attendance-'+teamId+'-'+new Date().toISOString().slice(0,10))||'{}'); }catch{}
+          const r=att[who]||{};
+          const ab=(r.breaks||[]).find(b=>!b.end);
+          const online=r.online!==false&&r.lastSeen&&(Date.now()-r.lastSeen)<70000;
+          if(ab){
+            const backAt=ab.plannedMins?new Date(ab.start+ab.plannedMins*60000):null;
+            const backStr=backAt?backAt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):null;
+            return (
+              <div style={{ padding:'10px 16px',borderBottom:`1px solid ${c.bord}`,background:'rgba(251,191,36,.08)',flexShrink:0,display:'flex',alignItems:'center',gap:9,fontSize:12.5,color:c.sub }}>
+                <span style={{ fontSize:14 }}>⏸️</span>
+                <span><strong style={{ color:'#F59E0B' }}>{activeLabel} is on {ab.label} break</strong>{backStr?` · back around ${backStr}`:''}{ab.note?` — "${ab.note}"`:''}. Your message will be waiting when they return.</span>
+              </div>
+            );
+          }
+          if(!online&&r.clockIn&&!r.clockOut){
+            return (
+              <div style={{ padding:'10px 16px',borderBottom:`1px solid ${c.bord}`,background:dark?'rgba(255,255,255,.04)':'rgba(0,0,0,.03)',flexShrink:0,display:'flex',alignItems:'center',gap:9,fontSize:12.5,color:c.mut }}>
+                <span style={{ fontSize:14 }}>🌙</span>
+                <span><strong>{activeLabel} is away</strong> right now. They'll see your message when they're back.</span>
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         {/* Messages + Files panel */}
         <div style={{ flex:1,display:'flex',minHeight:0 }}>
@@ -2016,6 +2045,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
                         ))}
                         <button onClick={()=>{setReplyTo(m);inputRef.current?.focus();}} style={{ width:28,height:28,borderRadius:7,border:'none',background:'transparent',cursor:'pointer',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',color:c.mut }} title="Reply">↩</button>
                         <button onClick={()=>pinMsg(m)} style={{ width:28,height:28,borderRadius:7,border:'none',background:'transparent',cursor:'pointer',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',color:c.mut }} title="Pin">📌</button>
+                        {activeSpace==='teamboard'&&m.type==='text'&&onCreateTask&&<button onClick={()=>{ onCreateTask({title:(m.text||'').slice(0,140),assignee_email:myEmail,assignee_name:myName,priority:'medium',status:'todo',timeline:'Today EOD (6 PM)',notes:'From team board · posted by '+(m.sender_name||''),manager_note:'',blocker:''}); sendMsg('✋ '+myName+' claimed this as a task','tasknote'); }} style={{ width:28,height:28,borderRadius:7,border:'none',background:'transparent',cursor:'pointer',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',color:'#6366F1' }} title="Claim as my task">✋</button>}
                       </div>
                     </div>
                   );
@@ -3238,7 +3268,7 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
             {mine.length===0&&<Card style={{ padding:'40px 20px',textAlign:'center' }}><div style={{ fontSize:36,marginBottom:12 }}>📋</div><div style={{ color:c.mut,fontSize:14 }}>No tasks yet — add what was assigned above</div></Card>}
           </>
         )}
-        {activeTab==='chat'&&<RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme}/>}
+        {activeTab==='chat'&&<RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme} teamId={team?.id||'demo'}/>}
         {activeTab==='cal'&&<CalendarPanel team={null} session={session} members={members}/>}
         {activeTab==='brain'&&<BrainstormSpace team={null} session={session} members={members}/>}
         {activeTab==='wiki'&&<ProjectWiki team={null} session={session} members={members}/>}
@@ -3328,8 +3358,11 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
 }
 
 // ─── MANAGER TABS ─────────────────────────────────────────────────────────────
-function LiveTab({ tasks, members, onStatus, onPriority, onNote, onAddTask, onDelete, session, isManager = true }) {
+function LiveTab({ tasks: allTasks, members, onStatus, onPriority, onNote, onAddTask, onDelete, session, isManager = true }) {
   const c=useC(); const [fu,setFu]=useState('all'); const [fs,setFs]=useState('all'); const [showModal,setShowModal]=useState(false);
+  const myEmail=(session?.user?.email||'').toLowerCase();
+  // Members only ever see their OWN tasks; managers/leads see everyone's.
+  const tasks=isManager?allTasks:allTasks.filter(t=>(t.assignee_email||'').toLowerCase()===myEmail);
   const filtered=tasks.filter(t=>fu==='all'||t.assignee_email===fu).filter(t=>fs==='all'||t.status===fs);
   const total=tasks.length,done=tasks.filter(t=>t.status==='done').length,inProg=tasks.filter(t=>t.status==='in-progress').length,blocked=tasks.filter(t=>t.status==='blocked').length,todo=tasks.filter(t=>t.status==='todo').length,pct=total?Math.round(done/total*100):0;
   return (
@@ -3340,7 +3373,7 @@ function LiveTab({ tasks, members, onStatus, onPriority, onNote, onAddTask, onDe
       {total>0&&<Card style={{ padding:'14px 18px',marginBottom:16 }}><div style={{ display:'flex',justifyContent:'space-between',marginBottom:8 }}><span style={{ fontSize:13,color:c.mut }}>Team progress</span><span style={{ fontSize:13,fontWeight:700,color:'#818CF8' }}>{pct}% · {done}/{total}</span></div><Bar pct={pct} h={8} color="linear-gradient(90deg,#6366F1,#34D399)"/></Card>}
       <Card style={{ overflow:'hidden' }}>
         <div style={{ padding:'12px 16px',borderBottom:`1px solid ${c.bord}`,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center' }}>
-          <div style={{ display:'flex',gap:5,flex:1,flexWrap:'wrap' }}>{[{v:'all',l:'All'},...members.map(m=>({v:m.email,l:(m.name||m.email).split(' ')[0]}))].map(f=><button key={f.v} onClick={()=>setFu(f.v)} style={{ fontSize:12,padding:'5px 12px',borderRadius:20,border:`1px solid ${c.bord}`,background:fu===f.v?'rgba(129,140,248,.2)':'transparent',color:fu===f.v?'#818CF8':c.mut,cursor:'pointer',fontWeight:fu===f.v?700:400,transition:'all .15s' }}>{f.l}</button>)}</div>
+          <div style={{ display:'flex',gap:5,flex:1,flexWrap:'wrap' }}>{(isManager?[{v:'all',l:'All'},...members.map(m=>({v:m.email,l:(m.name||m.email).split(' ')[0]}))]:[]).map(f=><button key={f.v} onClick={()=>setFu(f.v)} style={{ fontSize:12,padding:'5px 12px',borderRadius:20,border:`1px solid ${c.bord}`,background:fu===f.v?'rgba(129,140,248,.2)':'transparent',color:fu===f.v?'#818CF8':c.mut,cursor:'pointer',fontWeight:fu===f.v?700:400,transition:'all .15s' }}>{f.l}</button>)}</div>
           <div style={{ display:'flex',gap:5 }}>{['all','todo','in-progress','done','blocked'].map(s=><button key={s} onClick={()=>setFs(s)} style={{ fontSize:11,padding:'4px 10px',borderRadius:20,border:`1px solid ${c.bord}`,background:fs===s?'rgba(128,128,128,.12)':'transparent',color:c.mut,cursor:'pointer',fontWeight:fs===s?700:400,textTransform:'capitalize' }}>{s==='all'?'All':s.replace('-',' ')}</button>)}</div>
           {isManager
             ? <Btn onClick={()=>setShowModal(true)} style={{ padding:'7px 14px',fontSize:12,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',flexShrink:0 }}>+ Assign task</Btn>
@@ -7656,7 +7689,7 @@ function useAttendance(teamId, email) {
   const rec = log[email] || {};
   const clockIn = () => { const n = { ...readAtt(teamId) }; n[email] = { ...(n[email] || {}), clockIn: Date.now(), lastSeen: Date.now() }; writeAtt(teamId, n); setLog(n); };
   const clockOut = () => { const n = { ...readAtt(teamId) }; n[email] = { ...(n[email] || {}), clockOut: Date.now() }; writeAtt(teamId, n); setLog(n); };
-  const startBreak = (label, plannedMins) => { const n = { ...readAtt(teamId) }; const r = { ...(n[email] || {}) }; r.breaks = [...(r.breaks || []), { id: 'b' + Date.now(), label, plannedMins, start: Date.now(), end: null }]; n[email] = r; writeAtt(teamId, n); setLog(n); };
+  const startBreak = (label, plannedMins, note) => { const n = { ...readAtt(teamId) }; const r = { ...(n[email] || {}) }; r.breaks = [...(r.breaks || []), { id: 'b' + Date.now(), label, plannedMins, note: note || '', start: Date.now(), end: null }]; n[email] = r; writeAtt(teamId, n); setLog(n); };
   const endBreak = () => { const n = { ...readAtt(teamId) }; const r = { ...(n[email] || {}) }; r.breaks = (r.breaks || []).map(b => b.end ? b : { ...b, end: Date.now(), mins: Math.round((Date.now() - b.start) / 60000) }); n[email] = r; writeAtt(teamId, n); setLog(n); };
   const activeBreak = (rec.breaks || []).find(b => !b.end);
   const status = activeBreak ? 'break' : (rec.clockIn && !rec.clockOut ? 'online' : 'offline');
@@ -7735,6 +7768,7 @@ function AttendancePanel({ team, members, session, isManager }) {
   const [log, setLog] = useState(() => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { return {}; } });
   const [now, setNow] = useState(Date.now());
   const [customMin, setCustomMin] = useState('');
+  const [breakNote, setBreakNote] = useState('');
 
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(t); }, []);
 
@@ -7772,7 +7806,7 @@ function AttendancePanel({ team, members, session, isManager }) {
   const clockOut = () => { const next = { ...log }; next[myEmail] = { ...(next[myEmail] || {}), clockOut: Date.now() }; save(next); };
   const startBreak = (bt) => {
     const mins = bt.id === 'custom' ? (parseInt(customMin) || 0) : bt.mins;
-    const next = { ...log }; const r = { ...(next[myEmail] || {}) }; r.breaks = [...(r.breaks || []), { id: 'b' + Date.now(), type: bt.id, label: bt.id === 'custom' ? `${mins} min` : bt.label, plannedMins: mins, start: Date.now(), end: null }]; next[myEmail] = r; save(next); setCustomMin('');
+    const next = { ...log }; const r = { ...(next[myEmail] || {}) }; r.breaks = [...(r.breaks || []), { id: 'b' + Date.now(), type: bt.id, label: bt.id === 'custom' ? `${mins} min` : bt.label, plannedMins: mins, note: (breakNote||'').trim(), start: Date.now(), end: null }]; next[myEmail] = r; save(next); setCustomMin(''); setBreakNote('');
   };
   const endBreak = () => { const next = { ...log }; const r = { ...(next[myEmail] || {}) }; r.breaks = (r.breaks || []).map(b => b.end ? b : { ...b, end: Date.now(), mins: Math.round((Date.now() - b.start) / 60000) }); next[myEmail] = r; save(next); };
 
@@ -7832,6 +7866,7 @@ function AttendancePanel({ team, members, session, isManager }) {
       ) : myRec.clockIn && !myRec.clockOut && (
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 8 }}>Log a break</div>
+          <input value={breakNote} onChange={e => setBreakNote(e.target.value)} placeholder="Optional note shown to teammates (e.g. 'back by 2pm, ping for urgent')" style={{ width: '100%', boxSizing: 'border-box', background: c.inp, border: `1px solid ${c.inpB}`, borderRadius: 9, padding: '8px 11px', color: c.text, fontSize: 12.5, outline: 'none', marginBottom: 10 }}/>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             {BREAK_TYPES.filter(b => b.id !== 'custom').map(bt => (
               <button key={bt.id} onClick={() => startBreak(bt)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: `1px solid ${c.bord}`, background: c.surf, color: c.text, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
@@ -8596,7 +8631,7 @@ function ManagerView({
           )}
 
           {area === 'communication' && (
-            <RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme} isManager={true} onCreateTask={onAddTask}/>
+            <RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme} isManager={true} onCreateTask={onAddTask} teamId={team?.id||'demo'}/>
           )}
 
           {area === 'spaces' && <SpacesArea team={team} session={session} members={members}/>}
