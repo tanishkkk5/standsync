@@ -3981,53 +3981,89 @@ function ReliabilityTab({ tasks, members, history, team }) {
   const c = useC();
   const commitments = buildCommitments(tasks, history);
   const teamScore = reliabilityOf(commitments);
-  // per-member
+
+  // per-member commitment reliability
   const byMember = members.map(m => {
     const cs = commitments.filter(x => (x.who || '').toLowerCase() === (m.email || '').toLowerCase());
     return { m, cs, score: reliabilityOf(cs), kept: cs.filter(x => x.outcome === 'kept').length, missed: cs.filter(x => x.outcome === 'missed').length, pending: cs.filter(x => x.outcome === 'pending').length };
   }).filter(x => x.cs.length > 0).sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
 
   const scoreColor = (s) => s == null ? '#94A3B8' : s >= 85 ? '#16A34A' : s >= 65 ? '#D97706' : '#DC2626';
+  const scoreLabel = (s) => s == null ? 'No data' : s >= 85 ? 'Highly reliable' : s >= 65 ? 'Mostly reliable' : 'At risk';
   const totalKept = commitments.filter(c => c.outcome === 'kept').length;
   const totalMissed = commitments.filter(c => c.outcome === 'missed').length;
   const totalPending = commitments.filter(c => c.outcome === 'pending').length;
+  const resolvedCount = totalKept + totalMissed;
+
+  // Reliability trend: this half of history vs the prior half
+  const periodScore = (days) => {
+    let kept = 0, resolved = 0;
+    (days || []).forEach(d => (d.tasks || []).forEach(t => {
+      if (!t.assignee_email || !t.timeline) return;
+      const overdue = isCommitmentOverdue(t.timeline, t.created_at);
+      if (t.status === 'done') { kept++; resolved++; }
+      else if (overdue) { resolved++; }
+    }));
+    return resolved ? Math.round(kept / resolved * 100) : null;
+  };
+  const recentP = periodScore((history || []).slice(0, 5));
+  const olderP = periodScore((history || []).slice(5, 10));
+  const trend = (recentP != null && olderP != null) ? recentP - olderP : null;
+
+  // Commitment ledger — who / what / by when / outcome
+  const outcomeMeta = { kept: { l: 'Kept', col: '#16A34A', bg: 'rgba(22,163,74,.1)' }, missed: { l: 'Missed', col: '#DC2626', bg: 'rgba(220,38,38,.1)' }, pending: { l: 'Pending', col: '#D97706', bg: 'rgba(217,119,6,.1)' } };
+  const ledger = [...commitments].sort((a, b) => {
+    const order = { missed: 0, pending: 1, kept: 2 };
+    return order[a.outcome] - order[b.outcome];
+  }).slice(0, 14);
+
+  const ringSize = 132, r = (ringSize - 16) / 2, circ = 2 * Math.PI * r;
 
   return (
     <div>
       <div style={{ marginBottom: 18 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: c.text, marginBottom: 4 }}>Commitment reliability</h2>
-        <p style={{ fontSize: 12.5, color: c.mut, lineHeight: 1.6 }}>Most tools track tasks. This tracks what people <strong>promised</strong> — every owned task with a deadline becomes a commitment. When the deadline passes it's <span style={{ color: '#16A34A', fontWeight: 600 }}>kept</span>, <span style={{ color: '#DC2626', fontWeight: 600 }}>missed</span>, or still pending. Reliability is kept ÷ resolved.</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 5 }}>
+          <h2 style={{ fontSize: 19, fontWeight: 800, color: c.text, margin: 0, letterSpacing: '-.01em' }}>Execution Reliability Engine</h2>
+          <span style={{ fontSize: 9.5, fontWeight: 800, color: '#6366F1', background: 'rgba(99,102,241,.12)', padding: '3px 8px', borderRadius: 6, letterSpacing: '.04em', textTransform: 'uppercase' }}>Signature</span>
+        </div>
+        <p style={{ fontSize: 12.5, color: c.mut, lineHeight: 1.6, maxWidth: 720 }}>Who said they would do what, by when — and how often they actually deliver. Most tools track tasks; this tracks <strong>commitments, trust, and execution reliability</strong> across the team. Every owned task with a deadline becomes a commitment, scored when its deadline passes.</p>
       </div>
 
       {commitments.length === 0 ? (
-        <Card style={{ padding: '40px', textAlign: 'center' }}>
-          <div style={{ fontSize: 34, marginBottom: 12 }}>🤝</div>
+        <Card style={{ padding: '44px', textAlign: 'center' }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>🤝</div>
           <div style={{ color: c.sub, fontSize: 14, fontWeight: 600, marginBottom: 4 }}>No commitments tracked yet</div>
-          <div style={{ color: c.mut, fontSize: 12.5 }}>Assign tasks with a timeline and they'll show up here as commitments.</div>
+          <div style={{ color: c.mut, fontSize: 12.5 }}>Assign tasks with a timeline and they become tracked commitments here.</div>
         </Card>
       ) : (
         <>
-          {/* Headline scores */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 18 }}>
-            {[
-              { l: 'Team reliability', s: teamScore, sub: `${totalKept} kept · ${totalMissed} missed` },
-              { l: 'Commitments', s: null, raw: commitments.length, sub: `${totalPending} still pending` },
-              { l: 'On-time rate', s: teamScore, sub: 'of resolved commitments' },
-            ].map((card, i) => (
-              <div key={i} style={{ padding: '18px', borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}` }}>
-                <div style={{ fontSize: 11, color: c.mut, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>{card.l}</div>
-                <div style={{ fontSize: 30, fontWeight: 800, color: card.s == null && card.raw == null ? c.mut : (card.raw != null ? c.text : scoreColor(card.s)) }}>{card.raw != null ? card.raw : (card.s == null ? '—' : card.s + '%')}</div>
-                <div style={{ fontSize: 11.5, color: c.mut, marginTop: 3 }}>{card.sub}</div>
+          {/* HERO — team trust score */}
+          <div style={{ borderRadius: 18, background: 'linear-gradient(135deg, rgba(99,102,241,.1), rgba(129,140,248,.03))', border: '1px solid rgba(99,102,241,.22)', padding: '24px 26px', marginBottom: 16, display: 'flex', gap: 28, alignItems: 'center', flexWrap: 'wrap' }}>
+            <svg width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`} style={{ flexShrink: 0 }}>
+              <circle cx={ringSize/2} cy={ringSize/2} r={r} fill="none" stroke="rgba(128,128,128,.15)" strokeWidth="11"/>
+              <circle cx={ringSize/2} cy={ringSize/2} r={r} fill="none" stroke={scoreColor(teamScore)} strokeWidth="11" strokeLinecap="round"
+                strokeDasharray={circ} strokeDashoffset={circ * (1 - (teamScore ?? 0)/100)} transform={`rotate(-90 ${ringSize/2} ${ringSize/2})`}/>
+              <text x="50%" y="46%" dominantBaseline="middle" textAnchor="middle" fontSize="34" fontWeight="800" fill={scoreColor(teamScore)}>{teamScore == null ? '—' : teamScore}</text>
+              <text x="50%" y="62%" dominantBaseline="middle" textAnchor="middle" fontSize="11" fill={c.mut}>/ 100</text>
+            </svg>
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <div style={{ fontSize: 12, color: c.mut, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>Team execution reliability</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: scoreColor(teamScore), marginBottom: 8 }}>{scoreLabel(teamScore)}</div>
+              <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+                <div><span style={{ fontSize: 20, fontWeight: 800, color: '#16A34A' }}>{totalKept}</span><span style={{ fontSize: 12, color: c.mut, marginLeft: 5 }}>kept</span></div>
+                <div><span style={{ fontSize: 20, fontWeight: 800, color: '#DC2626' }}>{totalMissed}</span><span style={{ fontSize: 12, color: c.mut, marginLeft: 5 }}>missed</span></div>
+                <div><span style={{ fontSize: 20, fontWeight: 800, color: '#D97706' }}>{totalPending}</span><span style={{ fontSize: 12, color: c.mut, marginLeft: 5 }}>pending</span></div>
+                {trend != null && <div><span style={{ fontSize: 20, fontWeight: 800, color: trend >= 0 ? '#16A34A' : '#DC2626' }}>{trend >= 0 ? '▲' : '▼'}{Math.abs(trend)}%</span><span style={{ fontSize: 12, color: c.mut, marginLeft: 5 }}>vs last period</span></div>}
               </div>
-            ))}
+            </div>
           </div>
 
-          {/* Accountability heatmap */}
+          {/* Accountability heatmap (composite signals) */}
           <AccountabilityHeatmap members={members} tasks={tasks} history={history} commitments={commitments}/>
 
-          {/* Per-employee reliability */}
+          {/* Per-person reliability leaderboard */}
           <Card style={{ padding: '18px 20px', marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 14 }}>By employee</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 14 }}>Reliability by person</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {byMember.map(({ m, score, kept, missed, pending }) => (
                 <div key={m.email} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -4043,31 +4079,32 @@ function ReliabilityTab({ tasks, members, history, team }) {
             </div>
           </Card>
 
-          {/* Recent missed commitments */}
-          {totalMissed > 0 && (
-            <Card style={{ padding: '18px 20px' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 12 }}>Missed commitments</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {commitments.filter(x => x.outcome === 'missed').slice(0, 8).map((x, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, background: 'rgba(239,68,68,.05)', border: '1px solid rgba(239,68,68,.18)' }}>
-                    <span style={{ fontSize: 13, color: c.text, flex: 1 }}>{x.text}</span>
-                    <span style={{ fontSize: 11, color: c.mut }}>{x.whoName?.split(' ')[0]} · promised {x.timeline}</span>
+          {/* Commitment ledger — who promised what, by when, outcome */}
+          <Card style={{ padding: '18px 20px' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 4 }}>Commitment ledger</div>
+            <p style={{ fontSize: 11.5, color: c.mut, marginBottom: 14 }}>Every promise on record — who, what, by when, and whether it was delivered. Missed and pending shown first.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {ledger.map((x, i) => {
+                const om = outcomeMeta[x.outcome];
+                return (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, background: c.row }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 600, color: c.sub, width: 92, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(x.whoName || '').split(' ')[0]}</span>
+                    <span style={{ flex: 1, fontSize: 13, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{x.text}</span>
+                    <span style={{ fontSize: 11, color: c.mut, whiteSpace: 'nowrap' }}>by {x.timeline}</span>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: om.col, background: om.bg, padding: '3px 9px', borderRadius: 20, whiteSpace: 'nowrap' }}>{om.l}</span>
                   </div>
-                ))}
-              </div>
-            </Card>
-          )}
+                );
+              })}
+            </div>
+          </Card>
 
-          <p style={{ fontSize: 11, color: c.mut, marginTop: 14, lineHeight: 1.5 }}>How it's measured: a commitment is "resolved" once its deadline passes — completed = kept, still open/blocked = missed. Pending commitments (deadline not yet reached) don't count for or against the score until they resolve.</p>
+          <p style={{ fontSize: 11, color: c.mut, marginTop: 14, lineHeight: 1.5 }}>Reliability = kept ÷ resolved commitments. A commitment resolves once its deadline passes (completed = kept, still open = missed). Pending commitments don't affect the score until they resolve. Precise on-time vs. late tracking unlocks when tasks carry an exact due date and completion timestamp.</p>
         </>
       )}
     </div>
   );
 }
 
-// ─── MANAGER TIME SAVED DASHBOARD ─────────────────────────────────────────────
-// Honest ROI view from real activity counts × transparent per-action time assumptions.
-// ─── AI WEEKLY EXECUTIVE SUMMARY ──────────────────────────────────────────────
 function WeeklyExecSummary({ tasks, members, history, team }) {
   const c = useC();
   const [aiText, setAiText] = useState('');
@@ -9658,7 +9695,7 @@ function ManagerView({
             canPerf ? (
               <>
                 <SubTabs value={tasksSub} onChange={setTasksSub}
-                  tabs={[{ id: 'board', label: 'Tasks' }, { id: 'overview', label: 'Overview' }, { id: 'reliability', label: 'Reliability' }, { id: 'report', label: 'Daily Report' }, { id: 'ai', label: 'Ask AI' }, { id: 'history', label: 'History' }, ...(isManager ? [{ id: 'weekly', label: 'Weekly summary' }, { id: 'elevate', label: 'Elevate' }, { id: 'timesaved', label: 'Time saved' }] : [])]}/>
+                  tabs={[{ id: 'board', label: 'Tasks' }, { id: 'overview', label: 'Overview' }, { id: 'reliability', label: 'Reliability Engine' }, { id: 'report', label: 'Daily Report' }, { id: 'ai', label: 'Ask AI' }, { id: 'history', label: 'History' }, ...(isManager ? [{ id: 'weekly', label: 'Weekly summary' }, { id: 'elevate', label: 'Elevate' }, { id: 'timesaved', label: 'Time saved' }] : [])]}/>
                 {tasksSub === 'board' && <LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} onDelete={onDeleteTask} session={session} isManager={isManager}/>}
                 {tasksSub === 'overview' && <TeamAnalysisTab tasks={tasks} members={members} history={history}/>}
                 {tasksSub === 'reliability' && <ReliabilityTab tasks={tasks} members={members} history={history} team={team}/>}
