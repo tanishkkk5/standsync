@@ -3010,7 +3010,7 @@ function AvatarAdjustModal({ url, posX=50, posY=50, zoom=1, onClose, onSave }) {
   );
 }
 
-function SettingsPage({ session, onBack, onSaved }) {
+function SettingsPage({ session, onBack, onSaved, team, members = [], setMembers, isManager = false }) {
   const c=useC(); const { dark, toggle }=useTheme();
   const [tab,setTab]=useState('profile'); const [name,setName]=useState(session?.user?.user_metadata?.name||'');
   const [saving,setSaving]=useState(false); const [newPw,setNewPw]=useState(''); const [pwErr,setPwErr]=useState(''); const [pwOk,setPwOk]=useState(false);
@@ -3024,7 +3024,7 @@ function SettingsPage({ session, onBack, onSaved }) {
   const save=async()=>{ setSaving(true); if(SB.IS_LIVE)await SB.updateProfile({name,avatar_url:avatarUrl,avatar_fit:avatarFit,avatar_pos:avatarPos,avatar_posx:avatarPosX,avatar_zoom:avatarZoom}); setSaving(false); onSaved({name,avatar_url:avatarUrl,avatar_fit:avatarFit,avatar_pos:avatarPos,avatar_posx:avatarPosX,avatar_zoom:avatarZoom}); };
   const changePw=async()=>{ setPwErr(''); if(newPw.length<6){setPwErr('Min 6 characters');return;} setSaving(true); const {error}=SB.IS_LIVE?await SB.updatePassword(newPw):{error:null}; if(error)setPwErr(error.message); else{setPwOk(true);setNewPw('');setTimeout(()=>setPwOk(false),3000);} setSaving(false); };
   const handleAvatar=async(e)=>{ const file=e.target.files[0]; if(!file)return; if(SB.IS_LIVE){setSaving(true);const url=await SB.uploadAvatar(session.user.id,file);if(url)setAvatarUrl(url);setSaving(false);} };
-  const TABS=[{id:'profile',l:'Profile',i:'👤'},{id:'security',l:'Security',i:'🔒'},{id:'appearance',l:'Appearance',i:'🎨'},{id:'notifications',l:'Notifications',i:'🔔'},{id:'faq',l:'FAQ & Help',i:'❓'}];
+  const TABS=[{id:'profile',l:'Profile',i:'👤'},{id:'security',l:'Security',i:'🔒'},{id:'appearance',l:'Appearance',i:'🎨'},{id:'notifications',l:'Notifications',i:'🔔'},...(isManager&&team?[{id:'team',l:'Team & invites',i:'🔑'}]:[]),{id:'faq',l:'FAQ & Help',i:'❓'}];
   const [chatNotifsEnabled,setChatNotifsEnabled]=useState(true);
   const [notifPerm,setNotifPerm]=useState(typeof Notification!=='undefined'?Notification.permission:'unsupported');
   const requestNotif=()=>{
@@ -3096,6 +3096,7 @@ function SettingsPage({ session, onBack, onSaved }) {
               <RemindersPanel/>
             </div>
           )}
+          {tab==='team'&&team&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:6 }}>Team & invites</h2><p style={{ fontSize:12.5,color:c.mut,marginBottom:18 }}>Share room codes and invite people to your team. To change someone's role or remove them, open their card in Team → Directory.</p><TeamSettingsTab team={team} members={members} session={session} hideMembers={true} onMembersUpdate={()=>{ if(setMembers&&SB.IS_LIVE) SB.getTeamMembers(team.id).then(m=>setMembers(m||[])); }}/></Card>)}
           {tab==='faq'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>FAQ & Help</h2>{FAQ.map((item,i)=><div key={i} style={{ borderBottom:`1px solid ${c.bord}`,padding:'14px 0' }}><button onClick={()=>setOpenFaq(openFaq===i?null:i)} style={{ width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',background:'none',border:'none',cursor:'pointer',color:c.text,fontSize:14,fontWeight:600,textAlign:'left',gap:12 }}><span>{item.q}</span><span style={{ transform:openFaq===i?'rotate(180deg)':'none',transition:'transform .2s',color:c.mut,fontSize:18,flexShrink:0 }}>⌃</span></button>{openFaq===i&&<p style={{ fontSize:13,color:c.mut,lineHeight:1.6,marginTop:10,marginBottom:0 }}>{item.a}</p>}</div>)}</Card>)}
         </div>
       </div>
@@ -3408,11 +3409,14 @@ function AssignModal({ members, onClose, onAdd, isManager = true, session }) {
     <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}><Btn v="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={submit} disabled={!title.trim()}>{isManager?'Assign task':'Add task'}</Btn></div></Modal>;
 }
 
-function MemberCard({ member, tasks = [], teamId = 'demo', isManager, session, onClose, onRemove }) {
+function MemberCard({ member, tasks = [], teamId = 'demo', isManager, session, onClose, onRemove, onRoleChange }) {
   const c = useC();
   const { dark } = useTheme();
   const [confirm, setConfirm] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [editingRole, setEditingRole] = useState(false);
+  const [roleVal, setRoleVal] = useState(member.role || 'member');
+  const [savingRole, setSavingRole] = useState(false);
   const day = new Date().toISOString().slice(0, 10);
   let att = {}; try { att = JSON.parse(localStorage.getItem('ss-attendance-' + teamId + '-' + day) || '{}'); } catch {}
   const r = att[member.email] || {};
@@ -3426,6 +3430,9 @@ function MemberCard({ member, tasks = [], teamId = 'demo', isManager, session, o
   const blocked = mt.filter(t => t.status === 'blocked').length;
   const isSelf = session?.user?.email === member.email;
   const canRemove = isManager && !isSelf && member.role !== 'manager' && onRemove;
+  const canEditRole = isManager && !isSelf && onRoleChange;
+
+  const saveRole = async () => { setSavingRole(true); await onRoleChange(member, roleVal); setSavingRole(false); setEditingRole(false); };
 
   const doRemove = async () => { setRemoving(true); await onRemove(member); setRemoving(false); onClose(); };
 
@@ -3468,6 +3475,27 @@ function MemberCard({ member, tasks = [], teamId = 'demo', isManager, session, o
         </div>
       )}
 
+      {canEditRole && (
+        <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${c.bord}` }}>
+          {!editingRole ? (
+            <button onClick={() => { setRoleVal(member.role || 'member'); setEditingRole(true); }} style={{ width: '100%', padding: '10px', borderRadius: 10, border: `1px solid ${c.bord}`, background: 'transparent', color: c.sub, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Change role</button>
+          ) : (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Role</div>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+                {[['member', 'Member'], ['team_lead', 'Team Lead'], ['manager', 'Manager']].map(([v, l]) => (
+                  <button key={v} onClick={() => setRoleVal(v)} style={{ flex: 1, padding: '8px 6px', borderRadius: 9, border: `1px solid ${roleVal === v ? '#6366F1' : c.bord}`, background: roleVal === v ? 'rgba(99,102,241,.1)' : 'transparent', color: roleVal === v ? '#6366F1' : c.sub, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>{l}</button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Btn v="ghost" onClick={() => setEditingRole(false)} style={{ flex: 1, justifyContent: 'center' }}>Cancel</Btn>
+                <Btn onClick={saveRole} loading={savingRole} disabled={roleVal === member.role} style={{ flex: 1, justifyContent: 'center' }}>Save role</Btn>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {canRemove && (
         <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${c.bord}` }}>
           {!confirm ? (
@@ -3487,7 +3515,7 @@ function MemberCard({ member, tasks = [], teamId = 'demo', isManager, session, o
   );
 }
 
-function TeamTab({ tasks, members, isManager = true, teamId = 'demo', session, onRemoveMember }) {
+function TeamTab({ tasks, members, isManager = true, teamId = 'demo', session, onRemoveMember, onRoleChange }) {
   const c=useC();
   const { dark } = useTheme();
   const [now,setNow]=useState(Date.now());
@@ -3562,7 +3590,7 @@ function TeamTab({ tasks, members, isManager = true, teamId = 'demo', session, o
         })}
       </div>
       <p style={{ fontSize:11.5,color:c.mut,marginTop:14 }}>Looking for completion rates, scores, or task lists? Those live in the <strong style={{ color:c.sub }}>Performance</strong> and <strong style={{ color:c.sub }}>Tasks</strong> tabs.</p>
-      {cardMember&&<MemberCard member={cardMember} tasks={tasks} teamId={teamId} isManager={isManager} session={session} onClose={()=>setCardMember(null)} onRemove={onRemoveMember}/>}
+      {cardMember&&<MemberCard member={cardMember} tasks={tasks} teamId={teamId} isManager={isManager} session={session} onClose={()=>setCardMember(null)} onRemove={onRemoveMember} onRoleChange={onRoleChange}/>}
     </div>
   );
 }
@@ -3769,7 +3797,7 @@ function HistTab({ history, members }) {
   return(<div><div style={{ marginBottom:18 }}><h2 style={{ fontSize:18,fontWeight:700,color:c.text,marginBottom:4 }}>🕓 Standup history</h2><p style={{ fontSize:12.5,color:c.mut }}>A day-by-day archive of past standups. Open any day to see exactly what each person committed to and whether it was completed — your audit trail and time machine, distinct from Overview (today) and Performance (cumulative scores).</p></div>{history.length===0?<Card style={{ padding:'40px',textAlign:'center' }}><div style={{ fontSize:36,marginBottom:12 }}>📅</div><div style={{ color:c.mut,fontSize:14 }}>History appears after your first standup</div></Card>:history.map(s=>{ const t=s.tasks||[],d=t.filter(x=>x.status==='done').length,b=t.filter(x=>x.status==='blocked').length,pct=t.length?Math.round(d/t.length*100):0,isOpen=open===s.id; return(<Card key={s.id} style={{ marginBottom:10,overflow:'hidden' }}><button onClick={()=>setOpen(isOpen?null:s.id)} style={{ width:'100%',display:'flex',alignItems:'center',gap:12,padding:'14px 18px',background:'transparent',border:'none',cursor:'pointer',color:c.text }}><div style={{ width:7,height:7,borderRadius:'50%',background:pct===100?'#34D399':'#818CF8',flexShrink:0 }}/><span style={{ flex:1,fontSize:14,fontWeight:500,textAlign:'left' }}>{fmt(s.date)}</span>{b>0&&<span style={{ fontSize:11,color:'#F87171',background:'rgba(239,68,68,.12)',padding:'2px 8px',borderRadius:20 }}>⚠️ {b}</span>}<span style={{ fontSize:11,color:c.mut,background:'rgba(128,128,128,.1)',padding:'2px 10px',borderRadius:20 }}>{d}/{t.length} · {pct}%</span><span style={{ color:c.mut,transform:isOpen?'rotate(180deg)':'none',transition:'transform .2s',fontSize:16 }}>⌃</span></button>{isOpen&&<div style={{ borderTop:`1px solid ${c.bord}` }}>{t.map(task=>{ const m=members.find(x=>x.email===task.assignee_email); return(<div key={task.id} style={{ display:'flex',alignItems:'center',gap:10,padding:'9px 18px',borderBottom:`1px solid ${c.bord}` }}><div style={{ width:6,height:6,borderRadius:'50%',background:getPriority(task.priority).color,flexShrink:0 }}/><span style={{ flex:1,fontSize:12,color:task.status==='done'?c.mut:c.sub,textDecoration:task.status==='done'?'line-through':'none' }}>{task.title}</span>{task.timeline&&<span style={{ fontSize:10,color:c.mut }}>{task.timeline}</span>}{m&&<Av member={m} size={22}/>}<SBadge status={task.status}/></div>); })}</div>}</Card>); })}</div>);
 }
 
-function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
+function TeamSettingsTab({ team, members, session, onMembersUpdate, hideMembers = false }) {
   const c=useC();
   const [invEmail,setInvEmail]=useState(''); const [sending,setSending]=useState(false); const [sent,setSent]=useState(false); const [lastInviteLink,setLastInviteLink]=useState(''); const [copied,setCopied]=useState(false);
   const [rooms,setRooms]=useState([]); const [loadingRooms,setLoadingRooms]=useState(true);
@@ -3777,7 +3805,7 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
   const [editMember,setEditMember]=useState(null); // {id, name, designation, role}
   const [editDesg,setEditDesg]=useState(''); const [editRole,setEditRole]=useState('');
   const [saving,setSaving]=useState(false);
-  const [tab,setTab]=useState('members'); // members | rooms | invite
+  const [tab,setTab]=useState(hideMembers?'rooms':'members'); // members | rooms | invite
 
   useEffect(()=>{
     if(!SB.IS_LIVE)return;
@@ -3856,7 +3884,7 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
     setConfirmRemove(null); setRemoving(false); setEditMember(null);
   };
 
-  const TABS=[{id:'members',l:'Members',i:'👥'},{id:'rooms',l:'Rooms & codes',i:'🔑'},{id:'invite',l:'Invite',i:'📧'}];
+  const TABS=[...(hideMembers?[]:[{id:'members',l:'Members',i:'👥'}]),{id:'rooms',l:'Rooms & codes',i:'🔑'},{id:'invite',l:'Invite',i:'📧'}];
 
   return(
     <div>
@@ -8072,6 +8100,16 @@ function ManagerView({
     } catch (e) {}
   };
 
+  const handleRoleChange = async (member, newRole) => {
+    if (!member) return;
+    setMembers && setMembers(prev => prev.map(m => (m.id || m.email) === (member.id || member.email) ? { ...m, role: newRole } : m));
+    try {
+      if (SB.IS_LIVE && typeof SB.updateMemberDesignation === 'function') {
+        await SB.updateMemberDesignation(member.id, member.designation || '', newRole);
+      }
+    } catch (e) {}
+  };
+
   const c = useC();
   const { dark } = useTheme();
 
@@ -8200,10 +8238,13 @@ function ManagerView({
   const [unreadChat, setUnreadChat] = useState(0);
   const prevMsgCount = useRef(messages.length);
   useEffect(() => {
-    if (messages.length > prevMsgCount.current && area !== 'communication') {
+    if (messages.length > prevMsgCount.current) {
       const myEmail = session?.user?.email;
       const externalNew = messages.slice(prevMsgCount.current).filter(m => m.sender_email !== myEmail);
-      if (externalNew.length) setUnreadChat(n => n + externalNew.length);
+      if (externalNew.length) {
+        try { playChime(); } catch (e) {}   // sound on every incoming message (respects ss-sound)
+        if (area !== 'communication') setUnreadChat(n => n + externalNew.length);
+      }
     }
     prevMsgCount.current = messages.length;
   }, [messages, area]);
@@ -8241,14 +8282,17 @@ function ManagerView({
     const overCanvas = (t) => { let el = t; while (el) { if (el.dataset && el.dataset.bsCanvas) return true; el = el.parentElement; } return false; };
     const onWheel = (e) => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY) * 1.4) return; // horizontal only
-      if (cooldown || overCanvas(e.target)) return;
+      if (overCanvas(e.target)) return;
+      // Stop the browser's own back/forward swipe-navigation from firing.
+      if (e.cancelable) e.preventDefault();
+      if (cooldown) return;
       accum += e.deltaX;
       clearTimeout(idleTimer);
       idleTimer = setTimeout(() => { accum = 0; }, 160); // reset if the gesture pauses
       if (accum < -110) { goBack(); accum = 0; cooldown = true; setTimeout(() => cooldown = false, 600); }
       else if (accum > 110) { goForward(); accum = 0; cooldown = true; setTimeout(() => cooldown = false, 600); }
     };
-    window.addEventListener('wheel', onWheel, { passive: true });
+    window.addEventListener('wheel', onWheel, { passive: false });
     let tx = null, ty = null, fingers = 0;
     const onTS = (e) => { fingers = e.touches.length; if (fingers === 2) { tx = e.touches[0].clientX; ty = e.touches[0].clientY; } };
     const onTE = (e) => {
@@ -8309,7 +8353,6 @@ function ManagerView({
   ];
   const NAV_YOU = [
     { id: 'calendar',      label: 'Calendar',      icon: '⊟' },
-    { id: 'settings',      label: 'Settings',      icon: '⚙' },
   ];
 
   const areaTitle = {
@@ -8511,7 +8554,7 @@ function ManagerView({
               <>
                 <SubTabs value={teamSub} onChange={setTeamSub}
                   tabs={[{ id: 'directory', label: 'Directory' }, { id: 'performance', label: 'Performance' }, { id: 'attendance', label: 'Attendance & breaks' }]}/>
-                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={true} teamId={team?.id || "demo"} session={session} onRemoveMember={isManager?handleRemoveMember:undefined}/>}
+                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={true} teamId={team?.id || "demo"} session={session} onRemoveMember={isManager?handleRemoveMember:undefined} onRoleChange={isManager?handleRoleChange:undefined}/>}
                 {teamSub === 'performance' && <PerfTab tasks={tasks} history={history} members={members}/>}
                 {teamSub === 'attendance' && <AttendancePanel team={team} members={members} session={session} isManager={true}/>}
               </>
@@ -8519,7 +8562,7 @@ function ManagerView({
               <>
                 <SubTabs value={teamSub} onChange={setTeamSub}
                   tabs={[{ id: 'directory', label: 'Directory' }, { id: 'performance', label: 'Performance' }, { id: 'attendance', label: 'My shift & breaks' }]}/>
-                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={true} teamId={team?.id || "demo"} session={session} onRemoveMember={isManager?handleRemoveMember:undefined}/>}
+                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={true} teamId={team?.id || "demo"} session={session} onRemoveMember={isManager?handleRemoveMember:undefined} onRoleChange={isManager?handleRoleChange:undefined}/>}
                 {teamSub === 'performance' && <PerfTab tasks={tasks} history={history} members={members}/>}
                 {teamSub === 'attendance' && <AttendancePanel team={team} members={members} session={session} isManager={false}/>}
               </>
@@ -8558,20 +8601,6 @@ function ManagerView({
             </>
           )}
 
-          {area === 'settings' && (
-            <>
-              {isManager ? (
-                <>
-                  <SubTabs value={insightsSub === 'reminders' ? 'reminders' : 'team'} onChange={(v) => setInsightsSub(v)}
-                    tabs={[{ id: 'team', label: 'Team settings' }, { id: 'reminders', label: 'Reminders' }]}/>
-                  {insightsSub !== 'reminders' && <TeamSettingsTab team={team} members={members} session={session} onMembersUpdate={() => { if (setMembers && SB.IS_LIVE) SB.getTeamMembers(team.id).then(m => setMembers(m || [])); }}/>}
-                  {insightsSub === 'reminders' && <RemindersPanel team={team} members={members} session={session}/>}
-                </>
-              ) : (
-                <MemberSettings session={session} team={team} myRole={userRole}/>
-              )}
-            </>
-          )}
         </div>
       </div>
 
@@ -8584,7 +8613,7 @@ function ManagerView({
 
       {/* Floating AI assistant — available on every area */}
       <AIBubble tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name || 'Team'} teamId={team?.id || 'demo'}/>
-      {searchCardMember && <MemberCard member={searchCardMember} tasks={tasks} teamId={team?.id || 'demo'} isManager={isManager} session={session} onClose={() => setSearchCardMember(null)} onRemove={isManager ? handleRemoveMember : undefined}/>}
+      {searchCardMember && <MemberCard member={searchCardMember} tasks={tasks} teamId={team?.id || 'demo'} isManager={isManager} session={session} onClose={() => setSearchCardMember(null)} onRemove={isManager ? handleRemoveMember : undefined} onRoleChange={isManager ? handleRoleChange : undefined}/>}
 
       {mailView && <MailPreviewModal mail={mailView} onClose={() => setMailView(null)}/>}
     </div>
@@ -8968,6 +8997,21 @@ export default function App() {
   const [dark,setDark]=useState(()=>(localStorage.getItem('ss-theme')||'light')==='dark');
   const toggle=useCallback(()=>setDark(d=>{const n=!d;localStorage.setItem('ss-theme',n?'dark':'light');document.body.style.background=n?'#060412':'#F4F6FB';return n;}),[]);
 
+  // Unlock WebAudio on the first user interaction so notification chimes can play.
+  useEffect(() => {
+    const unlock = () => {
+      try {
+        _ssAudioCtx = _ssAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        if (_ssAudioCtx.state === 'suspended') _ssAudioCtx.resume();
+      } catch (e) {}
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => { window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };
+  }, []);
+
   // SESSION: Supabase stores it in localStorage with key 'ss-auth'
   // We read it synchronously so there is zero flicker on load or tab switch
   const [session,setSession]=useState(()=>{
@@ -9090,7 +9134,11 @@ export default function App() {
         setHistory((past||[]).filter(p=>p.date!==TODAY()));
         setMessages(msgs||[]);
         if(mems&&mems.length>0){
-          setMembers(mems);
+          // Ensure the logged-in user's own uploaded avatar shows even if the
+          // team_members row hasn't synced avatar_url yet.
+          const myAv=session?.user?.user_metadata?.avatar_url;
+          const merged=myAv?mems.map(m=>m.user_id===session?.user?.id&&!m.avatar_url?{...m,avatar_url:myAv}:m):mems;
+          setMembers(merged);
           // Verify and correct role from DB (fixes manager showing as member)
           const myMem=mems.find(m=>m.user_id===session?.user?.id);
           if(myMem&&myMem.role!==myRole){
@@ -9246,7 +9294,7 @@ export default function App() {
   const myMember=members.find(m=>m.user_id===(session?.user?.id||'u1'));
   const userForView={email:session?.user?.email||'tanisk.pandey@xtransmatrix.com',name:session?.user?.user_metadata?.name||'Tanisk Pandey'};
 
-  useEffect(()=>{document.body.style.background=dark?'#060412':'#F4F6FB';},[dark]);
+  useEffect(()=>{document.body.style.background=dark?'#060412':'#F4F6FB';document.body.style.overscrollBehaviorX='none';document.documentElement.style.overscrollBehaviorX='none';},[dark]);
 
   // ── Global presence: online while tab open & visible; offline on hide/close ──
   useEffect(()=>{
@@ -9291,7 +9339,7 @@ export default function App() {
       {SB.IS_LIVE && !session && view!=='auth' && view!=='splash' && <AuthPage onLogin={handleLogin} inviteToken={inviteToken}/>}
       {/* App views */}
       {(session||!SB.IS_LIVE)&&view==='home'&&<HomeView key={homeKey} session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onSelectTeam={handleSelectTeam} onLogout={handleLogout} onSettings={()=>setView('settings')}/>}
-      {(session||!SB.IS_LIVE)&&view==='settings'&&<SettingsPage session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onBack={()=>setView(team?'standup':'home')} onSaved={d=>showToast('Profile saved')}/>}
+      {(session||!SB.IS_LIVE)&&view==='settings'&&<SettingsPage session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} team={team} members={members} setMembers={setMembers} isManager={isManager} onBack={()=>setView(team?'standup':'home')} onSaved={d=>showToast('Profile saved')}/>}
       {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView canViewPerformance={canViewPerformance} myRole={myRole} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
       {/* PiP is a real popup window — no DOM element needed */}
       {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<ManagerView isManager={false} canViewPerformance={canViewPerformance} myRole={myRole} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
