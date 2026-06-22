@@ -92,6 +92,28 @@ function Logo({ size=32, onClick }) {
     </div>
   );
 }
+// Short notification chime via WebAudio (no asset file needed). Respects ss-sound.
+let _ssAudioCtx = null;
+function playChime() {
+  try {
+    if (localStorage.getItem('ss-sound') !== '1') return;
+    _ssAudioCtx = _ssAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = _ssAudioCtx;
+    if (ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    [880, 1180].forEach((freq, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = freq;
+      o.connect(g); g.connect(ctx.destination);
+      const t = now + i * 0.12;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.18, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+      o.start(t); o.stop(t + 0.24);
+    });
+  } catch (e) {}
+}
+
 function Av({ member, size=36, url }) {
   const color=member?.color||'#818CF8';
   const ini=member?.name?member.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase():'?';
@@ -1781,7 +1803,36 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
   },[]);
 
   const DEFAULT_SPACES=[{id:'general',label:'general',icon:'#'},{id:'announcements',label:'announcements',icon:'#'},{id:'random',label:'random',icon:'#'}]; // kept for chat sidebar
-  const dmMembers=members.filter(m=>m.email!==myEmail);
+  // ── Per-DM unread tracking ──
+  const [dmReads,setDmReads]=useState(()=>{ try{ return JSON.parse(localStorage.getItem('ss-dm-reads-'+myEmail)||'{}'); }catch{ return {}; } });
+  const dmUnread=useMemo(()=>{
+    const counts={};
+    (messages||[]).forEach(m=>{
+      if(!m.dm_to) return;
+      // a DM addressed to me, from someone else
+      if(m.dm_to===myEmail && m.sender_email && m.sender_email!==myEmail){
+        const since=dmReads[m.sender_email]||0;
+        const t=m.created_at?new Date(m.created_at).getTime():(parseInt(String(m.id).replace(/\D/g,''))||0);
+        if(t>since) counts[m.sender_email]=(counts[m.sender_email]||0)+1;
+      }
+    });
+    return counts;
+  },[messages,dmReads,myEmail]);
+  // Mark the open DM as read
+  useEffect(()=>{
+    if(activeSpace.startsWith('dm-')){
+      const who=activeSpace.slice(3);
+      setDmReads(prev=>{ const next={...prev,[who]:Date.now()}; try{localStorage.setItem('ss-dm-reads-'+myEmail,JSON.stringify(next));}catch{} return next; });
+    }
+  },[activeSpace,messages]); // re-mark as new messages arrive while open
+
+  const dmMembersBase=members.filter(m=>m.email!==myEmail);
+  // unread first, then by most-recent activity, then name
+  const dmMembers=[...dmMembersBase].sort((a,b)=>{
+    const ua=dmUnread[a.email]||0, ub=dmUnread[b.email]||0;
+    if(ua!==ub) return ub-ua;
+    return (a.name||a.email).localeCompare(b.name||b.email);
+  });
   const activeLabel=activeSpace.startsWith('dm-')
     ? (members.find(m=>m.email===activeSpace.slice(3))?.name||activeSpace.slice(3)).split(' ')[0]
     : (customSpaces.find(s=>s.id===activeSpace)?.name||DEFAULT_SPACES.find(s=>s.id===activeSpace)?.label||activeSpace);
@@ -1842,13 +1893,15 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
           {dmMembers.map(m=>{
             const dmKey='dm-'+m.email;
             const isActive=activeSpace===dmKey;
+            const unread=dmUnread[m.email]||0;
             return(
-              <button key={m.email} onClick={()=>setActiveSpace(dmKey)} style={{ display:'flex',alignItems:'center',gap:9,padding:'7px 10px',borderRadius:9,border:'none',background:isActive?(c.dark?'rgba(99,102,241,.2)':'rgba(99,102,241,.12)'):'transparent',color:isActive?'#818CF8':c.sub,cursor:'pointer',fontSize:13,fontWeight:isActive?600:400,textAlign:'left',width:'100%' }}>
+              <button key={m.email} onClick={()=>setActiveSpace(dmKey)} style={{ display:'flex',alignItems:'center',gap:9,padding:'7px 10px',borderRadius:9,border:'none',background:isActive?(c.dark?'rgba(99,102,241,.2)':'rgba(99,102,241,.12)'):'transparent',color:isActive?'#818CF8':c.sub,cursor:'pointer',fontSize:13,fontWeight:(isActive||unread)?700:400,textAlign:'left',width:'100%' }}>
                 <div style={{ position:'relative',flexShrink:0 }}>
                   <Av member={m} size={22} url={m.avatar_url}/>
                   <div style={{ position:'absolute',bottom:-1,right:-1,width:7,height:7,borderRadius:'50%',background:'#34D399',border:'1.5px solid '+(c.dark?'#0F0D2A':'#F3F4FF') }}/>
                 </div>
-                <span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{(m.name||m.email).split(' ')[0]}</span>
+                <span style={{ flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:unread&&!isActive?c.text:undefined }}>{(m.name||m.email).split(' ')[0]}</span>
+                {unread>0&&<span style={{ flexShrink:0,minWidth:18,height:18,borderRadius:9,background:'#6366F1',color:'#fff',fontSize:11,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 5px' }}>{unread>9?'9+':unread}</span>}
               </button>
             );
           })}
@@ -2979,7 +3032,8 @@ function SettingsPage({ session, onBack, onSaved }) {
     if(Notification.permission==='denied'){ setNotifPerm('denied'); return; } // browser won't re-prompt
     Notification.requestPermission().then(p=>{ setNotifPerm(p); if(p==='granted'){ try{ new Notification('StandSync',{body:'Desktop notifications are on 🎉'}); }catch(e){} } });
   };
-  const [soundEnabled,setSoundEnabled]=useState(false);
+  const [soundEnabled,setSoundEnabledRaw]=useState(()=>{ try{ return localStorage.getItem('ss-sound')==='1'; }catch{ return false; } });
+  const setSoundEnabled=(v)=>{ setSoundEnabledRaw(v); try{ localStorage.setItem('ss-sound',v?'1':'0'); }catch{} if(v){ try{ playChime(); }catch(e){} } };
   return (
     <div style={{ position:'relative',zIndex:1,minHeight:'100vh' }}>
       <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100,overflow:'visible' }}>
@@ -8118,13 +8172,17 @@ function ManagerView({
   // Fire a desktop notification for genuinely-new items (once each), if allowed.
   const seenNotifRef = useRef(null);
   useEffect(() => {
-    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
     // First run: record what's already here, don't fire for the backlog.
     if (seenNotifRef.current === null) { seenNotifRef.current = new Set(notifs.map(n => n.id)); return; }
     const fresh = notifs.filter(n => !n.read && !seenNotifRef.current.has(n.id));
-    fresh.slice(0, 3).forEach(n => {
-      try { const d = new Notification(n.title, { body: n.body, tag: n.id, icon: '/favicon.ico' }); setTimeout(() => d.close(), 6000); } catch (e) {}
-    });
+    if (fresh.length) {
+      try { playChime(); } catch (e) {} // sound (respects ss-sound) — independent of desktop permission
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        fresh.slice(0, 3).forEach(n => {
+          try { const d = new Notification(n.title, { body: n.body, tag: n.id, icon: '/favicon.ico' }); setTimeout(() => d.close(), 6000); } catch (e) {}
+        });
+      }
+    }
     notifs.forEach(n => seenNotifRef.current.add(n.id));
   }, [notifs]);
 
