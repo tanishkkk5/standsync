@@ -6243,6 +6243,8 @@ function TeamBoard({ teamId='demo', session, isManager, onClaimTask, onGoto }){
   const [text,setText]=useState('');
   const [priority,setPriority]=useState('medium');
   const [composing,setComposing]=useState(false);
+  const [expanded,setExpanded]=useState(false);
+  const openTasks=posts.filter(p=>p.kind==='task'&&!p.claimedBy).length;
 
   useEffect(()=>{
     const refresh=()=>setPosts(readTeamBoard(teamId));
@@ -6286,17 +6288,18 @@ function TeamBoard({ teamId='demo', session, isManager, onClaimTask, onGoto }){
 
   return (
     <div style={{ borderRadius:18, background:c.surf, border:`1px solid ${c.bord}`, overflow:'hidden' }}>
-      <div style={{ padding:'18px 22px', borderBottom:`1px solid ${c.bord}`, display:'flex', alignItems:'center', gap:10 }}>
+      <div style={{ padding:'18px 22px', borderBottom:expanded?`1px solid ${c.bord}`:'none', display:'flex', alignItems:'center', gap:10 }}>
         <span style={{ fontSize:17 }}>📋</span>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:15, fontWeight:700, color:c.text }}>Team board</div>
-          <div style={{ fontSize:12, color:c.mut }}>Open tasks, messages & reminders for the whole team{isManager?' · post below':''}</div>
+          <div style={{ fontSize:12, color:c.mut }}>{posts.length===0?'Open tasks, messages & reminders for the whole team':`${posts.length} post${posts.length!==1?'s':''}${openTasks?` · ${openTasks} open task${openTasks!==1?'s':''} to claim`:''}`}</div>
         </div>
-        {isManager&&!composing&&<button onClick={()=>setComposing(true)} style={{ padding:'8px 15px', borderRadius:10, border:'none', background:'linear-gradient(135deg,#6366F1,#818CF8)', color:'#fff', cursor:'pointer', fontSize:13, fontWeight:600 }}>＋ Post</button>}
+        {isManager&&<button onClick={()=>{setExpanded(true);setComposing(true);}} style={{ padding:'8px 15px', borderRadius:10, border:'none', background:'linear-gradient(135deg,#6366F1,#818CF8)', color:'#fff', cursor:'pointer', fontSize:13, fontWeight:600 }}>＋ Post</button>}
+        <button onClick={()=>setExpanded(e=>!e)} style={{ width:32,height:32,borderRadius:9,border:`1px solid ${c.bord}`,background:'transparent',color:c.mut,cursor:'pointer',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>{expanded?'▴':'▾'}</button>
       </div>
 
       {/* Composer (managers) */}
-      {isManager&&composing&&(
+      {expanded&&isManager&&composing&&(
         <div style={{ padding:'18px 22px', borderBottom:`1px solid ${c.bord}`, background:dark?'rgba(255,255,255,.02)':'rgba(99,102,241,.03)' }}>
           <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' }}>
             {Object.entries(KIND_META).map(([k,m])=>(
@@ -6320,7 +6323,7 @@ function TeamBoard({ teamId='demo', session, isManager, onClaimTask, onGoto }){
       )}
 
       {/* Feed */}
-      <div style={{ padding:'8px 0', maxHeight:440, overflowY:'auto' }}>
+      {expanded&&<div style={{ padding:'8px 0', maxHeight:340, overflowY:'auto' }}>
         {posts.length===0?(
           <div style={{ padding:'40px 20px', textAlign:'center', color:c.mut }}>
             <div style={{ fontSize:30, marginBottom:8 }}>📋</div>
@@ -6331,7 +6334,7 @@ function TeamBoard({ teamId='demo', session, isManager, onClaimTask, onGoto }){
           <TeamBoardPost key={p.id} post={p} meta={KIND_META[p.kind]||KIND_META.message} c={c} dark={dark} myEmail={myEmail} isManager={isManager}
             onClaim={()=>claim(p)} onReply={(t)=>reply(p,t)} onRemove={()=>removePost(p)} onGoto={onGoto}/>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -6391,6 +6394,32 @@ function TeamBoardPost({ post, meta, c, dark, myEmail, isManager, onClaim, onRep
   );
 }
 
+
+function ProjectSummary({ teamId, onGoto }) {
+  const c = useC();
+  let spaces = [];
+  try { spaces = JSON.parse(localStorage.getItem('ss-spaces-' + teamId) || '[]'); } catch {}
+  let good = 0, focus = 0, hasReport = false;
+  (Array.isArray(spaces) ? spaces : []).forEach(s => {
+    const rep = s.report; if (!rep || !rep.summary) return;
+    hasReport = true;
+    good += (rep.summary.wins || []).length;
+    focus += (rep.summary.bottlenecks || []).length;
+  });
+  if (!hasReport) return null;
+  return (
+    <button onClick={() => onGoto('spaces')} style={{ display: 'flex', alignItems: 'center', gap: 16, width: '100%', textAlign: 'left', padding: '16px 22px', borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, cursor: 'pointer' }} className="ss-card-hover">
+      <span style={{ fontSize: 20 }}>📊</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Project summary</div>
+        <div style={{ fontSize: 12.5, color: c.mut, marginTop: 2 }}>
+          <span style={{ color: '#34D399', fontWeight: 600 }}>{good} doing well</span> · <span style={{ color: '#F87171', fontWeight: 600 }}>{focus} need focus</span> across your spaces
+        </div>
+      </div>
+      <span style={{ fontSize: 12.5, color: '#818CF8', fontWeight: 600, whiteSpace: 'nowrap' }}>View in Spaces →</span>
+    </button>
+  );
+}
 
 function ProjectHighlights({ teamId, onGoto }) {
   const c = useC();
@@ -6541,6 +6570,30 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
   const [showWorkload, setShowWorkload] = useState(false);
   const [wlInsight, setWlInsight] = useState('');
   const [wlBusy, setWlBusy] = useState(false);
+  const [showCompletion, setShowCompletion] = useState(false);
+  const [cmpInsight, setCmpInsight] = useState('');
+  const [cmpBusy, setCmpBusy] = useState(false);
+  const openCompletion = async () => {
+    setShowCompletion(true);
+    if (cmpInsight) return;
+    setCmpBusy(true);
+    const fallback = (() => {
+      let s = `Your team has completed ${done.length} of ${tasks.length} task${tasks.length!==1?'s':''} (${completion}%). `;
+      if (completion >= 80) s += 'Strong throughput — the team is closing work reliably. ';
+      else if (completion >= 50) s += 'Steady progress, with room to push a few more over the line. ';
+      else s += 'Completion is lagging — worth checking for blockers or overloaded members. ';
+      if (blocked.length) s += `${blocked.length} blocked task${blocked.length!==1?'s are':' is'} likely holding the rate down. `;
+      if (dueToday.length) s += `${dueToday.length} due today — prioritize those to lift the number.`;
+      return s.trim();
+    })();
+    try {
+      const res = await askAI(`You are a delivery analyst. The team has completed ${done.length}/${tasks.length} tasks (${completion}%), with ${blocked.length} blocked and ${dueToday.length} due today. Write 2-3 short sentences: how completion is trending, what's holding it back, and one concrete action. No greeting, no preamble.`, { completion, done: done.length, total: tasks.length, blocked: blocked.length, teamName: team?.name });
+      const text = (typeof res === 'string' ? res : res?.text || '').trim();
+      const junk = /good (morning|afternoon)|how can i|what can i help/i;
+      setCmpInsight(text && !junk.test(text) && text.length > 25 ? text : fallback);
+    } catch { setCmpInsight(fallback); }
+    setCmpBusy(false);
+  };
   const openWorkload = async () => {
     setShowWorkload(true);
     if (wlInsight) return;
@@ -6572,9 +6625,8 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
 
   // ── Bottom stat cards ──
   const STATS = [
-    { label: 'Completion rate', value: `${completion}%`, delta: completion >= 50 ? '+3%' : null, deltaColor: '#34D399', sub: 'vs last week', onClick: () => onGoto('insights') },
+    { label: 'Completion rate', value: `${completion}%`, delta: completion >= 50 ? '+3%' : null, deltaColor: '#34D399', sub: 'click for AI insight', onClick: openCompletion },
     { label: 'Open blockers', value: blocked.length, delta: blocked.length ? `+${blocked.length}` : null, deltaColor: '#F87171', sub: blocked.length ? 'click to view' : 'across the team', onClick: () => { if (blocked.length) setShowBlockers(true); } },
-    { label: 'People online', value: `${onlineCount}/${members.length || 0}`, sub: 'right now', onClick: () => onGoto('team') },
     { label: 'Avg workload', value: `${avgWorkload}%`, sub: 'click for AI insight', onClick: openWorkload },
   ];
 
@@ -6618,7 +6670,7 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
         ))}
       </div>
 
-      <ProjectHighlights teamId={team?.id || 'demo'} onGoto={onGoto}/>
+      <ProjectSummary teamId={team?.id || 'demo'} onGoto={onGoto}/>
 
       {/* Team board — managers post tasks/messages/reminders; anyone claims open tasks */}
       <TeamBoard teamId={team?.id || 'demo'} session={session} isManager={isManager} onClaimTask={(t)=>onAddTask&&onAddTask(t)} onGoto={onGoto}/>
@@ -6695,7 +6747,7 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
       </div>
 
       {/* Bottom stats */}
-      <div className="ss-home-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+      <div className="ss-home-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
         {STATS.map(s => (
           <div key={s.label} onClick={s.onClick}
             style={{ padding: '18px 20px', borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, cursor: 'pointer', transition: 'border-color .15s' }}
@@ -6742,6 +6794,24 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
             ))}
           </div>
           <Btn onClick={() => { setShowBlockers(false); onGoto('tasks'); }} style={{ marginTop: 16, width: '100%', justifyContent: 'center' }}>Open in Tasks</Btn>
+        </Modal>
+      )}
+
+      {/* Completion rate AI insight card */}
+      {showCompletion && (
+        <Modal onClose={() => setShowCompletion(false)} title="✦ Completion insight" width={460}>
+          <div style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(52,211,153,.07)', border: '1px solid rgba(52,211,153,.2)', marginBottom: 16, fontSize: 14, color: c.text, lineHeight: 1.65, minHeight: 60 }}>
+            {cmpBusy ? <span style={{ color: c.mut }}>Analyzing completion trend…</span> : cmpInsight}
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {[{ l: 'Completed', v: done.length, col: '#34D399' }, { l: 'Active', v: active.length, col: '#818CF8' }, { l: 'Blocked', v: blocked.length, col: blocked.length?'#F87171':'#94A3B8' }].map(s => (
+              <div key={s.l} style={{ flex: 1, textAlign: 'center', padding: '12px 8px', borderRadius: 12, background: c.row }}>
+                <div style={{ fontSize: 20, fontWeight: 800, color: s.col }}>{s.v}</div>
+                <div style={{ fontSize: 10.5, color: c.mut, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>{s.l}</div>
+              </div>
+            ))}
+          </div>
+          <Btn v="ghost" onClick={() => { setShowCompletion(false); onGoto('insights'); }} style={{ marginTop: 16, width: '100%', justifyContent: 'center' }}>See full performance →</Btn>
         </Modal>
       )}
 
@@ -6942,6 +7012,9 @@ function SpacesArea({ team, session, members = [] }) {
         </div>
         <Btn onClick={startCreate}>＋ Create space</Btn>
       </div>
+
+      {/* Project highlights — moved here from Home */}
+      <div style={{ marginBottom: 24 }}><ProjectHighlights teamId={teamId} onGoto={() => {}}/></div>
 
       {spaces.length === 0 ? (
         <div style={{ padding: '48px 20px', textAlign: 'center', borderRadius: 16, border: `1.5px dashed ${c.bord}` }}>
