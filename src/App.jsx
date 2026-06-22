@@ -3977,6 +3977,100 @@ function AccountabilityHeatmap({ members, tasks, history, commitments }) {
 }
 
 
+// ─── SILENT EMPLOYEE DETECTION ────────────────────────────────────────────────
+// Surfaces people whose ACTIVITY looks high (present in standups, holding/updating
+// tasks, looks busy) but whose DELIVERY is low (missed commitments, low completion,
+// creating bottlenecks). The signal is the GAP between looking busy and shipping.
+function detectSilentRisk(members, tasks, history, commitments) {
+  const days = (history || []).slice(0, 30); // ~last 30 standup days
+  const out = [];
+  members.forEach(m => {
+    const email = (m.email || '').toLowerCase();
+    const mine = (tasks || []).filter(t => (t.assignee_email || '').toLowerCase() === email);
+    const myCommit = commitments.filter(x => (x.who || '').toLowerCase() === email);
+    const resolved = myCommit.filter(x => x.outcome === 'kept' || x.outcome === 'missed');
+    const missed = resolved.filter(x => x.outcome === 'missed').length;
+
+    // ACTIVITY signals (looks busy)
+    const present = days.filter(d => (d.tasks || []).some(t => (t.assignee_email || '').toLowerCase() === email)).length;
+    const participation = days.length ? present / days.length : 0;
+    const holding = mine.filter(t => t.status === 'in-progress' || t.status === 'todo').length; // tasks "being worked on"
+    const looksBusy = participation >= 0.5 || holding >= 3;
+
+    // DELIVERY signals (actually ships)
+    const completion = mine.length ? mine.filter(t => t.status === 'done').length / mine.length : null;
+    const delivers = (completion != null && completion >= 0.5);
+    const blockersCreated = mine.filter(t => t.status === 'blocked' || t.blocker).length;
+
+    // Need enough data to judge fairly
+    const hasSignal = mine.length >= 3 || resolved.length >= 2;
+    if (!hasSignal) return;
+
+    // The gap: busy but not delivering
+    const reasons = [];
+    if (missed >= 3) reasons.push({ text: `Missed ${missed} commitment${missed !== 1 ? 's' : ''}`, weight: missed * 6 });
+    if (completion != null && completion < 0.35 && mine.length >= 4) reasons.push({ text: `Only ${Math.round(completion*100)}% of tasks completed`, weight: 30 });
+    if (blockersCreated >= 3) reasons.push({ text: `${blockersCreated} tasks stuck / creating bottlenecks`, weight: blockersCreated * 4 });
+    if (holding >= 4 && (completion == null || completion < 0.4)) reasons.push({ text: `${holding} tasks open but little shipped`, weight: 14 });
+
+    // Only flag if they LOOK busy yet reasons exist (the silent pattern)
+    if (looksBusy && reasons.length >= 1) {
+      const risk = Math.min(100, reasons.reduce((s, r) => s + r.weight, 0));
+      out.push({
+        m, risk, reasons: reasons.sort((a, b) => b.weight - a.weight),
+        participation: Math.round(participation * 100),
+        completion: completion == null ? null : Math.round(completion * 100),
+        missed, holding, blockersCreated,
+        level: risk >= 45 ? 'high' : 'watch',
+      });
+    }
+  });
+  return out.sort((a, b) => b.risk - a.risk);
+}
+
+function SilentRiskPanel({ members, tasks, history, commitments }) {
+  const c = useC();
+  const flagged = detectSilentRisk(members, tasks, history, commitments);
+  if (flagged.length === 0) return null;
+  const levelMeta = { high: { col: '#DC2626', bg: 'rgba(220,38,38,.08)', bd: 'rgba(220,38,38,.28)', l: 'Execution risk' }, watch: { col: '#D97706', bg: 'rgba(217,119,6,.07)', bd: 'rgba(217,119,6,.25)', l: 'Watch' } };
+  return (
+    <Card style={{ padding: '18px 20px', marginBottom: 16, border: '1px solid rgba(220,38,38,.22)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 4 }}>
+        <span style={{ fontSize: 16 }}>🔍</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Silent execution risk</span>
+        <span style={{ fontSize: 11, color: '#DC2626', background: 'rgba(220,38,38,.1)', padding: '2px 9px', borderRadius: 20, fontWeight: 700 }}>{flagged.length} flagged</span>
+      </div>
+      <p style={{ fontSize: 11.5, color: c.mut, marginBottom: 14, lineHeight: 1.5 }}>People who look active — present in stand-ups, holding tasks — but deliver little. The pattern most tools miss.</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {flagged.map(f => {
+          const lm = levelMeta[f.level];
+          return (
+            <div key={f.m.email} style={{ borderRadius: 12, border: `1px solid ${lm.bd}`, background: lm.bg, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '12px 14px' }}>
+                <Av member={f.m} size={32} url={f.m.avatar_url}/>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: c.text }}>{f.m.name || f.m.email.split('@')[0]}</div>
+                  <div style={{ fontSize: 11, color: c.mut }}>Active: {f.participation}% stand-up presence · {f.holding} tasks held{f.completion != null ? ` · ${f.completion}% delivered` : ''}</div>
+                </div>
+                <span style={{ fontSize: 10.5, fontWeight: 800, color: lm.col, textTransform: 'uppercase', letterSpacing: '.03em', whiteSpace: 'nowrap' }}>{lm.l}</span>
+              </div>
+              <div style={{ padding: '0 14px 12px 57px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {f.reasons.map((r, i) => (
+                  <div key={i} style={{ fontSize: 12.5, color: c.sub, display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <span style={{ color: lm.col }}>•</span>{r.text}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p style={{ fontSize: 11, color: c.mut, marginTop: 12, lineHeight: 1.5 }}>This flags a <em>pattern worth a conversation</em>, not a verdict — context (leave, scope, dependencies) matters. The signal is the gap between visible activity and delivered outcomes.</p>
+    </Card>
+  );
+}
+
+
 function ReliabilityTab({ tasks, members, history, team }) {
   const c = useC();
   const commitments = buildCommitments(tasks, history);
@@ -4057,6 +4151,9 @@ function ReliabilityTab({ tasks, members, history, team }) {
               </div>
             </div>
           </div>
+
+          {/* Silent execution risk — busy but not delivering */}
+          <SilentRiskPanel members={members} tasks={tasks} history={history} commitments={commitments}/>
 
           {/* Accountability heatmap (composite signals) */}
           <AccountabilityHeatmap members={members} tasks={tasks} history={history} commitments={commitments}/>
