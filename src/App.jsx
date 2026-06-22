@@ -2926,6 +2926,33 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
 }
 
 // ─── SETTINGS PAGE ────────────────────────────────────────────────────────────
+function AvatarAdjustModal({ url, posX=50, posY=50, zoom=1, onClose, onSave }) {
+  const c=useC();
+  const [x,setX]=useState(posX); const [y,setY]=useState(posY); const [z,setZ]=useState(zoom);
+  const dragRef=useRef(null);
+  const onDown=(e)=>{ e.preventDefault(); const startX=e.clientX??e.touches?.[0]?.clientX; const startY=e.clientY??e.touches?.[0]?.clientY; const ox=x, oy=y;
+    const move=(ev)=>{ const cx=ev.clientX??ev.touches?.[0]?.clientX; const cy=ev.clientY??ev.touches?.[0]?.clientY; const dx=(cx-startX)/2.4; const dy=(cy-startY)/2.4; setX(Math.max(0,Math.min(100,ox - dx))); setY(Math.max(0,Math.min(100,oy - dy))); };
+    const up=()=>{ window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); window.removeEventListener('touchmove',move); window.removeEventListener('touchend',up); };
+    window.addEventListener('mousemove',move); window.addEventListener('mouseup',up); window.addEventListener('touchmove',move); window.addEventListener('touchend',up);
+  };
+  return (
+    <Modal onClose={onClose} title="Adjust photo" width={360}>
+      <p style={{ fontSize:12.5,color:c.mut,marginBottom:14,textAlign:'center' }}>Drag the image to reposition · use the slider to zoom</p>
+      <div ref={dragRef} onMouseDown={onDown} onTouchStart={onDown} style={{ width:220,height:220,borderRadius:'50%',overflow:'hidden',margin:'0 auto 16px',border:`3px solid #818CF8`,cursor:'grab',background:c.row,touchAction:'none' }}>
+        <img src={url} alt="adjust" draggable={false} style={{ width:'100%',height:'100%',objectFit:'cover',objectPosition:`${x}% ${y}%`,transform:`scale(${z})`,transition:'none',userSelect:'none',pointerEvents:'none' }}/>
+      </div>
+      <div style={{ marginBottom:18 }}>
+        <div style={{ fontSize:11,color:c.mut,marginBottom:5 }}>Zoom</div>
+        <input type="range" min="1" max="2.5" step="0.05" value={z} onChange={e=>setZ(parseFloat(e.target.value))} style={{ width:'100%',accentColor:'#6366F1' }}/>
+      </div>
+      <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}>
+        <Btn v="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={()=>onSave(Math.round(x),Math.round(y),z)}>Apply</Btn>
+      </div>
+    </Modal>
+  );
+}
+
 function SettingsPage({ session, onBack, onSaved }) {
   const c=useC(); const { dark, toggle }=useTheme();
   const [tab,setTab]=useState('profile'); const [name,setName]=useState(session?.user?.user_metadata?.name||'');
@@ -2933,8 +2960,11 @@ function SettingsPage({ session, onBack, onSaved }) {
   const [openFaq,setOpenFaq]=useState(null); const [avatarUrl,setAvatarUrl]=useState(session?.user?.user_metadata?.avatar_url||'');
   const [avatarFit,setAvatarFit]=useState(session?.user?.user_metadata?.avatar_fit||'cover');
   const [avatarPos,setAvatarPos]=useState(session?.user?.user_metadata?.avatar_pos||50);
+  const [avatarPosX,setAvatarPosX]=useState(session?.user?.user_metadata?.avatar_posx||50);
+  const [avatarZoom,setAvatarZoom]=useState(session?.user?.user_metadata?.avatar_zoom||1);
+  const [showAdjust,setShowAdjust]=useState(false);
   const fileRef=useRef();
-  const save=async()=>{ setSaving(true); if(SB.IS_LIVE)await SB.updateProfile({name,avatar_url:avatarUrl,avatar_fit:avatarFit,avatar_pos:avatarPos}); setSaving(false); onSaved({name,avatar_url:avatarUrl,avatar_fit:avatarFit,avatar_pos:avatarPos}); };
+  const save=async()=>{ setSaving(true); if(SB.IS_LIVE)await SB.updateProfile({name,avatar_url:avatarUrl,avatar_fit:avatarFit,avatar_pos:avatarPos,avatar_posx:avatarPosX,avatar_zoom:avatarZoom}); setSaving(false); onSaved({name,avatar_url:avatarUrl,avatar_fit:avatarFit,avatar_pos:avatarPos,avatar_posx:avatarPosX,avatar_zoom:avatarZoom}); };
   const changePw=async()=>{ setPwErr(''); if(newPw.length<6){setPwErr('Min 6 characters');return;} setSaving(true); const {error}=SB.IS_LIVE?await SB.updatePassword(newPw):{error:null}; if(error)setPwErr(error.message); else{setPwOk(true);setNewPw('');setTimeout(()=>setPwOk(false),3000);} setSaving(false); };
   const handleAvatar=async(e)=>{ const file=e.target.files[0]; if(!file)return; if(SB.IS_LIVE){setSaving(true);const url=await SB.uploadAvatar(session.user.id,file);if(url)setAvatarUrl(url);setSaving(false);} };
   const TABS=[{id:'profile',l:'Profile',i:'👤'},{id:'security',l:'Security',i:'🔒'},{id:'appearance',l:'Appearance',i:'🎨'},{id:'notifications',l:'Notifications',i:'🔔'},{id:'faq',l:'FAQ & Help',i:'❓'}];
@@ -2953,16 +2983,17 @@ function SettingsPage({ session, onBack, onSaved }) {
           {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{ width:'100%',display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,border:'none',background:tab===t.id?'rgba(99,102,241,.15)':'transparent',color:tab===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:13,fontWeight:tab===t.id?700:400,marginBottom:4,textAlign:'left',transition:'all .15s' }}><span>{t.i}</span>{t.l}</button>)}
         </div>
         <div style={{ animation:'fadeIn .3s ease' }}>
-          {tab==='profile'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>Profile</h2><div style={{ display:'flex',alignItems:'center',gap:16,marginBottom:16 }}><div style={{ position:'relative' }}>{avatarUrl?<div style={{ width:80,height:80,borderRadius:'50%',overflow:'hidden',border:'3px solid #818CF8',background:c.row }}><img src={avatarUrl} alt="av" style={{ width:'100%',height:'100%',objectFit:avatarFit==='manual'?'cover':avatarFit,objectPosition:avatarFit==='manual'?`center ${avatarPos}%`:'center' }}/></div>:<div style={{ width:80,height:80,borderRadius:'50%',background:'rgba(99,102,241,.2)',border:'3px solid #818CF8',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'#818CF8' }}>{name?name[0].toUpperCase():'?'}</div>}<button onClick={()=>fileRef.current.click()} style={{ position:'absolute',bottom:0,right:0,width:26,height:26,borderRadius:'50%',background:'#6366F1',border:'2px solid #fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13 }}>✏️</button><input ref={fileRef} type="file" accept="image/*" onChange={handleAvatar} style={{ display:'none' }}/></div><div><div style={{ fontSize:16,fontWeight:700,color:c.text }}>{name||session?.user?.email}</div><div style={{ fontSize:13,color:c.mut }}>{session?.user?.email}</div><button onClick={()=>fileRef.current.click()} style={{ fontSize:12,color:'#818CF8',background:'none',border:'none',cursor:'pointer',padding:0,marginTop:6 }}>Change photo</button></div></div>
+          {tab==='profile'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>Profile</h2><div style={{ display:'flex',alignItems:'center',gap:16,marginBottom:16 }}><div style={{ position:'relative' }}>{avatarUrl?<div style={{ width:80,height:80,borderRadius:'50%',overflow:'hidden',border:'3px solid #818CF8',background:c.row }}><img src={avatarUrl} alt="av" style={{ width:'100%',height:'100%',objectFit:avatarFit==='contain'?'contain':'cover',objectPosition:avatarFit==='manual'?`${avatarPosX}% ${avatarPos}%`:'center',transform:avatarFit==='manual'?`scale(${avatarZoom})`:'none' }}/></div>:<div style={{ width:80,height:80,borderRadius:'50%',background:'rgba(99,102,241,.2)',border:'3px solid #818CF8',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'#818CF8' }}>{name?name[0].toUpperCase():'?'}</div>}<button onClick={()=>fileRef.current.click()} style={{ position:'absolute',bottom:0,right:0,width:26,height:26,borderRadius:'50%',background:'#6366F1',border:'2px solid #fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13 }}>✏️</button><input ref={fileRef} type="file" accept="image/*" onChange={handleAvatar} style={{ display:'none' }}/></div><div><div style={{ fontSize:16,fontWeight:700,color:c.text }}>{name||session?.user?.email}</div><div style={{ fontSize:13,color:c.mut }}>{session?.user?.email}</div><div style={{ display:'flex',gap:12,marginTop:6 }}><button onClick={()=>fileRef.current.click()} style={{ fontSize:12,color:'#818CF8',background:'none',border:'none',cursor:'pointer',padding:0 }}>Change photo</button>{avatarUrl&&<button onClick={()=>{setAvatarUrl('');setAvatarFit('cover');}} style={{ fontSize:12,color:'#F87171',background:'none',border:'none',cursor:'pointer',padding:0 }}>Delete photo</button>}</div></div></div>
             {avatarUrl&&(<div style={{ marginBottom:24,padding:'14px 16px',background:c.row,borderRadius:12 }}>
               <div style={{ fontSize:12,fontWeight:600,color:c.sub,marginBottom:8 }}>Adjust image</div>
-              <div style={{ display:'flex',gap:8,marginBottom:avatarFit==='manual'?12:0 }}>
+              <div style={{ display:'flex',gap:8 }}>
                 {[['cover','Fill space'],['contain','Fit whole'],['manual','Manual']].map(([v,l])=>(
-                  <button key={v} onClick={()=>setAvatarFit(v)} style={{ flex:1,padding:'7px 6px',borderRadius:8,border:`1px solid ${avatarFit===v?'#6366F1':c.bord}`,background:avatarFit===v?'rgba(99,102,241,.1)':'transparent',color:avatarFit===v?'#6366F1':c.sub,cursor:'pointer',fontSize:12,fontWeight:600 }}>{l}</button>
+                  <button key={v} onClick={()=>{ setAvatarFit(v); if(v==='manual')setShowAdjust(true); }} style={{ flex:1,padding:'7px 6px',borderRadius:8,border:`1px solid ${avatarFit===v?'#6366F1':c.bord}`,background:avatarFit===v?'rgba(99,102,241,.1)':'transparent',color:avatarFit===v?'#6366F1':c.sub,cursor:'pointer',fontSize:12,fontWeight:600 }}>{l}</button>
                 ))}
               </div>
-              {avatarFit==='manual'&&(<div><div style={{ fontSize:11,color:c.mut,marginBottom:5 }}>Vertical position</div><input type="range" min="0" max="100" value={avatarPos} onChange={e=>setAvatarPos(parseInt(e.target.value))} style={{ width:'100%',accentColor:'#6366F1' }}/></div>)}
+              {avatarFit==='manual'&&<button onClick={()=>setShowAdjust(true)} style={{ marginTop:10,fontSize:12,color:'#818CF8',background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.25)',borderRadius:8,cursor:'pointer',padding:'6px 12px',fontWeight:600 }}>↔ Drag to adjust</button>}
             </div>)}
+            {showAdjust&&<AvatarAdjustModal url={avatarUrl} posX={avatarPosX} posY={avatarPos} zoom={avatarZoom} onClose={()=>setShowAdjust(false)} onSave={(x,y,z)=>{setAvatarPosX(x);setAvatarPos(y);setAvatarZoom(z);setAvatarFit('manual');setShowAdjust(false);}}/>}
             <Inp label="Display name" value={name} onChange={e=>setName(e.target.value)} style={{ marginBottom:16 }}/><Inp label="Email" value={session?.user?.email||''} disabled style={{ marginBottom:20,opacity:.6 }}/><Btn onClick={save} loading={saving}>Save changes</Btn></Card>)}
           {tab==='security'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>Security</h2><Lbl>Change password</Lbl><Inp label="New password" type="password" value={newPw} onChange={e=>setNewPw(e.target.value)} placeholder="At least 6 characters" error={pwErr} style={{ marginBottom:16 }}/>{pwOk&&<div style={{ background:'rgba(52,211,153,.12)',border:'1px solid rgba(52,211,153,.3)',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#34D399',marginBottom:14 }}>✅ Password updated</div>}<Btn onClick={changePw} loading={saving} disabled={!newPw}>Update password</Btn></Card>)}
           {tab==='appearance'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>Appearance</h2><div style={{ display:'flex',gap:14 }}>{[{l:'Dark',i:'🌙',d:true},{l:'Light',i:'☀️',d:false}].map(opt=><div key={opt.l} onClick={()=>opt.d!==dark&&toggle()} style={{ flex:1,padding:'20px',borderRadius:14,border:`2px solid ${dark===opt.d?'#6366F1':c.bord}`,background:dark===opt.d?'rgba(99,102,241,.12)':c.surf,cursor:'pointer',textAlign:'center',transition:'all .2s' }}><div style={{ fontSize:32,marginBottom:10 }}>{opt.i}</div><div style={{ fontSize:14,fontWeight:600,color:c.text }}>{opt.l} mode</div>{dark===opt.d&&<div style={{ fontSize:11,color:'#818CF8',marginTop:4 }}>✓ Active</div>}</div>)}</div></Card>)}
@@ -3302,10 +3333,90 @@ function AssignModal({ members, onClose, onAdd, isManager = true, session }) {
     <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}><Btn v="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={submit} disabled={!title.trim()}>{isManager?'Assign task':'Add task'}</Btn></div></Modal>;
 }
 
-function TeamTab({ tasks, members, isManager = true, teamId = 'demo' }) {
+function MemberCard({ member, tasks = [], teamId = 'demo', isManager, session, onClose, onRemove }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const [confirm, setConfirm] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const day = new Date().toISOString().slice(0, 10);
+  let att = {}; try { att = JSON.parse(localStorage.getItem('ss-attendance-' + teamId + '-' + day) || '{}'); } catch {}
+  const r = att[member.email] || {};
+  const online = r.online !== false && r.lastSeen && (Date.now() - r.lastSeen) < 70000;
+  const onBreak = (r.breaks || []).some(b => !b.end);
+  const presence = onBreak ? { label: 'On break', col: '#F59E0B' } : online ? { label: 'Online', col: '#34D399' } : (r.clockIn && !r.clockOut) ? { label: 'Away', col: '#FBBF24' } : { label: 'Offline', col: '#94A3B8' };
+  const roleLabel = member.role === 'manager' ? 'Manager' : member.role === 'team_lead' ? 'Team Lead' : (member.designation || 'Member');
+  const mt = tasks.filter(t => t.assignee_email === member.email);
+  const done = mt.filter(t => t.status === 'done').length;
+  const open = mt.filter(t => t.status !== 'done');
+  const blocked = mt.filter(t => t.status === 'blocked').length;
+  const isSelf = session?.user?.email === member.email;
+  const canRemove = isManager && !isSelf && member.role !== 'manager' && onRemove;
+
+  const doRemove = async () => { setRemoving(true); await onRemove(member); setRemoving(false); onClose(); };
+
+  return (
+    <Modal onClose={onClose} title="" width={420}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginTop: -8 }}>
+        <div style={{ position: 'relative' }}>
+          <Av member={member} size={84} url={member.avatar_url}/>
+          <span style={{ position: 'absolute', bottom: 4, right: 4, width: 16, height: 16, borderRadius: '50%', background: presence.col, border: `3px solid ${c.surf}` }}/>
+        </div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: c.text, marginTop: 12 }}>{member.name || member.email}</div>
+        <div style={{ fontSize: 13, color: c.mut }}>{member.email}</div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: member.role === 'manager' ? '#A78BFA' : member.role === 'team_lead' ? '#38BDF8' : c.sub, background: member.role === 'manager' ? 'rgba(124,92,255,.14)' : member.role === 'team_lead' ? 'rgba(56,189,248,.14)' : 'rgba(128,128,128,.1)', padding: '3px 12px', borderRadius: 20 }}>{roleLabel}</span>
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: presence.col, background: presence.col + '1f', padding: '3px 12px', borderRadius: 20 }}>● {presence.label}</span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+        {[{ l: 'Completed', v: done, col: '#34D399' }, { l: 'Open', v: open.length, col: '#818CF8' }, { l: 'Blocked', v: blocked, col: blocked ? '#EF4444' : '#94A3B8' }].map(s => (
+          <div key={s.l} style={{ flex: 1, textAlign: 'center', padding: '12px 8px', borderRadius: 12, background: c.row }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: s.col }}>{s.v}</div>
+            <div style={{ fontSize: 10.5, color: c.mut, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>{s.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {open.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Current tasks</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 160, overflowY: 'auto' }}>
+            {open.slice(0, 6).map(t => (
+              <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: c.sub, padding: '7px 11px', borderRadius: 9, background: c.row }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: getPriority(t.priority).color, flexShrink: 0 }}/>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title || t.text}</span>
+                {t.label && <span style={{ fontSize: 9.5, fontWeight: 700, color: t.label_color || '#6366F1' }}>{t.label}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {canRemove && (
+        <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${c.bord}` }}>
+          {!confirm ? (
+            <button onClick={() => setConfirm(true)} style={{ width: '100%', padding: '10px', borderRadius: 10, border: '1px solid rgba(239,68,68,.3)', background: 'rgba(239,68,68,.06)', color: '#EF4444', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Remove from team</button>
+          ) : (
+            <div>
+              <p style={{ fontSize: 12.5, color: c.sub, lineHeight: 1.6, marginBottom: 12 }}>Remove <strong>{member.name || member.email.split('@')[0]}</strong> from the team? They'll lose access to tasks, boards, and chat. They'd need a new invite to rejoin.</p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Btn v="ghost" onClick={() => setConfirm(false)} style={{ flex: 1, justifyContent: 'center' }}>Cancel</Btn>
+                <Btn onClick={doRemove} loading={removing} style={{ flex: 1, justifyContent: 'center', background: '#EF4444', border: 'none' }}>Remove</Btn>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function TeamTab({ tasks, members, isManager = true, teamId = 'demo', session, onRemoveMember }) {
   const c=useC();
   const { dark } = useTheme();
   const [now,setNow]=useState(Date.now());
+  const [cardMember,setCardMember]=useState(null);
   useEffect(()=>{ const t=setInterval(()=>setNow(Date.now()),20000); return ()=>clearInterval(t); },[]);
 
   // Live availability from attendance store (online / on break / clocked-in)
@@ -3352,7 +3463,7 @@ function TeamTab({ tasks, members, isManager = true, teamId = 'demo' }) {
           const p=presence(member.email);
           const openCount=tasks.filter(t=>t.assignee_email===member.email && t.status!=='done').length;
           return (
-            <Card key={member.id||member.email} style={{ padding:'18px 20px' }}>
+            <Card key={member.id||member.email} onClick={()=>setCardMember(member)} style={{ padding:'18px 20px' }}>
               <div style={{ display:'flex',alignItems:'flex-start',gap:12 }}>
                 <div style={{ position:'relative',flexShrink:0 }}>
                   <Av member={member} size={46} url={member.avatar_url}/>
@@ -3376,6 +3487,7 @@ function TeamTab({ tasks, members, isManager = true, teamId = 'demo' }) {
         })}
       </div>
       <p style={{ fontSize:11.5,color:c.mut,marginTop:14 }}>Looking for completion rates, scores, or task lists? Those live in the <strong style={{ color:c.sub }}>Performance</strong> and <strong style={{ color:c.sub }}>Tasks</strong> tabs.</p>
+      {cardMember&&<MemberCard member={cardMember} tasks={tasks} teamId={teamId} isManager={isManager} session={session} onClose={()=>setCardMember(null)} onRemove={onRemoveMember}/>}
     </div>
   );
 }
@@ -7865,6 +7977,18 @@ function ManagerView({
   // Team leads see performance/insights even though they aren't full managers.
   const canPerf = canViewPerformance !== undefined ? canViewPerformance : isManager;
 
+  const handleRemoveMember = async (member) => {
+    if (!member) return;
+    setMembers && setMembers(prev => prev.filter(m => (m.id || m.email) !== (member.id || member.email)));
+    try {
+      if (SB.IS_LIVE) {
+        const rm = (typeof SB.removeMember === 'function') ? SB.removeMember : null;
+        if (rm) await rm(member.id);
+        else if (SB.supabase) await SB.supabase.from('team_members').delete().eq('id', member.id);
+      }
+    } catch (e) {}
+  };
+
   const c = useC();
   const { dark } = useTheme();
 
@@ -7878,6 +8002,7 @@ function ManagerView({
   const [tasksSub, setTasksSub]         = useState('board');     // board | overview | performance | ai | history
   const [search, setSearch]             = useState('');
   const [searchOpen, setSearchOpen]     = useState(false);
+  const [searchCardMember, setSearchCardMember] = useState(null);
   const [mobileNav, setMobileNav] = useState(false);
 
   // ── Home quick-action modals ──
@@ -7990,7 +8115,7 @@ function ManagerView({
     tasks.filter(t => (t.title || t.text || '').toLowerCase().includes(q)).slice(0, 6).forEach(t =>
       out.push({ type: 'Task', icon: '◎', label: t.title || t.text, sub: (t.status || 'todo') + (t.assignee_name ? ' · ' + t.assignee_name : ''), act: () => goArea('tasks') }));
     members.filter(m => (m.name || '').toLowerCase().includes(q) || (m.email || '').toLowerCase().includes(q)).slice(0, 5).forEach(m =>
-      out.push({ type: 'Person', icon: '◍', label: m.name || m.email, sub: m.email, act: () => goArea('team') }));
+      out.push({ type: 'Person', icon: '◍', label: m.name || m.email, sub: m.email, act: () => { setSearchCardMember(m); setSearch(''); setSearchOpen(false); } }));
     try {
       const docs = JSON.parse(localStorage.getItem('ss-quicknotes-' + (team?.id || 'demo')) || '[]');
       (Array.isArray(docs) ? docs : []).filter(d => (d.title || '').toLowerCase().includes(q)).slice(0, 4).forEach(d =>
@@ -8216,7 +8341,7 @@ function ManagerView({
               <>
                 <SubTabs value={teamSub} onChange={setTeamSub}
                   tabs={[{ id: 'directory', label: 'Directory' }, { id: 'performance', label: 'Performance' }, { id: 'attendance', label: 'Attendance & breaks' }]}/>
-                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={true} teamId={team?.id || "demo"}/>}
+                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={true} teamId={team?.id || "demo"} session={session} onRemoveMember={isManager?handleRemoveMember:undefined}/>}
                 {teamSub === 'performance' && <PerfTab tasks={tasks} history={history} members={members}/>}
                 {teamSub === 'attendance' && <AttendancePanel team={team} members={members} session={session} isManager={true}/>}
               </>
@@ -8224,7 +8349,7 @@ function ManagerView({
               <>
                 <SubTabs value={teamSub} onChange={setTeamSub}
                   tabs={[{ id: 'directory', label: 'Directory' }, { id: 'performance', label: 'Performance' }, { id: 'attendance', label: 'My shift & breaks' }]}/>
-                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={true} teamId={team?.id || "demo"}/>}
+                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={true} teamId={team?.id || "demo"} session={session} onRemoveMember={isManager?handleRemoveMember:undefined}/>}
                 {teamSub === 'performance' && <PerfTab tasks={tasks} history={history} members={members}/>}
                 {teamSub === 'attendance' && <AttendancePanel team={team} members={members} session={session} isManager={false}/>}
               </>
@@ -8232,7 +8357,7 @@ function ManagerView({
               <>
                 <SubTabs value={teamSub} onChange={setTeamSub}
                   tabs={[{ id: 'directory', label: 'Directory' }, { id: 'attendance', label: 'My shift & breaks' }]}/>
-                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={false} teamId={team?.id || "demo"}/>}
+                {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={false} teamId={team?.id || "demo"} session={session}/>}
                 {teamSub === 'attendance' && <AttendancePanel team={team} members={members} session={session} isManager={false}/>}
               </>
             )
@@ -8289,6 +8414,7 @@ function ManagerView({
 
       {/* Floating AI assistant — available on every area */}
       <AIBubble tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name || 'Team'} teamId={team?.id || 'demo'}/>
+      {searchCardMember && <MemberCard member={searchCardMember} tasks={tasks} teamId={team?.id || 'demo'} isManager={isManager} session={session} onClose={() => setSearchCardMember(null)} onRemove={isManager ? handleRemoveMember : undefined}/>}
 
       {mailView && <MailPreviewModal mail={mailView} onClose={() => setMailView(null)}/>}
     </div>
