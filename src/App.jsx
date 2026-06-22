@@ -56,6 +56,9 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 .ss-home-root>*:nth-child(7){animation-delay:.38s}
 .ss-card-hover{transition:transform .18s cubic-bezier(.22,1,.36,1),box-shadow .18s,border-color .18s}
 .ss-card-hover:hover{transform:translateY(-3px)}
+.ss-area-enter{animation:ssAreaEnter .34s cubic-bezier(.22,1,.36,1) both}
+@keyframes ssAreaEnter{from{opacity:0;transform:translateY(10px) scale(.995)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(prefers-reduced-motion:reduce){.ss-area-enter{animation:none!important}}
 @media(prefers-reduced-motion:reduce){.ss-home-root>*{animation:none!important}}
 input,select,textarea,button{font-family:inherit}
 ::-webkit-scrollbar{width:4px;height:4px}
@@ -6490,7 +6493,18 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
   });
   const overloaded = [...workloads].sort((a, b) => b.pct - a.pct)[0];
   const avgWorkload = workloads.length ? Math.round(workloads.reduce((s, w) => s + w.pct, 0) / workloads.length) : 0;
-  const onlineCount = members.filter(m => m.online !== false).length || Math.min(members.length, Math.max(1, Math.round(members.length * 0.7)));
+  // Real presence from the attendance store (same source as Team directory).
+  const presenceNow = (() => {
+    let att = {}; try { att = JSON.parse(localStorage.getItem('ss-attendance-' + (team?.id || 'demo') + '-' + new Date().toISOString().slice(0,10)) || '{}'); } catch {}
+    const online = [], offline = [];
+    members.forEach(m => {
+      const r = att[m.email] || {};
+      const isOn = r.online !== false && r.lastSeen && (Date.now() - r.lastSeen) < 70000;
+      (isOn ? online : offline).push(m);
+    });
+    return { online, offline };
+  })();
+  const onlineCount = presenceNow.online.length;
 
   // Today's focus — prioritized
   const focus = [...tasks].filter(t => t.status !== 'done')
@@ -6522,6 +6536,34 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
   const prioColor = p => p === 'high' ? '#F87171' : p === 'medium' ? '#FBBF24' : '#818CF8';
   const initials = (email) => (email||'?').split('@')[0].split(/[.\s]/).map(s=>s[0]).slice(0,2).join('').toUpperCase();
 
+  // Detail-card modals for blockers & workload
+  const [showBlockers, setShowBlockers] = useState(false);
+  const [showWorkload, setShowWorkload] = useState(false);
+  const [wlInsight, setWlInsight] = useState('');
+  const [wlBusy, setWlBusy] = useState(false);
+  const openWorkload = async () => {
+    setShowWorkload(true);
+    if (wlInsight) return;
+    setWlBusy(true);
+    const lines = workloads.map(w => `${w.member.name || w.member.email.split('@')[0]}: ${w.count} active task${w.count!==1?'s':''}${w.urgent?`, ${w.urgent} urgent/blocked`:''}`).join('\n');
+    const fallback = (() => {
+      const sorted = [...workloads].sort((a,b)=>b.count-a.count);
+      const top = sorted[0], low = sorted[sorted.length-1];
+      let s = `The team is averaging ${avgWorkload}% capacity. `;
+      if (top && top.count > 0) s += `${top.member.name||top.member.email.split('@')[0]} has the most on their plate (${top.count} task${top.count!==1?'s':''}${top.urgent?`, ${top.urgent} urgent`:''}). `;
+      if (low && low.count === 0) s += `${low.member.name||low.member.email.split('@')[0]} has capacity to take more. `;
+      if (avgWorkload > 85) s += 'Overall load is high — consider redistributing.'; else if (avgWorkload < 40) s += 'Plenty of headroom across the team.'; else s += 'Distribution looks healthy.';
+      return s;
+    })();
+    try {
+      const res = await askAI(`You are a team lead assistant. Given each member's active workload, write 2-3 short sentences of practical insight: who's overloaded, who has capacity, and one suggestion. Be specific, no preamble.\n\n${lines}`, { workloads, teamName: team?.name });
+      const text = (typeof res === 'string' ? res : res?.text || '').trim();
+      const junk = /good (morning|afternoon)|how can i|what can i help/i;
+      setWlInsight(text && !junk.test(text) && text.length > 25 ? text : fallback);
+    } catch { setWlInsight(fallback); }
+    setWlBusy(false);
+  };
+
   // ── Quick action cards ──
   const QUICK = [
     { l: 'Meeting note', sub: 'Notes & project notes', icon: '≡', fn: () => onNewNote && onNewNote() },
@@ -6531,13 +6573,13 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
   // ── Bottom stat cards ──
   const STATS = [
     { label: 'Completion rate', value: `${completion}%`, delta: completion >= 50 ? '+3%' : null, deltaColor: '#34D399', sub: 'vs last week', onClick: () => onGoto('insights') },
-    { label: 'Open blockers', value: blocked.length, delta: blocked.length ? `+${blocked.length}` : null, deltaColor: '#F87171', sub: 'across the team', onClick: () => onGoto('tasks') },
+    { label: 'Open blockers', value: blocked.length, delta: blocked.length ? `+${blocked.length}` : null, deltaColor: '#F87171', sub: blocked.length ? 'click to view' : 'across the team', onClick: () => { if (blocked.length) setShowBlockers(true); } },
     { label: 'People online', value: `${onlineCount}/${members.length || 0}`, sub: 'right now', onClick: () => onGoto('team') },
-    { label: 'Avg workload', value: `${avgWorkload}%`, sub: 'healthy band: 60–85%', onClick: () => onGoto('team') },
+    { label: 'Avg workload', value: `${avgWorkload}%`, sub: 'click for AI insight', onClick: openWorkload },
   ];
 
   return (
-    <div className="ss-home-root" style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 32 }}>
+    <div className="ss-home-root" style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
 
       {/* Greeting */}
       <div>
@@ -6575,9 +6617,6 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
           </button>
         ))}
       </div>
-
-      {/* Attendance / shift status */}
-      <AttendanceWidget teamId={team?.id || 'demo'} email={session?.user?.email || 'me@demo'} shift={getShiftConfig(team?.id || 'demo', session?.user?.email)} onOpenFull={() => onOpenAttendance && onOpenAttendance()}/>
 
       <ProjectHighlights teamId={team?.id || 'demo'} onGoto={onGoto}/>
 
@@ -6690,11 +6729,43 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
           </div>
         )}
       </div>
+
+      {/* Blockers detail card */}
+      {showBlockers && (
+        <Modal onClose={() => setShowBlockers(false)} title={`🚧 Open blockers (${blocked.length})`} width={460}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {blocked.map(t => (
+              <div key={t.id} style={{ padding: '12px 14px', borderRadius: 11, background: 'rgba(239,68,68,.06)', border: '1px solid rgba(239,68,68,.2)' }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: c.text, marginBottom: 3 }}>{t.title || t.text}</div>
+                <div style={{ fontSize: 12, color: c.mut }}>{t.assignee_name || (t.assignee_email||'Unassigned').split('@')[0]}{t.blocker ? ` · ${t.blocker}` : ''}</div>
+              </div>
+            ))}
+          </div>
+          <Btn onClick={() => { setShowBlockers(false); onGoto('tasks'); }} style={{ marginTop: 16, width: '100%', justifyContent: 'center' }}>Open in Tasks</Btn>
+        </Modal>
+      )}
+
+      {/* Workload AI insight card */}
+      {showWorkload && (
+        <Modal onClose={() => setShowWorkload(false)} title="✦ Workload insight" width={460}>
+          <div style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(99,102,241,.07)', border: '1px solid rgba(99,102,241,.2)', marginBottom: 16, fontSize: 14, color: c.text, lineHeight: 1.65, minHeight: 60 }}>
+            {wlBusy ? <span style={{ color: c.mut }}>Analyzing team workload…</span> : wlInsight}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[...workloads].sort((a,b)=>b.count-a.count).map(w => (
+              <div key={w.member.email} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Av member={w.member} size={26} url={w.member.avatar_url}/>
+                <span style={{ flex: 1, fontSize: 13, color: c.text }}>{w.member.name || w.member.email.split('@')[0]}</span>
+                <div style={{ width: 90 }}><Bar pct={w.pct} h={6} color={w.pct>=85?'#F87171':w.pct>=60?'#FBBF24':'#34D399'}/></div>
+                <span style={{ fontSize: 12, color: c.mut, width: 54, textAlign: 'right' }}>{w.count} task{w.count!==1?'s':''}</span>
+              </div>
+            ))}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
-
-// ─── SPACES (Jira-style projects) ─────────────────────────────────────────────
 const SPACE_TEMPLATES = [
   { id: 'pm',       name: 'Project management', icon: '📋', color: '#2563EB', desc: 'Plan and deliver business projects.' },
   { id: 'software', name: 'Software development', icon: '💻', color: '#7C3AED', desc: 'Build, ship, and iterate on products.' },
@@ -8437,6 +8508,7 @@ function ManagerView({
   }, [tasks, messages, readIds, session, todayKey, team]);
 
   const unreadNotifs = notifs.filter(n => !n.read).length;
+  const [presenceOpen, setPresenceOpen] = useState(false);
 
   // Fire a desktop notification for genuinely-new items (once each), if allowed.
   const seenNotifRef = useRef(null);
@@ -8728,6 +8800,36 @@ function ManagerView({
           {/* Attendance status tag */}
           <AttendanceTag teamId={team?.id || 'demo'} email={session?.user?.email || 'me@demo'} onClick={() => { setTeamSub('attendance'); goArea('team'); }}/>
 
+          {/* Compact team-presence pill */}
+          {(() => {
+            let att = {}; try { att = JSON.parse(localStorage.getItem('ss-attendance-' + (team?.id || 'demo') + '-' + new Date().toISOString().slice(0,10)) || '{}'); } catch {}
+            const status = (m) => { const r = att[m.email] || {}; const onB = (r.breaks||[]).some(b=>!b.end); const on = r.online !== false && r.lastSeen && (Date.now()-r.lastSeen) < 70000; return onB ? 'break' : on ? 'online' : 'offline'; };
+            const online = members.filter(m => status(m) === 'online');
+            return (
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <button onClick={() => setPresenceOpen(o => !o)} title="Who's online" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 11px', borderRadius: 18, border: `1px solid ${c.bord}`, background: presenceOpen ? c.row : 'transparent', color: c.sub, cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#34D399' }}/>
+                  {online.length}/{members.length}
+                </button>
+                {presenceOpen && (
+                  <>
+                    <div onClick={() => setPresenceOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }}/>
+                    <div style={{ position: 'absolute', top: 40, right: 0, zIndex: 50, width: 250, maxHeight: 340, overflowY: 'auto', background: dark ? '#161B2E' : '#fff', border: `1px solid ${c.bord}`, borderRadius: 14, boxShadow: '0 14px 44px rgba(0,0,0,.3)', padding: 8, animation: 'popIn .15s ease both' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.05em', padding: '6px 10px' }}>{online.length} online now</div>
+                      {members.map(m => { const st = status(m); const dot = st === 'online' ? '#34D399' : st === 'break' ? '#F59E0B' : '#94A3B8'; const lbl = st === 'online' ? 'Online' : st === 'break' ? 'On break' : 'Offline'; return (
+                        <div key={m.email} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 9 }}>
+                          <div style={{ position: 'relative' }}><Av member={m} size={28} url={m.avatar_url}/><span style={{ position: 'absolute', bottom: -1, right: -1, width: 9, height: 9, borderRadius: '50%', background: dot, border: `1.5px solid ${dark ? '#161B2E' : '#fff'}` }}/></div>
+                          <span style={{ flex: 1, fontSize: 13, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name || m.email.split('@')[0]}</span>
+                          <span style={{ fontSize: 11, color: dot, fontWeight: 600 }}>{lbl}</span>
+                        </div>
+                      ); })}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Controls: Notifications, Theme, Profile */}
           <button onClick={toggleNotif} title="Notifications"
             style={{ width: 34, height: 34, borderRadius: '50%', border: `1px solid ${c.bord}`, background: notifOpen ? c.row : 'transparent', color: notifOpen ? c.text : c.sub, cursor: 'pointer', flexShrink: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s' }}
@@ -8749,7 +8851,7 @@ function ManagerView({
         )}
 
         {/* Content */}
-        <div style={{ flex: 1, padding: '24px 32px 48px', maxWidth: 1280, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+        <div key={area} className="ss-area-enter" style={{ flex: 1, padding: '34px 32px 64px', maxWidth: 1280, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
 
           {area === 'home' && (
             <HomeCommand session={session} team={team} tasks={tasks} members={members}
