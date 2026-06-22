@@ -2931,8 +2931,10 @@ function SettingsPage({ session, onBack, onSaved }) {
   const [tab,setTab]=useState('profile'); const [name,setName]=useState(session?.user?.user_metadata?.name||'');
   const [saving,setSaving]=useState(false); const [newPw,setNewPw]=useState(''); const [pwErr,setPwErr]=useState(''); const [pwOk,setPwOk]=useState(false);
   const [openFaq,setOpenFaq]=useState(null); const [avatarUrl,setAvatarUrl]=useState(session?.user?.user_metadata?.avatar_url||'');
+  const [avatarFit,setAvatarFit]=useState(session?.user?.user_metadata?.avatar_fit||'cover');
+  const [avatarPos,setAvatarPos]=useState(session?.user?.user_metadata?.avatar_pos||50);
   const fileRef=useRef();
-  const save=async()=>{ setSaving(true); if(SB.IS_LIVE)await SB.updateProfile({name,avatar_url:avatarUrl}); setSaving(false); onSaved({name,avatar_url:avatarUrl}); };
+  const save=async()=>{ setSaving(true); if(SB.IS_LIVE)await SB.updateProfile({name,avatar_url:avatarUrl,avatar_fit:avatarFit,avatar_pos:avatarPos}); setSaving(false); onSaved({name,avatar_url:avatarUrl,avatar_fit:avatarFit,avatar_pos:avatarPos}); };
   const changePw=async()=>{ setPwErr(''); if(newPw.length<6){setPwErr('Min 6 characters');return;} setSaving(true); const {error}=SB.IS_LIVE?await SB.updatePassword(newPw):{error:null}; if(error)setPwErr(error.message); else{setPwOk(true);setNewPw('');setTimeout(()=>setPwOk(false),3000);} setSaving(false); };
   const handleAvatar=async(e)=>{ const file=e.target.files[0]; if(!file)return; if(SB.IS_LIVE){setSaving(true);const url=await SB.uploadAvatar(session.user.id,file);if(url)setAvatarUrl(url);setSaving(false);} };
   const TABS=[{id:'profile',l:'Profile',i:'👤'},{id:'security',l:'Security',i:'🔒'},{id:'appearance',l:'Appearance',i:'🎨'},{id:'notifications',l:'Notifications',i:'🔔'},{id:'faq',l:'FAQ & Help',i:'❓'}];
@@ -2951,7 +2953,17 @@ function SettingsPage({ session, onBack, onSaved }) {
           {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{ width:'100%',display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,border:'none',background:tab===t.id?'rgba(99,102,241,.15)':'transparent',color:tab===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:13,fontWeight:tab===t.id?700:400,marginBottom:4,textAlign:'left',transition:'all .15s' }}><span>{t.i}</span>{t.l}</button>)}
         </div>
         <div style={{ animation:'fadeIn .3s ease' }}>
-          {tab==='profile'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>Profile</h2><div style={{ display:'flex',alignItems:'center',gap:16,marginBottom:24 }}><div style={{ position:'relative' }}>{avatarUrl?<img src={avatarUrl} alt="av" style={{ width:80,height:80,borderRadius:'50%',objectFit:'cover',border:'3px solid #818CF8' }}/>:<div style={{ width:80,height:80,borderRadius:'50%',background:'rgba(99,102,241,.2)',border:'3px solid #818CF8',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'#818CF8' }}>{name?name[0].toUpperCase():'?'}</div>}<button onClick={()=>fileRef.current.click()} style={{ position:'absolute',bottom:0,right:0,width:26,height:26,borderRadius:'50%',background:'#6366F1',border:'2px solid #fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13 }}>✏️</button><input ref={fileRef} type="file" accept="image/*" onChange={handleAvatar} style={{ display:'none' }}/></div><div><div style={{ fontSize:16,fontWeight:700,color:c.text }}>{name||session?.user?.email}</div><div style={{ fontSize:13,color:c.mut }}>{session?.user?.email}</div><button onClick={()=>fileRef.current.click()} style={{ fontSize:12,color:'#818CF8',background:'none',border:'none',cursor:'pointer',padding:0,marginTop:6 }}>Change photo</button></div></div><Inp label="Display name" value={name} onChange={e=>setName(e.target.value)} style={{ marginBottom:16 }}/><Inp label="Email" value={session?.user?.email||''} disabled style={{ marginBottom:20,opacity:.6 }}/><Btn onClick={save} loading={saving}>Save changes</Btn></Card>)}
+          {tab==='profile'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>Profile</h2><div style={{ display:'flex',alignItems:'center',gap:16,marginBottom:16 }}><div style={{ position:'relative' }}>{avatarUrl?<div style={{ width:80,height:80,borderRadius:'50%',overflow:'hidden',border:'3px solid #818CF8',background:c.row }}><img src={avatarUrl} alt="av" style={{ width:'100%',height:'100%',objectFit:avatarFit==='manual'?'cover':avatarFit,objectPosition:avatarFit==='manual'?`center ${avatarPos}%`:'center' }}/></div>:<div style={{ width:80,height:80,borderRadius:'50%',background:'rgba(99,102,241,.2)',border:'3px solid #818CF8',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'#818CF8' }}>{name?name[0].toUpperCase():'?'}</div>}<button onClick={()=>fileRef.current.click()} style={{ position:'absolute',bottom:0,right:0,width:26,height:26,borderRadius:'50%',background:'#6366F1',border:'2px solid #fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13 }}>✏️</button><input ref={fileRef} type="file" accept="image/*" onChange={handleAvatar} style={{ display:'none' }}/></div><div><div style={{ fontSize:16,fontWeight:700,color:c.text }}>{name||session?.user?.email}</div><div style={{ fontSize:13,color:c.mut }}>{session?.user?.email}</div><button onClick={()=>fileRef.current.click()} style={{ fontSize:12,color:'#818CF8',background:'none',border:'none',cursor:'pointer',padding:0,marginTop:6 }}>Change photo</button></div></div>
+            {avatarUrl&&(<div style={{ marginBottom:24,padding:'14px 16px',background:c.row,borderRadius:12 }}>
+              <div style={{ fontSize:12,fontWeight:600,color:c.sub,marginBottom:8 }}>Adjust image</div>
+              <div style={{ display:'flex',gap:8,marginBottom:avatarFit==='manual'?12:0 }}>
+                {[['cover','Fill space'],['contain','Fit whole'],['manual','Manual']].map(([v,l])=>(
+                  <button key={v} onClick={()=>setAvatarFit(v)} style={{ flex:1,padding:'7px 6px',borderRadius:8,border:`1px solid ${avatarFit===v?'#6366F1':c.bord}`,background:avatarFit===v?'rgba(99,102,241,.1)':'transparent',color:avatarFit===v?'#6366F1':c.sub,cursor:'pointer',fontSize:12,fontWeight:600 }}>{l}</button>
+                ))}
+              </div>
+              {avatarFit==='manual'&&(<div><div style={{ fontSize:11,color:c.mut,marginBottom:5 }}>Vertical position</div><input type="range" min="0" max="100" value={avatarPos} onChange={e=>setAvatarPos(parseInt(e.target.value))} style={{ width:'100%',accentColor:'#6366F1' }}/></div>)}
+            </div>)}
+            <Inp label="Display name" value={name} onChange={e=>setName(e.target.value)} style={{ marginBottom:16 }}/><Inp label="Email" value={session?.user?.email||''} disabled style={{ marginBottom:20,opacity:.6 }}/><Btn onClick={save} loading={saving}>Save changes</Btn></Card>)}
           {tab==='security'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>Security</h2><Lbl>Change password</Lbl><Inp label="New password" type="password" value={newPw} onChange={e=>setNewPw(e.target.value)} placeholder="At least 6 characters" error={pwErr} style={{ marginBottom:16 }}/>{pwOk&&<div style={{ background:'rgba(52,211,153,.12)',border:'1px solid rgba(52,211,153,.3)',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#34D399',marginBottom:14 }}>✅ Password updated</div>}<Btn onClick={changePw} loading={saving} disabled={!newPw}>Update password</Btn></Card>)}
           {tab==='appearance'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>Appearance</h2><div style={{ display:'flex',gap:14 }}>{[{l:'Dark',i:'🌙',d:true},{l:'Light',i:'☀️',d:false}].map(opt=><div key={opt.l} onClick={()=>opt.d!==dark&&toggle()} style={{ flex:1,padding:'20px',borderRadius:14,border:`2px solid ${dark===opt.d?'#6366F1':c.bord}`,background:dark===opt.d?'rgba(99,102,241,.12)':c.surf,cursor:'pointer',textAlign:'center',transition:'all .2s' }}><div style={{ fontSize:32,marginBottom:10 }}>{opt.i}</div><div style={{ fontSize:14,fontWeight:600,color:c.text }}>{opt.l} mode</div>{dark===opt.d&&<div style={{ fontSize:11,color:'#818CF8',marginTop:4 }}>✓ Active</div>}</div>)}</div></Card>)}
           {tab==='notifications'&&(
@@ -3232,6 +3244,7 @@ function MgrRow({ task, members, onStatus, onPriority, onNote, onDelete, session
         </button>
         <div style={{ width:7,height:7,borderRadius:'50%',background:p.color,flexShrink:0 }}/>
         <span style={{ flex:1,fontSize:13,color:task.status==='done'?c.mut:c.text,textDecoration:task.status==='done'?'line-through':'none',lineHeight:1.4 }}>{task.title}</span>
+        {task.label&&<span style={{ fontSize:10,fontWeight:700,color:task.label_color||'#6366F1',background:(task.label_color||'#6366F1')+'1f',border:`1px solid ${(task.label_color||'#6366F1')}44`,padding:'2px 8px',borderRadius:6,whiteSpace:'nowrap' }}>{task.label}</span>}
         {task.blocker&&<span style={{ fontSize:10,color:'#F87171',background:'rgba(239,68,68,.12)',border:'1px solid rgba(239,68,68,.25)',padding:'2px 7px',borderRadius:6,whiteSpace:'nowrap' }}>⚠️ Blocked</span>}
         {task.timeline&&<span style={{ fontSize:11,color:c.mut,whiteSpace:'nowrap' }}>🕐 {task.timeline}</span>}
         {member&&<Av member={member} size={24} url={member.avatar_url}/>}
@@ -3257,8 +3270,24 @@ function AssignModal({ members, onClose, onAdd, isManager = true, session }) {
   const me=members.find(m=>m.email===myEmail);
   const [title,setTitle]=useState(''); const [assignee,setAssignee]=useState(isManager?(members[0]?.email||''):myEmail); const [priority,setPriority]=useState('medium'); const [timeline,setTimeline]=useState('Today EOD (6 PM)'); const [note,setNote]=useState('');
   const [schedOn,setSchedOn]=useState(false); const [sDate,setSDate]=useState(()=>new Date().toISOString().slice(0,10)); const [sStart,setSStart]=useState('10:00'); const [sEnd,setSEnd]=useState('12:00');
-  const submit=()=>{ if(!title.trim())return; const targetEmail=isManager?assignee:myEmail; const m=members.find(x=>x.email===targetEmail); const payload={title:title.trim(),assignee_email:targetEmail,assignee_name:m?.name||targetEmail,priority,status:'todo',timeline,manager_note:isManager?note:'',notes:'',blocker:''}; if(schedOn&&sStart&&sEnd&&sEnd>sStart) payload._timeBlock={date:sDate,start:sStart,end:sEnd,repeat:'none'}; onAdd(payload); onClose(); };
+  const [labelId,setLabelId]=useState(''); const [customLabel,setCustomLabel]=useState(''); const [customColor,setCustomColor]=useState('#6366F1');
+  const submit=()=>{ if(!title.trim())return; const targetEmail=isManager?assignee:myEmail; const m=members.find(x=>x.email===targetEmail); const payload={title:title.trim(),assignee_email:targetEmail,assignee_name:m?.name||targetEmail,priority,status:'todo',timeline,manager_note:isManager?note:'',notes:'',blocker:''}; if(labelId==='__custom'&&customLabel.trim()){ payload.label=customLabel.trim(); payload.label_color=customColor; } else if(labelId){ const L=TASK_LABELS.find(x=>x.id===labelId); if(L){ payload.label=L.label; payload.label_color=L.color; } } if(schedOn&&sStart&&sEnd&&sEnd>sStart) payload._timeBlock={date:sDate,start:sStart,end:sEnd,repeat:'none'}; onAdd(payload); onClose(); };
   return <Modal onClose={onClose} title={isManager?'Assign a task':'Add my task'}><Inp value={title} onChange={e=>setTitle(e.target.value)} placeholder="Task description..." style={{ marginBottom:12 }} autoFocus/><div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10 }}>{isManager?<Sel label="Assign to" value={assignee} onChange={e=>setAssignee(e.target.value)}>{members.map(m=><option key={m.id||m.email} value={m.email}>{m.name||m.email}</option>)}</Sel>:<div><Lbl>Assigned to</Lbl><div style={{ display:'flex',alignItems:'center',gap:8,padding:'9px 12px',background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:10 }}>{me&&<Av member={me} size={22} url={me.avatar_url}/>}<span style={{ fontSize:13,color:c.text }}>{me?.name||myEmail.split('@')[0]} (you)</span></div></div>}<Sel label="Priority" value={priority} onChange={e=>setPriority(e.target.value)}>{['critical','high','medium','low'].map(v=><option key={v} value={v}>{v.charAt(0).toUpperCase()+v.slice(1)}</option>)}</Sel></div><Sel label="Timeline" value={timeline} onChange={e=>setTimeline(e.target.value)} style={{ marginBottom:10 }}>{['Today noon (12 PM)','Today 3 PM','Today EOD (6 PM)','Tomorrow morning','Tomorrow EOD','This week'].map(t=><option key={t} value={t}>{t}</option>)}</Sel>{isManager&&<Inp value={note} onChange={e=>setNote(e.target.value)} placeholder="Note to team member (optional)" style={{ marginBottom:12 }}/>}
+    <div style={{ marginBottom:14 }}>
+      <Lbl>Label (optional)</Lbl>
+      <div style={{ display:'flex',gap:6,flexWrap:'wrap',marginTop:2 }}>
+        {TASK_LABELS.map(L=>(
+          <button key={L.id} onClick={()=>setLabelId(labelId===L.id?'':L.id)} style={{ fontSize:11.5,fontWeight:600,padding:'4px 11px',borderRadius:20,cursor:'pointer',border:`1px solid ${labelId===L.id?L.color:c.bord}`,background:labelId===L.id?L.color+'22':'transparent',color:labelId===L.id?L.color:c.sub }}>{L.label}</button>
+        ))}
+        <button onClick={()=>setLabelId(labelId==='__custom'?'':'__custom')} style={{ fontSize:11.5,fontWeight:600,padding:'4px 11px',borderRadius:20,cursor:'pointer',border:`1px dashed ${labelId==='__custom'?customColor:c.bord}`,background:'transparent',color:labelId==='__custom'?customColor:c.mut }}>+ Custom</button>
+      </div>
+      {labelId==='__custom'&&(
+        <div style={{ display:'flex',gap:8,alignItems:'center',marginTop:8 }}>
+          <input value={customLabel} onChange={e=>setCustomLabel(e.target.value)} placeholder="Label name" style={{ flex:1,...inpS(c) }}/>
+          <input type="color" value={customColor} onChange={e=>setCustomColor(e.target.value)} style={{ width:38,height:38,border:`1px solid ${c.inpB}`,borderRadius:8,background:'transparent',cursor:'pointer',padding:2 }}/>
+        </div>
+      )}
+    </div>
     <div style={{ marginBottom:14 }}>
       <label style={{ display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontSize:13,color:c.sub }}>
         <input type="checkbox" checked={schedOn} onChange={e=>setSchedOn(e.target.checked)} style={{ accentColor:'#6366F1' }}/>
@@ -3366,8 +3395,13 @@ function DailyReportTab({ tasks = [], session, team, members = [] }) {
   const today = new Date().toISOString().slice(0, 10);
   const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
-  // Only THIS user's tasks; completed ones drive the report
-  const myTasks = tasks.filter(t => t.assignee_email === myEmail);
+  // Scope to THIS user's tasks. For members, `tasks` is already pre-filtered to
+  // them upstream, so we keep any task that's either pre-scoped or matches their
+  // email case-insensitively (handles look-alike addresses & casing).
+  const meLc = (myEmail || '').trim().toLowerCase();
+  const mine = tasks.filter(t => { const a = (t.assignee_email || '').trim().toLowerCase(); return !a || a === meLc; });
+  // If everything was already scoped to me upstream, `mine` ≈ all tasks; otherwise it filters.
+  const myTasks = mine.length ? mine : tasks;
   const completed = myTasks.filter(t => t.status === 'done');
   const open = myTasks.filter(t => t.status !== 'done');
   const blocked = myTasks.filter(t => t.status === 'blocked');
@@ -3390,30 +3424,44 @@ function DailyReportTab({ tasks = [], session, team, members = [] }) {
   const flash = (m) => { setToast(m); setTimeout(() => setToast(''), 2600); };
   const save = (body) => { try { localStorage.setItem(reportKey(teamId, myEmail), JSON.stringify({ date: today, body, at: Date.now() })); setSavedAt(Date.now()); } catch {} };
 
-  // Plain fallback report — used if AI is unavailable
+  // Rich data-built report (reliable primary path — never a generic greeting)
   const buildPlain = () => {
-    if (completed.length === 0) return `Daily report — ${myName} — ${todayLabel}\n\nNo tasks were completed today.`;
-    const lines = completed.map(t => `• ${t.title || t.text}${t.priority ? ` (${t.priority})` : ''}`).join('\n');
-    let body = `Daily report — ${myName} — ${todayLabel}\n\nCompleted today (${completed.length}):\n${lines}`;
-    if (open.length) body += `\n\nStill open: ${open.length} task${open.length !== 1 ? 's' : ''}.`;
-    if (blocked.length) body += `\nBlocked: ${blocked.length}.`;
+    if (completed.length === 0) return `Daily Report — ${myName}\n${todayLabel}\n\nNo tasks were completed today.`;
+    const lines = completed.map(t => `• ${t.title || t.text}${t.priority && t.priority !== 'medium' ? ` (${t.priority} priority)` : ''}`).join('\n');
+    let body = `Daily Report — ${myName}\n${todayLabel}\n\n✅ Completed today (${completed.length}):\n${lines}`;
+    if (open.length) body += `\n\n⏳ Still in progress: ${open.length} task${open.length !== 1 ? 's' : ''}.`;
+    if (blocked.length) body += `\n🚧 Blocked: ${blocked.length}.`;
     return body;
   };
 
+  // Heuristic: did ai.js summarize, or return a canned greeting / question?
+  const looksLikeJunk = (text) => {
+    if (!text || text.length < 12) return true;
+    const t = text.toLowerCase();
+    const junk = ['good morning','good afternoon','how can i help','what can i help','no tasks added','how can i assist',"i'm here to help",'hello!','hi there','what would you'];
+    if (junk.some(j => t.includes(j))) return true;
+    const mentionsATask = completed.some(ct => { const words = (ct.title || ct.text || '').toLowerCase().split(/\s+/).filter(w => w.length > 3); return words.some(w => t.includes(w)); });
+    return !mentionsATask;
+  };
+
   const generateAI = async () => {
-    if (completed.length === 0) { setReport(buildPlain()); save(buildPlain()); flash('No completed tasks today — nothing to summarize.'); return; }
+    const plain = buildPlain();
+    if (completed.length === 0) { setReport(plain); save(plain); flash('No completed tasks today — nothing to summarize.'); return; }
     setBusy(true);
+    setReport(plain); // show the reliable version immediately
     try {
-      const list = completed.map(t => `- ${t.title || t.text}${t.priority ? ` [${t.priority}]` : ''}${t.manager_note ? ` (note: ${t.manager_note})` : ''}`).join('\n');
-      const prompt = `You are writing a concise, professional end-of-day work report for ${myName} on ${todayLabel}. Summarize ONLY the tasks they COMPLETED today — do not mention open, pending, or incomplete work. Write 2-4 short sentences in first person ("Today I..."), grouping related items, highlighting impact. Be specific but brief. Completed tasks:\n${list}\n\nReturn only the report text, no preamble or headings.`;
+      const list = completed.map(t => `- ${t.title || t.text}${t.priority ? ` [${t.priority}]` : ''}`).join('\n');
+      const prompt = `Write a short professional end-of-day work report. Summarize ONLY these COMPLETED tasks in 2-3 first-person sentences ("Today I completed..."). Do not greet, do not ask questions, do not mention incomplete work. Output only the report.\n\nCompleted tasks:\n${list}`;
       const res = await askAI(prompt, { tasks: completed, members, teamName: team?.name || 'Team', userName: myName });
       const text = (typeof res === 'string' ? res : (res?.text || '')).trim();
-      const finalBody = text || buildPlain();
-      setReport(finalBody); save(finalBody);
-      flash(text ? '✨ AI report generated' : 'Used a basic summary (AI unavailable).');
+      if (text && !looksLikeJunk(text)) {
+        const polished = `Daily Report — ${myName}\n${todayLabel}\n\n${text}`;
+        setReport(polished); save(polished); flash('✨ AI report generated');
+      } else {
+        save(plain); flash('Generated from your completed tasks. (AI summary unavailable.)');
+      }
     } catch (e) {
-      const fb = buildPlain(); setReport(fb); save(fb);
-      flash('AI unavailable — generated a basic summary.');
+      save(plain); flash('Generated from your completed tasks.');
     }
     setBusy(false);
   };
@@ -3427,10 +3475,15 @@ function DailyReportTab({ tasks = [], session, team, members = [] }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: myEmail, subject, text: report, html: '<pre style="font:14px/1.6 system-ui,sans-serif;white-space:pre-wrap">' + report.replace(/</g, '&lt;') + '</pre>' }),
       });
-      if (res.ok) { const d = await res.json().catch(() => ({})); flash(d.id ? '📧 Report emailed to ' + myEmail : '📧 Report sent'); }
-      else flash('Email failed — set RESEND_API_KEY in Vercel & verify your domain.');
+      if (res.ok) { const d = await res.json().catch(() => ({})); flash(d.id ? '📧 Report emailed to ' + myEmail : (d.demo ? '📧 Sent (demo) — set RESEND_API_KEY to deliver' : '📧 Report sent')); }
+      else {
+        // Fallback: open the user's own mail client pre-filled
+        window.open(`mailto:${myEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(report)}`, '_blank');
+        flash('Server email not set up — opened your mail app instead.');
+      }
     } catch (e) {
-      flash('Email needs the /api/send function deployed. Saved in-app for now.');
+      window.open(`mailto:${myEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(report)}`, '_blank');
+      flash('Opened your mail app to send it.');
     }
     setEmailBusy(false);
   };
@@ -3537,15 +3590,35 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
     SB.getTeamRooms(team.id).then(r=>{ setRooms(r); setLoadingRooms(false); });
   },[team.id]);
 
+  const [inviteRoom,setInviteRoom]=useState(null); // {roomId,password} to show after invite
   const sendInv=async()=>{
     if(!invEmail.trim()||!invEmail.includes('@'))return;
     setSending(true);
+    let link='', roomInfo=null;
     try{
       if(SB.IS_LIVE){
         const myName=session?.user?.user_metadata?.name||session?.user?.email;
-        const {link}=await SB.inviteMember(team.id,team.name,invEmail.trim(),myName);
-        setLastInviteLink(link); // Always show link so manager can share manually
-        try{ await Promise.race([Email.sendInvite(invEmail.trim(),myName,team.name,link),new Promise(r=>setTimeout(r,5000))]); }catch(e){}
+        const r=await SB.inviteMember(team.id,team.name,invEmail.trim(),myName);
+        link=r?.link||'';
+        setLastInviteLink(link);
+        // Attach a room code if one exists (first room) so they can join either way
+        if(rooms&&rooms.length){ roomInfo={ roomId:rooms[0].room_id||rooms[0].code, password:rooms[0].password }; setInviteRoom(roomInfo); }
+        // Send via the serverless endpoint (real delivery once /api/send + RESEND_API_KEY are set)
+        const subject=`You're invited to join ${team.name} on StandSync`;
+        const lines=[
+          `Hi,`,``,
+          `${myName} has invited you to join the team "${team.name}" on StandSync.`,``,
+          link?`Join with this link: ${link}`:'',
+          roomInfo?`\nOr join with a room code:\n  Room ID: ${roomInfo.roomId}\n  Password: ${roomInfo.password}`:'',
+          ``,
+          `If you already have a StandSync account, the link signs you straight in to the team. If not, you'll be taken to the sign-up page first.`,
+        ].filter(Boolean).join('\n');
+        try{
+          await Promise.race([
+            fetch('/api/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:invEmail.trim(),subject,text:lines})}),
+            new Promise(r=>setTimeout(r,5000))
+          ]);
+        }catch(e){}
       }
     }catch(e){ console.error('invite error:',e); }
     setSent(true);setSending(false);
@@ -3573,10 +3646,39 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
     setEditMember(null);setSaving(false);
   };
 
+  const [confirmRemove,setConfirmRemove]=useState(null); // member object pending removal
+  const [removing,setRemoving]=useState(false);
+  const doRemove=async()=>{
+    if(!confirmRemove)return;
+    setRemoving(true);
+    try{
+      if(SB.IS_LIVE){
+        const rm=(typeof SB.removeMember==='function')?SB.removeMember:null;
+        if(rm){ await rm(confirmRemove.id); }
+        else if(SB.supabase){ await SB.supabase.from('team_members').delete().eq('id',confirmRemove.id); }
+      }
+    }catch(e){}
+    onMembersUpdate&&onMembersUpdate();
+    setConfirmRemove(null); setRemoving(false); setEditMember(null);
+  };
+
   const TABS=[{id:'members',l:'Members',i:'👥'},{id:'rooms',l:'Rooms & codes',i:'🔑'},{id:'invite',l:'Invite',i:'📧'}];
 
   return(
     <div>
+      {confirmRemove&&(
+        <Modal onClose={()=>setConfirmRemove(null)} title="Remove team member" width={420}>
+          <div style={{ display:'flex',alignItems:'center',gap:12,marginBottom:16 }}>
+            <Av member={confirmRemove} size={44} url={confirmRemove.avatar_url}/>
+            <div><div style={{ fontSize:14,fontWeight:700,color:c.text }}>{confirmRemove.name||confirmRemove.email}</div><div style={{ fontSize:12,color:c.mut }}>{confirmRemove.email}</div></div>
+          </div>
+          <p style={{ fontSize:13,color:c.sub,lineHeight:1.6,marginBottom:18 }}>This will remove <strong>{confirmRemove.name||confirmRemove.email.split('@')[0]}</strong> from the team. They'll lose access to the team's tasks, boards, and chat. This can't be undone (they'd need a new invite to rejoin).</p>
+          <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}>
+            <Btn v="ghost" onClick={()=>setConfirmRemove(null)}>Cancel</Btn>
+            <Btn onClick={doRemove} loading={removing} style={{ background:'#EF4444',border:'none' }}>Remove from team</Btn>
+          </div>
+        </Modal>
+      )}
       <div style={{ display:'flex',gap:6,marginBottom:20 }}>
         {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{ padding:'7px 14px',borderRadius:8,border:`1px solid ${tab===t.id?'#6366F1':c.bord}`,background:tab===t.id?'rgba(99,102,241,.15)':'transparent',color:tab===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:13,fontWeight:tab===t.id?700:400,display:'flex',alignItems:'center',gap:6 }}><span>{t.i}</span>{t.l}</button>)}
       </div>
@@ -3611,6 +3713,7 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
                     <Btn v="ghost" onClick={()=>setEditMember(null)} style={{ flex:1,justifyContent:'center' }}>Cancel</Btn>
                     <Btn onClick={saveDesignation} loading={saving} style={{ flex:2,justifyContent:'center' }}>Save changes</Btn>
                   </div>
+                  {isManager&&m.role!=='manager'&&<button onClick={()=>setConfirmRemove(m)} style={{ marginTop:4,padding:'8px',borderRadius:8,border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.06)',color:'#EF4444',cursor:'pointer',fontSize:12.5,fontWeight:600 }}>Remove {m.name||m.email.split('@')[0]} from team</button>}
                 </div>
               )}
             </div>
@@ -3672,6 +3775,16 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate }) {
                 <div style={{ fontSize:11,color:c.text,wordBreak:'break-all',marginBottom:8,fontFamily:'monospace',background:c.surf,padding:'8px 10px',borderRadius:6,border:`1px solid ${c.bord}` }}>{lastInviteLink}</div>
                 <button onClick={()=>{navigator.clipboard&&navigator.clipboard.writeText(lastInviteLink);setCopied(true);setTimeout(()=>setCopied(false),2000);}} style={{ fontSize:12,color:'#818CF8',background:'rgba(99,102,241,.12)',border:'1px solid rgba(99,102,241,.25)',borderRadius:7,cursor:'pointer',padding:'5px 12px',fontWeight:600 }}>{copied?'✓ Copied!':'Copy link'}</button>
                 <div style={{ fontSize:11,color:c.mut,marginTop:6 }}>They click this link, create an account, and join your team automatically.</div>
+                {inviteRoom&&(
+                  <div style={{ marginTop:10,paddingTop:10,borderTop:`1px solid ${c.bord}` }}>
+                    <div style={{ fontSize:11,fontWeight:700,color:'#818CF8',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em' }}>Or share a room code</div>
+                    <div style={{ display:'flex',gap:8,flexWrap:'wrap' }}>
+                      <span style={{ fontSize:12,color:c.text,fontFamily:'monospace',background:c.surf,padding:'6px 10px',borderRadius:6,border:`1px solid ${c.bord}` }}>Room: <strong>{inviteRoom.roomId}</strong></span>
+                      <span style={{ fontSize:12,color:c.text,fontFamily:'monospace',background:c.surf,padding:'6px 10px',borderRadius:6,border:`1px solid ${c.bord}` }}>Password: <strong>{inviteRoom.password}</strong></span>
+                    </div>
+                    <button onClick={()=>{const txt=`Join ${team.name} on StandSync\nLink: ${lastInviteLink}\nRoom: ${inviteRoom.roomId}  Password: ${inviteRoom.password}`;navigator.clipboard&&navigator.clipboard.writeText(txt);setCopied(true);setTimeout(()=>setCopied(false),2000);}} style={{ marginTop:8,fontSize:12,color:'#818CF8',background:'rgba(99,102,241,.12)',border:'1px solid rgba(99,102,241,.25)',borderRadius:7,cursor:'pointer',padding:'5px 12px',fontWeight:600 }}>{copied?'✓ Copied!':'Copy link + code'}</button>
+                  </div>
+                )}
               </div>
             )}
             <div style={{ marginTop:10,padding:'9px 12px',background:'rgba(99,102,241,.07)',border:'1px solid rgba(99,102,241,.2)',borderRadius:8,fontSize:12,color:c.sub }}>
@@ -7264,6 +7377,16 @@ function getShiftConfig(teamId, email) {
 }
 function saveShiftConfig(teamId, cfg) { try { localStorage.setItem(`ss-shift-${teamId}`, JSON.stringify(cfg)); } catch {} }
 function fmtHour(h) { const ap = h >= 12 ? 'PM' : 'AM'; const hh = h % 12 === 0 ? 12 : h % 12; return `${hh}${ap}`; }
+const TASK_LABELS = [
+  { id: 'bug', label: 'Bug', color: '#EF4444' },
+  { id: 'feature', label: 'Feature', color: '#6366F1' },
+  { id: 'urgent', label: 'Urgent', color: '#F59E0B' },
+  { id: 'review', label: 'Review', color: '#8B5CF6' },
+  { id: 'design', label: 'Design', color: '#EC4899' },
+  { id: 'research', label: 'Research', color: '#06B6D4' },
+  { id: 'ops', label: 'Ops', color: '#10B981' },
+  { id: 'docs', label: 'Docs', color: '#64748B' },
+];
 const BREAK_TYPES = [
   { id: 'lunch',  label: 'Lunch',     mins: 45, icon: '🍱' },
   { id: 'short20',label: '20 min',    mins: 20, icon: '☕' },
@@ -8070,10 +8193,9 @@ function ManagerView({
             canPerf ? (
               <>
                 <SubTabs value={tasksSub} onChange={setTasksSub}
-                  tabs={[{ id: 'board', label: 'Tasks' }, { id: 'overview', label: 'Overview' }, { id: 'performance', label: 'Performance' }, { id: 'report', label: 'Daily Report' }, { id: 'ai', label: 'Ask AI' }, { id: 'history', label: 'History' }]}/>
+                  tabs={[{ id: 'board', label: 'Tasks' }, { id: 'overview', label: 'Overview' }, { id: 'report', label: 'Daily Report' }, { id: 'ai', label: 'Ask AI' }, { id: 'history', label: 'History' }]}/>
                 {tasksSub === 'board' && <LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} onDelete={onDeleteTask} session={session} isManager={isManager}/>}
                 {tasksSub === 'overview' && <TeamAnalysisTab tasks={tasks} members={members} history={history}/>}
-                {tasksSub === 'performance' && <PerfTab tasks={tasks} history={history} members={members}/>}
                 {tasksSub === 'report' && <DailyReportTab tasks={tasks} session={session} team={team} members={members}/>}
                 {tasksSub === 'ai' && <AIAssistant tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name || 'Team'}/>}
                 {tasksSub === 'history' && <HistTab history={history} members={members}/>}
@@ -8093,15 +8215,17 @@ function ManagerView({
             isManager ? (
               <>
                 <SubTabs value={teamSub} onChange={setTeamSub}
-                  tabs={[{ id: 'directory', label: 'Directory' }, { id: 'attendance', label: 'Attendance & breaks' }]}/>
+                  tabs={[{ id: 'directory', label: 'Directory' }, { id: 'performance', label: 'Performance' }, { id: 'attendance', label: 'Attendance & breaks' }]}/>
                 {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={true} teamId={team?.id || "demo"}/>}
+                {teamSub === 'performance' && <PerfTab tasks={tasks} history={history} members={members}/>}
                 {teamSub === 'attendance' && <AttendancePanel team={team} members={members} session={session} isManager={true}/>}
               </>
             ) : canPerf ? (
               <>
                 <SubTabs value={teamSub} onChange={setTeamSub}
-                  tabs={[{ id: 'directory', label: 'Directory' }, { id: 'attendance', label: 'My shift & breaks' }]}/>
+                  tabs={[{ id: 'directory', label: 'Directory' }, { id: 'performance', label: 'Performance' }, { id: 'attendance', label: 'My shift & breaks' }]}/>
                 {teamSub === 'directory' && <TeamTab tasks={tasks} members={members} isManager={true} teamId={team?.id || "demo"}/>}
+                {teamSub === 'performance' && <PerfTab tasks={tasks} history={history} members={members}/>}
                 {teamSub === 'attendance' && <AttendancePanel team={team} members={members} session={session} isManager={false}/>}
               </>
             ) : (
