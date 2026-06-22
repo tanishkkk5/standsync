@@ -95,14 +95,14 @@ input,select,textarea,button{font-family:inherit}
 `;
 
 // ─── PRIMITIVES ───────────────────────────────────────────────────────────────
-function Logo({ size=32, onClick }) {
+function Logo({ size=32, onClick, iconOnly=false }) {
   const { dark } = useTheme();
   return (
     <div onClick={onClick} style={{ display:'flex',alignItems:'center',gap:9,cursor:onClick?'pointer':'default',flexShrink:0 }}>
       <div style={{ width:size,height:size,borderRadius:size*.28,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 18px rgba(99,102,241,.4)',flexShrink:0 }}>
         <svg width={size*.55} height={size*.55} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       </div>
-      <span style={{ fontSize:size*.56,fontWeight:800,color:dark?'#fff':'#1E1B4B',letterSpacing:'-.025em',lineHeight:1 }}>StandSync</span>
+      {!iconOnly && <span style={{ fontSize:size*.56,fontWeight:800,color:dark?'#fff':'#1E1B4B',letterSpacing:'-.025em',lineHeight:1 }}>StandSync</span>}
     </div>
   );
 }
@@ -3189,7 +3189,7 @@ function MemberTaskCard({ task, user, onStatus, onBlocker }) {
         {task.status!=='blocked'&&<button onClick={()=>{onStatus(task.id,'blocked');setShowB(true);}} style={{ fontSize:11,padding:'5px 12px',borderRadius:8,border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.08)',color:'#F87171',cursor:'pointer' }}>⚠️ Report blocker</button>}
         <button onClick={()=>setShowB(!showB)} style={{ fontSize:11,padding:'5px 10px',borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',color:c.mut,cursor:'pointer',marginLeft:'auto' }}>Note</button>
       </div>
-      {showB&&<div style={{ padding:'0 16px 14px',display:'flex',gap:8 }}><input value={btext} onChange={e=>setBtext(e.target.value)} placeholder="Describe the blocker" style={{ flex:1,background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:8,padding:'8px 12px',color:c.text,fontSize:13,outline:'none' }}/><Btn v="danger" onClick={()=>{onBlocker(task.id,btext);setShowB(false);}} style={{ flexShrink:0,padding:'8px 14px' }}>Send</Btn></div>}
+      {showB&&<div style={{ padding:'0 16px 14px',display:'flex',gap:8 }}><input value={btext} onChange={e=>setBtext(e.target.value)} placeholder="What is blocking it? e.g. Waiting on Design team for assets" style={{ flex:1,background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:8,padding:'8px 12px',color:c.text,fontSize:13,outline:'none' }}/><Btn v="danger" onClick={()=>{onBlocker(task.id,btext);setShowB(false);}} style={{ flexShrink:0,padding:'8px 14px' }}>Send</Btn></div>}
     </Card>
   );
 }
@@ -3855,6 +3855,559 @@ function PerfTab({ tasks, history, members }) {
   const sorted=[...stats].sort((a,b)=>b.score-a.score),top=sorted[0]; const totDone=stats.reduce((a,s)=>a+s.done,0),avgRate=stats.length?Math.round(stats.reduce((a,s)=>a+s.rate,0)/stats.length):0;
   return(<div><div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20 }}><StatCard label="Days tracked" value={allDays.length} color="#818CF8" icon="📅"/><StatCard label="Total done" value={totDone} color="#34D399" icon="✅"/><StatCard label="Avg completion" value={avgRate+'%'} color="#F472B6" icon="🎯"/><StatCard label="Top performer" value={top?.member.name?.split(' ')[0]||'—'} color={top?.gc||'#818CF8'} sub={top?`Score: ${top.score}`:''} icon="🏆"/></div><Card style={{ padding:'18px 20px',marginBottom:20 }}><Lbl>Leaderboard</Lbl><div style={{ display:'flex',flexDirection:'column',gap:10 }}>{sorted.map((s,i)=><div key={s.member.id||s.member.email} style={{ display:'flex',alignItems:'center',gap:12 }}><div style={{ width:22,fontSize:13,fontWeight:700,color:i===0?'#FCD34D':i===1?'#94A3B8':i===2?'#CD7C2E':c.mut,textAlign:'center',flexShrink:0 }}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}`}</div><Av member={s.member} size={30} url={s.member.avatar_url}/><span style={{ fontSize:13,fontWeight:500,color:c.text,flex:1 }}>{s.member.name||s.member.email}</span><div style={{ width:120 }}><Bar pct={s.rate} color={s.gc} h={4}/></div><span style={{ fontSize:12,fontWeight:700,color:s.gc,width:36,textAlign:'right' }}>{s.rate}%</span><div style={{ width:28,height:28,borderRadius:8,background:s.gc+'20',border:`1px solid ${s.gc}40`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:800,color:s.gc }}>{s.grade}</div></div>)}</div></Card><div style={{ display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:14 }}>{stats.map(s=><Card key={s.member.id||s.member.email} style={{ padding:'20px 22px' }}><div style={{ display:'flex',alignItems:'center',gap:12,marginBottom:14 }}><Av member={s.member} size={44} url={s.member.avatar_url}/><div style={{ flex:1 }}><div style={{ fontSize:14,fontWeight:700,color:c.text }}>{s.member.name||s.member.email}</div></div><div style={{ position:'relative',width:56,height:56,flexShrink:0 }}><svg width="56" height="56" style={{ transform:'rotate(-90deg)' }}><circle cx="28" cy="28" r="20" fill="none" stroke="rgba(128,128,128,.15)" strokeWidth="4"/><circle cx="28" cy="28" r="20" fill="none" stroke={s.gc} strokeWidth="4" strokeLinecap="round" strokeDasharray={`${(s.score/100)*2*Math.PI*20} ${2*Math.PI*20}`}/></svg><div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center' }}><div style={{ fontSize:16,fontWeight:800,color:s.gc,lineHeight:1 }}>{s.grade}</div><div style={{ fontSize:9,color:c.mut,lineHeight:1 }}>{s.score}</div></div></div></div>{s.tod.length>0&&<div style={{ marginBottom:12 }}><div style={{ display:'flex',justifyContent:'space-between',marginBottom:5 }}><Lbl style={{ margin:0 }}>Today</Lbl><span style={{ fontSize:11,color:s.member.color||'#818CF8',fontWeight:700 }}>{s.tdone}/{s.tod.length}</span></div><Bar pct={s.todPct} color={s.member.color||'#818CF8'} h={4}/></div>}<div style={{ marginBottom:12 }}><div style={{ display:'flex',justifyContent:'space-between',marginBottom:5 }}><Lbl style={{ margin:0 }}>Overall</Lbl><span style={{ fontSize:11,color:s.gc,fontWeight:700 }}>{s.rate}%</span></div><Bar pct={s.rate} color={s.gc} h={4}/></div><div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8 }}>{[{l:'Done',v:s.done,col:'#34D399'},{l:'Avg/day',v:s.avg,col:'#818CF8'},{l:'Blockers',v:s.blocked,col:s.blocked>0?'#EF4444':'#34D399'}].map(x=><div key={x.l} style={{ background:'rgba(128,128,128,.07)',borderRadius:10,padding:10,textAlign:'center',border:`1px solid ${c.bord}` }}><div style={{ fontSize:18,fontWeight:800,color:x.col }}>{x.v}</div><div style={{ fontSize:9,color:c.mut,textTransform:'uppercase',letterSpacing:'.06em',marginTop:2 }}>{x.l}</div></div>)}</div>{s.week.length>0&&<><Lbl style={{ marginTop:12 }}>7-day trend</Lbl><div style={{ display:'flex',alignItems:'flex-end',gap:4,height:44 }}>{s.week.map((d,i)=><div key={i} style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3 }}><div style={{ width:'100%',height:Math.max(3,d.pct/100*36),borderRadius:3,background:d.pct===100?'#34D399':d.pct>=60?'#818CF8':'#F97316' }}/><div style={{ fontSize:9,color:c.mut }}>{new Date(d.date+'T12:00').toLocaleDateString('en',{weekday:'narrow'})}</div></div>)}</div></>}</Card>)}</div></div>);
 }
+
+// ─── COMMITMENT TRACKING / RELIABILITY ───────────────────────────────────────
+// A "commitment" = a task someone owns that has a deadline. When the deadline
+// passes, the outcome is Kept (done), Missed (still open/blocked past due), or
+// Delayed (done, but after an extension). Reliability = kept / resolved commitments.
+function buildCommitments(tasks, history) {
+  // Live tasks that represent commitments (have an owner + a timeline)
+  const out = [];
+  const seen = new Set();
+  (tasks || []).forEach(t => {
+    if (!t.assignee_email || !t.timeline) return;
+    const id = t.id || (t.assignee_email + '|' + (t.title || t.text));
+    seen.add(id);
+    const overdue = isCommitmentOverdue(t.timeline, t.created_at);
+    let outcome;
+    if (t.status === 'done') outcome = 'kept';
+    else if (t.status === 'blocked') outcome = overdue ? 'missed' : 'pending';
+    else outcome = overdue ? 'missed' : 'pending';
+    out.push({
+      who: t.assignee_email, whoName: t.assignee_name || t.assignee_email,
+      text: t.title || t.text, timeline: t.timeline, outcome, status: t.status,
+    });
+  });
+  return out;
+}
+// Rough deadline interpreter for the fuzzy timeline labels the app uses.
+function isCommitmentOverdue(timeline, createdAt) {
+  if (!timeline) return false;
+  const made = createdAt ? new Date(createdAt).getTime() : Date.now();
+  const ageDays = (Date.now() - made) / 864e5;
+  const tl = timeline.toLowerCase();
+  if (tl.includes('today') || tl.includes('eod') || tl.includes('noon') || /\d\s*pm|\d\s*am/.test(tl)) return ageDays >= 1;
+  if (tl.includes('tomorrow')) return ageDays >= 2;
+  if (tl.includes('this week') || tl.includes('week')) return ageDays >= 7;
+  // explicit date
+  const d = Date.parse(timeline);
+  if (!isNaN(d)) return d < Date.now();
+  return ageDays >= 3;
+}
+function reliabilityOf(commitments) {
+  const resolved = commitments.filter(c => c.outcome === 'kept' || c.outcome === 'missed');
+  if (resolved.length === 0) return null; // nothing resolved yet
+  const kept = resolved.filter(c => c.outcome === 'kept').length;
+  return Math.round(kept / resolved.length * 100);
+}
+
+// ─── ACCOUNTABILITY HEATMAP ───────────────────────────────────────────────────
+// Composite per-member accountability from four signals:
+//   commitments completed, deadlines met, standup participation, task completion.
+function computeAccountability(members, tasks, history, commitments) {
+  const days = (history || []).slice(0, 14); // last ~2 weeks of standups
+  return members.map(m => {
+    const email = (m.email || '').toLowerCase();
+    const myTasks = (tasks || []).filter(t => (t.assignee_email || '').toLowerCase() === email);
+    const myCommit = commitments.filter(x => (x.who || '').toLowerCase() === email);
+    const resolved = myCommit.filter(x => x.outcome === 'kept' || x.outcome === 'missed');
+
+    // 1. Task completion %
+    const completion = myTasks.length ? Math.round(myTasks.filter(t => t.status === 'done').length / myTasks.length * 100) : null;
+    // 2. Commitments completed (kept / all owned commitments)
+    const commitPct = myCommit.length ? Math.round(myCommit.filter(x => x.outcome === 'kept').length / myCommit.length * 100) : null;
+    // 3. Deadlines met (kept / resolved)
+    const deadlinePct = resolved.length ? Math.round(resolved.filter(x => x.outcome === 'kept').length / resolved.length * 100) : null;
+    // 4. Standup participation (days they appeared in / total standup days)
+    const present = days.filter(d => (d.tasks || []).some(t => (t.assignee_email || '').toLowerCase() === email)).length;
+    const participation = days.length ? Math.round(present / days.length * 100) : null;
+
+    const parts = [completion, commitPct, deadlinePct, participation].filter(v => v != null);
+    const score = parts.length ? Math.round(parts.reduce((a, b) => a + b, 0) / parts.length) : null;
+    return { m, score, completion, commitPct, deadlinePct, participation, hasData: parts.length > 0 };
+  }).filter(x => x.hasData).sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+}
+
+function AccountabilityHeatmap({ members, tasks, history, commitments }) {
+  const c = useC();
+  const rows = computeAccountability(members, tasks, history, commitments);
+  if (rows.length === 0) return null;
+  const col = (s) => s == null ? '#94A3B8' : s >= 85 ? '#16A34A' : s >= 70 ? '#65A30D' : s >= 55 ? '#D97706' : '#DC2626';
+  const cell = (v) => (
+    <div style={{ flex: 1, textAlign: 'center' }}>
+      <div style={{ height: 30, borderRadius: 7, background: v == null ? 'rgba(128,128,128,.12)' : col(v) + (v >= 85 ? '' : '22'), border: v == null ? 'none' : `1px solid ${col(v)}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: v == null ? c.mut : col(v) }}>{v == null ? '–' : v + '%'}</div>
+    </div>
+  );
+  return (
+    <Card style={{ padding: '18px 20px', marginBottom: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 4 }}>Accountability heatmap</div>
+      <p style={{ fontSize: 11.5, color: c.mut, marginBottom: 14 }}>A composite of commitments completed, deadlines met, stand-up participation, and task completion.</p>
+
+      {/* big bar view */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 11, marginBottom: 18 }}>
+        {rows.map(({ m, score }) => (
+          <div key={m.email} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Av member={m} size={28} url={m.avatar_url}/>
+            <span style={{ width: 110, fontSize: 13, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name || m.email.split('@')[0]}</span>
+            <div style={{ flex: 1, height: 14, borderRadius: 7, background: 'rgba(128,128,128,.12)', overflow: 'hidden' }}>
+              <div style={{ width: (score ?? 0) + '%', height: '100%', background: col(score), borderRadius: 7, transition: 'width .5s cubic-bezier(.22,1,.36,1)' }}/>
+            </div>
+            <span style={{ width: 44, textAlign: 'right', fontSize: 15, fontWeight: 800, color: col(score) }}>{score == null ? '—' : score + '%'}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* metric breakdown grid */}
+      <div style={{ borderTop: `1px solid ${c.bord}`, paddingTop: 12 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <span style={{ width: 122, flexShrink: 0 }}/>
+          {['Commitments', 'Deadlines', 'Participation', 'Completion'].map(h => (
+            <span key={h} style={{ flex: 1, textAlign: 'center', fontSize: 10, color: c.mut, textTransform: 'uppercase', letterSpacing: '.03em' }}>{h}</span>
+          ))}
+        </div>
+        {rows.map(({ m, commitPct, deadlinePct, participation, completion }) => (
+          <div key={m.email} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ width: 122, flexShrink: 0, fontSize: 12, color: c.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name || m.email.split('@')[0]}</span>
+            {cell(commitPct)}{cell(deadlinePct)}{cell(participation)}{cell(completion)}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+
+function ReliabilityTab({ tasks, members, history, team }) {
+  const c = useC();
+  const commitments = buildCommitments(tasks, history);
+  const teamScore = reliabilityOf(commitments);
+  // per-member
+  const byMember = members.map(m => {
+    const cs = commitments.filter(x => (x.who || '').toLowerCase() === (m.email || '').toLowerCase());
+    return { m, cs, score: reliabilityOf(cs), kept: cs.filter(x => x.outcome === 'kept').length, missed: cs.filter(x => x.outcome === 'missed').length, pending: cs.filter(x => x.outcome === 'pending').length };
+  }).filter(x => x.cs.length > 0).sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+
+  const scoreColor = (s) => s == null ? '#94A3B8' : s >= 85 ? '#16A34A' : s >= 65 ? '#D97706' : '#DC2626';
+  const totalKept = commitments.filter(c => c.outcome === 'kept').length;
+  const totalMissed = commitments.filter(c => c.outcome === 'missed').length;
+  const totalPending = commitments.filter(c => c.outcome === 'pending').length;
+
+  return (
+    <div>
+      <div style={{ marginBottom: 18 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: c.text, marginBottom: 4 }}>Commitment reliability</h2>
+        <p style={{ fontSize: 12.5, color: c.mut, lineHeight: 1.6 }}>Most tools track tasks. This tracks what people <strong>promised</strong> — every owned task with a deadline becomes a commitment. When the deadline passes it's <span style={{ color: '#16A34A', fontWeight: 600 }}>kept</span>, <span style={{ color: '#DC2626', fontWeight: 600 }}>missed</span>, or still pending. Reliability is kept ÷ resolved.</p>
+      </div>
+
+      {commitments.length === 0 ? (
+        <Card style={{ padding: '40px', textAlign: 'center' }}>
+          <div style={{ fontSize: 34, marginBottom: 12 }}>🤝</div>
+          <div style={{ color: c.sub, fontSize: 14, fontWeight: 600, marginBottom: 4 }}>No commitments tracked yet</div>
+          <div style={{ color: c.mut, fontSize: 12.5 }}>Assign tasks with a timeline and they'll show up here as commitments.</div>
+        </Card>
+      ) : (
+        <>
+          {/* Headline scores */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 18 }}>
+            {[
+              { l: 'Team reliability', s: teamScore, sub: `${totalKept} kept · ${totalMissed} missed` },
+              { l: 'Commitments', s: null, raw: commitments.length, sub: `${totalPending} still pending` },
+              { l: 'On-time rate', s: teamScore, sub: 'of resolved commitments' },
+            ].map((card, i) => (
+              <div key={i} style={{ padding: '18px', borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}` }}>
+                <div style={{ fontSize: 11, color: c.mut, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>{card.l}</div>
+                <div style={{ fontSize: 30, fontWeight: 800, color: card.s == null && card.raw == null ? c.mut : (card.raw != null ? c.text : scoreColor(card.s)) }}>{card.raw != null ? card.raw : (card.s == null ? '—' : card.s + '%')}</div>
+                <div style={{ fontSize: 11.5, color: c.mut, marginTop: 3 }}>{card.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Accountability heatmap */}
+          <AccountabilityHeatmap members={members} tasks={tasks} history={history} commitments={commitments}/>
+
+          {/* Per-employee reliability */}
+          <Card style={{ padding: '18px 20px', marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 14 }}>By employee</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {byMember.map(({ m, score, kept, missed, pending }) => (
+                <div key={m.email} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <Av member={m} size={30} url={m.avatar_url}/>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: c.text }}>{m.name || m.email.split('@')[0]}</div>
+                    <div style={{ fontSize: 11, color: c.mut }}>{kept} kept · {missed} missed{pending ? ` · ${pending} pending` : ''}</div>
+                  </div>
+                  <div style={{ width: 120 }}><Bar pct={score ?? 0} h={7} color={scoreColor(score)}/></div>
+                  <div style={{ width: 48, textAlign: 'right', fontSize: 15, fontWeight: 800, color: scoreColor(score) }}>{score == null ? '—' : score + '%'}</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {/* Recent missed commitments */}
+          {totalMissed > 0 && (
+            <Card style={{ padding: '18px 20px' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 12 }}>Missed commitments</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {commitments.filter(x => x.outcome === 'missed').slice(0, 8).map((x, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, background: 'rgba(239,68,68,.05)', border: '1px solid rgba(239,68,68,.18)' }}>
+                    <span style={{ fontSize: 13, color: c.text, flex: 1 }}>{x.text}</span>
+                    <span style={{ fontSize: 11, color: c.mut }}>{x.whoName?.split(' ')[0]} · promised {x.timeline}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          <p style={{ fontSize: 11, color: c.mut, marginTop: 14, lineHeight: 1.5 }}>How it's measured: a commitment is "resolved" once its deadline passes — completed = kept, still open/blocked = missed. Pending commitments (deadline not yet reached) don't count for or against the score until they resolve.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── MANAGER TIME SAVED DASHBOARD ─────────────────────────────────────────────
+// Honest ROI view from real activity counts × transparent per-action time assumptions.
+// ─── AI WEEKLY EXECUTIVE SUMMARY ──────────────────────────────────────────────
+function WeeklyExecSummary({ tasks, members, history, team }) {
+  const c = useC();
+  const [aiText, setAiText] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // This week's window
+  const weekAgo = Date.now() - 7 * 864e5;
+  const ts = (t) => t.created_at ? new Date(t.created_at).getTime() : (parseInt(String(t.id).replace(/\D/g, '')) || 0);
+  const thisWeek = (tasks || []).filter(t => ts(t) >= weekAgo);
+  const completed = (tasks || []).filter(t => t.status === 'done').length;
+  const completedWeek = thisWeek.filter(t => t.status === 'done').length;
+  const delayed = (tasks || []).filter(t => t.status !== 'done' && isCommitmentOverdue(t.timeline, t.created_at)).length;
+  const criticalBlockers = (tasks || []).filter(t => (t.status === 'blocked' || t.blocker) && (t.priority === 'critical' || t.priority === 'high')).length;
+
+  // Productivity trend vs previous standup average
+  const recent = (history || []).slice(0, 5);
+  const older = (history || []).slice(5, 10);
+  const avgPct = (arr) => { const ps = arr.map(d => { const dt = d.tasks || []; return dt.length ? dt.filter(t => t.status === 'done').length / dt.length * 100 : null; }).filter(v => v != null); return ps.length ? Math.round(ps.reduce((a, b) => a + b, 0) / ps.length) : null; };
+  const recentAvg = avgPct(recent), olderAvg = avgPct(older);
+  const trend = (recentAvg != null && olderAvg != null) ? recentAvg - olderAvg : null;
+
+  // Projects at risk (health < 80)
+  let spaces = [];
+  try { spaces = JSON.parse(localStorage.getItem('ss-spaces-' + (team?.id || 'demo') + '') || '[]'); } catch {}
+  const atRisk = (Array.isArray(spaces) ? spaces : []).map(s => computeHealth(s)).filter(h => h.score < 80).length;
+
+  const stats = [
+    { label: 'tasks completed', value: completedWeek || completed, color: '#16A34A' },
+    { label: 'delayed', value: delayed, color: '#D97706' },
+    { label: 'critical blockers', value: criticalBlockers, color: '#DC2626' },
+    { label: 'projects at risk', value: atRisk, color: '#DC2626' },
+  ];
+
+  const buildFallback = () => {
+    let s = `This week the team completed ${completedWeek || completed} task${(completedWeek||completed) !== 1 ? 's' : ''}`;
+    if (delayed) s += `, with ${delayed} now delayed`;
+    s += '. ';
+    if (criticalBlockers) s += `${criticalBlockers} high-priority blocker${criticalBlockers !== 1 ? 's need' : ' needs'} attention. `;
+    if (trend != null) s += `Productivity is ${trend >= 0 ? 'up' : 'down'} ${Math.abs(trend)}% versus the prior period. `;
+    if (atRisk) s += `${atRisk} project${atRisk !== 1 ? 's are' : ' is'} below a healthy score and worth a closer look. `;
+    else s += 'All projects are in healthy territory. ';
+    return s.trim();
+  };
+
+  const generate = async () => {
+    setBusy(true);
+    const fb = buildFallback();
+    try {
+      const res = await askAI(`Write a 3-4 sentence executive weekly summary for a leadership team. Data: ${completedWeek||completed} tasks completed this week, ${delayed} delayed, ${criticalBlockers} critical blockers, productivity trend ${trend == null ? 'n/a' : (trend >= 0 ? '+' : '') + trend + '%'}, ${atRisk} projects at risk. Be crisp and executive. No greeting, no preamble, no bullet list.`, { teamName: team?.name });
+      const text = (typeof res === 'string' ? res : res?.text || '').trim();
+      const junk = /good (morning|afternoon)|how can i|what can i help/i;
+      setAiText(text && !junk.test(text) && text.length > 30 ? text : fb);
+    } catch { setAiText(fb); }
+    setBusy(false);
+  };
+  useEffect(() => { generate(); /* eslint-disable-next-line */ }, []);
+
+  const reportText = () => {
+    return `Weekly Executive Summary — ${team?.name || 'Team'}\n${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}\n\n${aiText}\n\n• ${completedWeek || completed} tasks completed\n• ${delayed} delayed\n• ${criticalBlockers} critical blockers\n• Productivity ${trend == null ? 'n/a' : (trend >= 0 ? 'up ' : 'down ') + Math.abs(trend) + '%'}\n• ${atRisk} projects at risk`;
+  };
+  const copy = () => { try { navigator.clipboard.writeText(reportText()); } catch {} };
+
+  return (
+    <div>
+      <div style={{ marginBottom: 18 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: c.text, marginBottom: 4 }}>Weekly executive summary</h2>
+        <p style={{ fontSize: 12.5, color: c.mut, lineHeight: 1.6 }}>The Friday wrap-up executives want — this week's output, risks, and trend in one glance. Generated from your live data.</p>
+      </div>
+
+      {/* AI narrative */}
+      <div style={{ borderRadius: 16, background: 'linear-gradient(135deg, rgba(99,102,241,.1), rgba(129,140,248,.04))', border: '1px solid rgba(99,102,241,.22)', padding: '20px 22px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 15 }}>✦</span>
+          <span style={{ fontSize: 12, color: c.mut, textTransform: 'uppercase', letterSpacing: '.06em' }}>This week at {team?.name || 'your team'}</span>
+        </div>
+        <div style={{ fontSize: 15, color: c.text, lineHeight: 1.7, minHeight: 50 }}>{busy ? <span style={{ color: c.mut }}>Generating summary…</span> : aiText}</div>
+      </div>
+
+      {/* Metric cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 16 }}>
+        {stats.map((s, i) => (
+          <div key={i} style={{ padding: '18px', borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, textAlign: 'center' }}>
+            <div style={{ fontSize: 30, fontWeight: 800, color: s.color }}>{s.value}</div>
+            <div style={{ fontSize: 11.5, color: c.mut, marginTop: 4 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Trend line */}
+      <Card style={{ padding: '16px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontSize: 13, color: c.sub, flex: 1 }}>Team productivity vs. prior period</span>
+        {trend == null ? <span style={{ fontSize: 13, color: c.mut }}>Not enough history yet</span> :
+          <span style={{ fontSize: 16, fontWeight: 800, color: trend >= 0 ? '#16A34A' : '#DC2626' }}>{trend >= 0 ? '▲' : '▼'} {Math.abs(trend)}%</span>}
+      </Card>
+
+      <div style={{ display: 'flex', gap: 10 }}>
+        <Btn v="ghost" onClick={generate} loading={busy}>Regenerate</Btn>
+        <Btn v="ghost" onClick={copy}>Copy report</Btn>
+      </div>
+      <p style={{ fontSize: 11, color: c.mut, marginTop: 14, lineHeight: 1.5 }}>Automatic Friday delivery to inboxes requires the email backend (a scheduled send). Until then, generate and copy/share it here. Numbers are live from your tasks, stand-ups, and project health.</p>
+    </div>
+  );
+}
+
+
+// ─── STANDSYNC ELEVATE — performance-driven learning ──────────────────────────
+// Connects work performance to learning. Detects likely root causes from real
+// signals (missed deadlines, recurring blockers, low completion, weak skill areas)
+// and recommends matching resources from a curated learning catalog.
+const ELEVATE_CATALOG = {
+  time: {
+    skill: 'Time & deadline management',
+    course: 'Owning Your Deadlines: Planning & Estimation',
+    path: 'Personal Productivity path (4 modules)',
+    assessment: 'Estimation accuracy self-check',
+    mins: 90,
+  },
+  unblock: {
+    skill: 'Unblocking & escalation',
+    course: 'Raising Blockers Early: Async Communication',
+    path: 'Effective Collaboration path (3 modules)',
+    assessment: 'Dependency-mapping exercise',
+    mins: 60,
+  },
+  focus: {
+    skill: 'Focus & throughput',
+    course: 'Deep Work: Finishing What You Start',
+    path: 'Execution Habits path (5 modules)',
+    assessment: 'Work-in-progress audit',
+    mins: 75,
+  },
+  design: {
+    skill: 'Design fundamentals',
+    course: 'Design Foundations for Faster Reviews',
+    path: 'Design Craft path (4 modules)',
+    assessment: 'Design critique exercise',
+    mins: 120,
+  },
+  bug: {
+    skill: 'Debugging & quality',
+    course: 'Systematic Debugging & Root-Cause Analysis',
+    path: 'Engineering Quality path (4 modules)',
+    assessment: 'Defect-triage scenario',
+    mins: 100,
+  },
+  docs: {
+    skill: 'Technical writing',
+    course: 'Clear Docs: Writing for Your Team',
+    path: 'Communication path (3 modules)',
+    assessment: 'Doc clarity review',
+    mins: 50,
+  },
+  research: {
+    skill: 'Research & analysis',
+    course: 'Structured Research & Synthesis',
+    path: 'Analytical Thinking path (4 modules)',
+    assessment: 'Research framing exercise',
+    mins: 80,
+  },
+};
+
+function buildElevateRecs(members, tasks, history, commitments) {
+  return members.map(m => {
+    const email = (m.email || '').toLowerCase();
+    const mine = (tasks || []).filter(t => (t.assignee_email || '').toLowerCase() === email);
+    if (mine.length === 0) return null;
+    const myCommit = commitments.filter(x => (x.who || '').toLowerCase() === email);
+    const resolved = myCommit.filter(x => x.outcome === 'kept' || x.outcome === 'missed');
+    const missed = resolved.filter(x => x.outcome === 'missed').length;
+    const deadlineRate = resolved.length ? missed / resolved.length : 0;
+    const blockers = mine.filter(t => t.status === 'blocked' || t.blocker).length;
+    const completion = mine.length ? mine.filter(t => t.status === 'done').length / mine.length : 1;
+
+    // weakest skill area by label: where this person has the most open/blocked work
+    const labelTrouble = {};
+    mine.forEach(t => {
+      if (t.status === 'done') return;
+      const key = (t.label || '').toLowerCase();
+      const id = key.includes('design') ? 'design' : key.includes('bug') ? 'bug' : key.includes('doc') ? 'docs' : key.includes('research') ? 'research' : null;
+      if (id) labelTrouble[id] = (labelTrouble[id] || 0) + 1;
+    });
+    const weakLabel = Object.entries(labelTrouble).sort((a, b) => b[1] - a[1])[0];
+
+    // Decide root cause (priority order)
+    const recs = [];
+    if (deadlineRate >= 0.34 && resolved.length >= 2) recs.push({ cause: `Missed ${missed} of ${resolved.length} deadlines`, key: 'time', severity: 'high' });
+    if (blockers >= 2) recs.push({ cause: `${blockers} tasks stuck on blockers`, key: 'unblock', severity: 'med' });
+    if (completion < 0.4 && mine.length >= 3) recs.push({ cause: `Only ${Math.round(completion*100)}% of tasks completed`, key: 'focus', severity: 'high' });
+    if (weakLabel && weakLabel[1] >= 2) recs.push({ cause: `${weakLabel[1]} open ${ELEVATE_CATALOG[weakLabel[0]].skill.toLowerCase()} tasks`, key: weakLabel[0], severity: 'med' });
+
+    if (recs.length === 0) return { m, healthy: true, recs: [] };
+    // de-dupe by key, keep first (highest priority)
+    const seen = new Set();
+    const unique = recs.filter(r => { if (seen.has(r.key)) return false; seen.add(r.key); return true; });
+    return { m, healthy: false, recs: unique };
+  }).filter(Boolean);
+}
+
+function ElevateTab({ tasks, members, history, team }) {
+  const c = useC();
+  const commitments = buildCommitments(tasks, history);
+  const rows = buildElevateRecs(members, tasks, history, commitments);
+  const needing = rows.filter(r => !r.healthy);
+  const sevColor = (s) => s === 'high' ? '#DC2626' : '#D97706';
+
+  return (
+    <div>
+      <div style={{ marginBottom: 18 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: c.text, marginBottom: 4 }}>✦ StandSync Elevate</h2>
+        <p style={{ fontSize: 12.5, color: c.mut, lineHeight: 1.6 }}>Where performance meets learning. Elevate watches real work signals — missed deadlines, recurring blockers, weak skill areas — infers the likely root cause, and recommends targeted learning. Work and growth, connected.</p>
+      </div>
+
+      {needing.length === 0 ? (
+        <Card style={{ padding: '40px', textAlign: 'center' }}>
+          <div style={{ fontSize: 34, marginBottom: 12 }}>🎓</div>
+          <div style={{ color: c.sub, fontSize: 14, fontWeight: 600, marginBottom: 4 }}>No learning gaps detected</div>
+          <div style={{ color: c.mut, fontSize: 12.5 }}>Everyone's performance signals look healthy. Recommendations appear when patterns emerge.</div>
+        </Card>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {needing.map(({ m, recs }) => (
+            <Card key={m.email} style={{ padding: '18px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                <Av member={m} size={34} url={m.avatar_url}/>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>{m.name || m.email.split('@')[0]}</div>
+                  <div style={{ fontSize: 12, color: c.mut }}>{recs.length} recommendation{recs.length !== 1 ? 's' : ''}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {recs.map((r, i) => {
+                  const cat = ELEVATE_CATALOG[r.key];
+                  return (
+                    <div key={i} style={{ borderRadius: 12, border: `1px solid ${c.bord}`, overflow: 'hidden' }}>
+                      <div style={{ padding: '10px 14px', background: sevColor(r.severity) + '12', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: sevColor(r.severity) }}/>
+                        <span style={{ fontSize: 12, color: c.sub }}>Detected: <strong style={{ color: c.text }}>{r.cause}</strong></span>
+                        <span style={{ marginLeft: 'auto', fontSize: 10.5, color: sevColor(r.severity), fontWeight: 700, textTransform: 'uppercase' }}>{r.severity === 'high' ? 'Priority' : 'Suggested'}</span>
+                      </div>
+                      <div style={{ padding: '12px 14px' }}>
+                        <div style={{ fontSize: 11, color: c.mut, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 6 }}>Recommended · {cat.skill}</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                            <span style={{ fontSize: 14 }}>📘</span>
+                            <span style={{ flex: 1, fontSize: 13, color: c.text, fontWeight: 600 }}>{cat.course}</span>
+                            <span style={{ fontSize: 11, color: c.mut }}>~{cat.mins} min</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                            <span style={{ fontSize: 14 }}>🗺️</span>
+                            <span style={{ flex: 1, fontSize: 13, color: c.sub }}>{cat.path}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                            <span style={{ fontSize: 14 }}>📝</span>
+                            <span style={{ flex: 1, fontSize: 13, color: c.sub }}>{cat.assessment}</span>
+                          </div>
+                        </div>
+                        <button onClick={() => { try { navigator.clipboard.writeText(`Recommended for ${m.name || m.email}: ${cat.course} (${cat.path}). Detected: ${r.cause}.`); } catch {} }}
+                          style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: '#6366F1', background: 'rgba(99,102,241,.1)', border: '1px solid rgba(99,102,241,.25)', borderRadius: 8, padding: '7px 14px', cursor: 'pointer' }}>
+                          Share recommendation
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          ))}
+          <p style={{ fontSize: 11, color: c.mut, lineHeight: 1.5 }}>Recommendations are generated from live performance signals and mapped to the Elevate learning catalog. Connecting a live LMS/course provider would let assignments and progress flow back into these cards.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function TimeSavedTab({ tasks, members, history, team }) {
+  const c = useC();
+  const standups = (history || []).length;
+  const tasksTracked = (tasks || []).length;
+  const completed = (tasks || []).filter(t => t.status === 'done').length;
+  const reportsGenerated = standups; // one daily summary per stand-up cycle
+
+  // Transparent assumptions (minutes saved per action vs. doing it manually)
+  const A = { standup: 18, report: 12, statusChase: 4, autoUpdate: 2 };
+  const meetingsAvoided = standups; // each async stand-up replaces a sync meeting
+  const statusChases = completed; // each tracked completion = a status update not chased
+  const minutes = standups * A.standup + reportsGenerated * A.report + statusChases * A.statusChase + tasksTracked * A.autoUpdate;
+  const hours = Math.round(minutes / 60 * 10) / 10;
+
+  const stat = (icon, value, label, sub) => (
+    <div style={{ padding: '20px', borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}` }}>
+      <div style={{ fontSize: 20, marginBottom: 8 }}>{icon}</div>
+      <div style={{ fontSize: 28, fontWeight: 800, color: c.text }}>{value}</div>
+      <div style={{ fontSize: 12.5, fontWeight: 600, color: c.sub, marginTop: 4 }}>{label}</div>
+      <div style={{ fontSize: 11, color: c.mut, marginTop: 2 }}>{sub}</div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{ marginBottom: 18 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: c.text, marginBottom: 4 }}>Time saved</h2>
+        <p style={{ fontSize: 12.5, color: c.mut, lineHeight: 1.6 }}>What StandSync has saved you as a manager — meetings replaced by async stand-ups, status updates you didn't have to chase, and reports generated automatically.</p>
+      </div>
+
+      {/* Hero hours-saved */}
+      <div style={{ borderRadius: 18, background: 'linear-gradient(135deg, rgba(99,102,241,.12), rgba(129,140,248,.06))', border: '1px solid rgba(99,102,241,.25)', padding: '26px', marginBottom: 18, textAlign: 'center' }}>
+        <div style={{ fontSize: 12, color: c.mut, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 6 }}>Estimated time saved</div>
+        <div style={{ fontSize: 46, fontWeight: 800, color: '#6366F1', lineHeight: 1 }}>{hours} <span style={{ fontSize: 22 }}>hours</span></div>
+        <div style={{ fontSize: 12.5, color: c.sub, marginTop: 8 }}>≈ {Math.round(hours * 60)} minutes of manager overhead avoided</div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 14, marginBottom: 18 }}>
+        {stat('🗓️', meetingsAvoided, 'Meetings avoided', 'async stand-ups instead of sync calls')}
+        {stat('📝', reportsGenerated, 'Reports generated', 'daily summaries created automatically')}
+        {stat('🔔', statusChases, 'Status updates automated', "completions you didn't have to chase")}
+        {stat('✅', tasksTracked, 'Tasks tracked', 'kept current without manual logging')}
+      </div>
+
+      <Card style={{ padding: '18px 20px' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 10 }}>How this is calculated</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          {[
+            [`${standups} stand-ups`, `× ${A.standup} min saved vs. a sync meeting`],
+            [`${reportsGenerated} reports`, `× ${A.report} min vs. writing a summary by hand`],
+            [`${statusChases} status updates`, `× ${A.statusChase} min vs. chasing each person`],
+            [`${tasksTracked} tasks tracked`, `× ${A.autoUpdate} min vs. manual logging`],
+          ].map((r, i) => (
+            <div key={i} style={{ display: 'flex', fontSize: 12.5 }}>
+              <span style={{ width: 160, fontWeight: 600, color: c.text }}>{r[0]}</span>
+              <span style={{ color: c.mut }}>{r[1]}</span>
+            </div>
+          ))}
+        </div>
+        <p style={{ fontSize: 11, color: c.mut, marginTop: 12, lineHeight: 1.5 }}>These are transparent estimates based on typical manual overhead, not tracked stopwatch time. Adjust the per-action assumptions to match your team's reality.</p>
+      </Card>
+    </div>
+  );
+}
+
 
 function HistTab({ history, members }) {
   const c=useC(); const [open,setOpen]=useState(null); const fmt=d=>new Date(d+'T12:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
@@ -6230,6 +6783,17 @@ function BrainstormSpace({ team, session, members=[] }) {
 // ─── HOME TEAM BOARD ─────────────────────────────────────────────────────────
 // Managers post a Task / Message / Reminder to the whole team. Open tasks can be
 // claimed by any member. Stored per-team in localStorage (ss-teamboard-<id>).
+function boardIcon(name, size=17){
+  const p={width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.9,strokeLinecap:'round',strokeLinejoin:'round'};
+  switch(name){
+    case 'board': return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>;
+    case 'task': return <svg {...p}><path d="M9 11l3 3L20 6"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>;
+    case 'message': return <svg {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>;
+    case 'reminder': return <svg {...p}><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6M22 6l-3-3"/></svg>;
+    case 'summary': return <svg {...p}><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></svg>;
+    default: return null;
+  }
+}
 function teamBoardKey(teamId){ return 'ss-teamboard-'+teamId; }
 function readTeamBoard(teamId){ try{ return JSON.parse(localStorage.getItem(teamBoardKey(teamId))||'[]'); }catch{ return []; } }
 function writeTeamBoard(teamId,posts){ try{ localStorage.setItem(teamBoardKey(teamId),JSON.stringify(posts)); }catch{} }
@@ -6281,15 +6845,15 @@ function TeamBoard({ teamId='demo', session, isManager, onClaimTask, onGoto }){
   const removePost=(p)=>persist(posts.filter(x=>x.id!==p.id));
 
   const KIND_META={
-    task:{ label:'Task', icon:'✓', color:'#6366F1', bg:'rgba(99,102,241,.12)' },
-    message:{ label:'Message', icon:'💬', color:'#38BDF8', bg:'rgba(56,189,248,.12)' },
-    reminder:{ label:'Reminder', icon:'⏰', color:'#F59E0B', bg:'rgba(245,158,11,.12)' },
+    task:{ label:'Task', icon:'task', color:'#6366F1', bg:'rgba(99,102,241,.12)' },
+    message:{ label:'Message', icon:'message', color:'#38BDF8', bg:'rgba(56,189,248,.12)' },
+    reminder:{ label:'Reminder', icon:'reminder', color:'#F59E0B', bg:'rgba(245,158,11,.12)' },
   };
 
   return (
     <div style={{ borderRadius:18, background:c.surf, border:`1px solid ${c.bord}`, overflow:'hidden' }}>
       <div style={{ padding:'18px 22px', borderBottom:expanded?`1px solid ${c.bord}`:'none', display:'flex', alignItems:'center', gap:10 }}>
-        <span style={{ fontSize:17 }}>📋</span>
+        <span style={{ color:'#6366F1',display:'flex' }}>{boardIcon('board',18)}</span>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:15, fontWeight:700, color:c.text }}>Team board</div>
           <div style={{ fontSize:12, color:c.mut }}>{posts.length===0?'Open tasks, messages & reminders for the whole team':`${posts.length} post${posts.length!==1?'s':''}${openTasks?` · ${openTasks} open task${openTasks!==1?'s':''} to claim`:''}`}</div>
@@ -6304,7 +6868,7 @@ function TeamBoard({ teamId='demo', session, isManager, onClaimTask, onGoto }){
           <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' }}>
             {Object.entries(KIND_META).map(([k,m])=>(
               <button key={k} onClick={()=>setKind(k)} style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:20, border:`1px solid ${kind===k?m.color:c.bord}`, background:kind===k?m.bg:'transparent', color:kind===k?m.color:c.sub, cursor:'pointer', fontSize:12.5, fontWeight:600 }}>
-                <span>{m.icon}</span>{m.label}
+                <span style={{ display:'flex' }}>{boardIcon(m.icon,15)}</span>{m.label}
               </button>
             ))}
           </div>
@@ -6348,7 +6912,7 @@ function TeamBoardPost({ post, meta, c, dark, myEmail, isManager, onClaim, onRep
   return (
     <div style={{ padding:'14px 22px', borderBottom:`1px solid ${c.bord}` }}>
       <div style={{ display:'flex', alignItems:'flex-start', gap:11 }}>
-        <span style={{ width:30, height:30, borderRadius:9, background:meta.bg, color:meta.color, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0 }}>{meta.icon}</span>
+        <span style={{ width:30, height:30, borderRadius:9, background:meta.bg, color:meta.color, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{boardIcon(meta.icon,16)}</span>
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4, flexWrap:'wrap' }}>
             <span style={{ fontSize:10.5, fontWeight:700, color:meta.color, textTransform:'uppercase', letterSpacing:'.04em' }}>{meta.label}</span>
@@ -6409,7 +6973,7 @@ function ProjectSummary({ teamId, onGoto }) {
   if (!hasReport) return null;
   return (
     <button onClick={() => onGoto('spaces')} style={{ display: 'flex', alignItems: 'center', gap: 16, width: '100%', textAlign: 'left', padding: '16px 22px', borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, cursor: 'pointer' }} className="ss-card-hover">
-      <span style={{ fontSize: 20 }}>📊</span>
+      <span style={{ color: '#6366F1', display: 'flex' }}>{boardIcon('summary', 20)}</span>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Project summary</div>
         <div style={{ fontSize: 12.5, color: c.mut, marginTop: 2 }}>
@@ -6836,6 +7400,81 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
     </div>
   );
 }
+// ── AI Project Health Score ──────────────────────────────────────────────────
+// Scores a space 0–100 from real signals: overdue tasks, blockers, workload
+// concentration, completion progress, recency of updates, and report bottlenecks.
+// Returns { score, band, color, label, factors:[{label,impact,detail}] }.
+function computeHealth(space) {
+  const items = Array.isArray(space?.items) ? space.items : [];
+  const now = Date.now();
+  let score = 100;
+  const factors = [];
+  const ded = (pts, label, detail) => { score -= pts; factors.push({ label, impact: -pts, detail }); };
+  const add = (pts, label, detail) => { score += pts; factors.push({ label, impact: pts, detail }); };
+
+  const open = items.filter(i => i.status !== 'done');
+  const done = items.filter(i => i.status === 'done');
+  const total = items.length;
+
+  // 1. Overdue / delayed tasks
+  const overdue = open.filter(i => i.due && !isNaN(Date.parse(i.due)) && new Date(i.due) < now);
+  if (overdue.length) ded(Math.min(28, overdue.length * 7), 'Delayed tasks', `${overdue.length} task${overdue.length>1?'s':''} past due`);
+
+  // 2. Blockers (status blocked, or a blocker note)
+  const blocked = items.filter(i => i.status === 'blocked' || i.blocker);
+  if (blocked.length) ded(Math.min(24, blocked.length * 8), 'Blockers', `${blocked.length} blocked item${blocked.length>1?'s':''}`);
+
+  // 3. Report bottlenecks (from Client Report summary, if present)
+  const bottlenecks = space?.report?.summary?.bottlenecks?.length || 0;
+  if (bottlenecks) ded(Math.min(15, bottlenecks * 3), 'Reported bottlenecks', `${bottlenecks} flagged in the client report`);
+
+  // 4. Completion progress
+  const pct = total ? Math.round(done.length / total * 100) : 0;
+  if (total >= 3) {
+    if (pct < 25) ded(14, 'Low completion', `Only ${pct}% of work is done`);
+    else if (pct >= 70) add(6, 'Strong progress', `${pct}% complete`);
+  }
+
+  // 5. Workload concentration (one person carrying too much open work)
+  const byAssignee = {};
+  open.forEach(i => { const a = i.assignee_email || i.assignee || 'unassigned'; byAssignee[a] = (byAssignee[a] || 0) + 1; });
+  const loads = Object.entries(byAssignee).filter(([k]) => k !== 'unassigned').map(([, v]) => v);
+  const maxLoad = loads.length ? Math.max(...loads) : 0;
+  if (maxLoad >= 6) ded(Math.min(14, (maxLoad - 5) * 4), 'Workload concentration', `One member has ${maxLoad} open tasks`);
+
+  // 6. Unassigned open work
+  const unassigned = open.filter(i => !(i.assignee_email || i.assignee)).length;
+  if (unassigned >= 3) ded(Math.min(10, unassigned * 2), 'Unassigned work', `${unassigned} open tasks have no owner`);
+
+  // 7. Staleness — no recent updates / no recently created items
+  const recent = items.filter(i => i.updatedAt ? (now - i.updatedAt) < 7 * 864e5 : (i.createdAt ? (now - i.createdAt) < 7 * 864e5 : false)).length;
+  if (total >= 4 && recent === 0) ded(12, 'No recent activity', 'No task updates in the last 7 days');
+  else if (recent > 0) add(4, 'Active this week', `${recent} item${recent>1?'s':''} touched recently`);
+
+  // 8. Empty project = unknown, not unhealthy
+  if (total === 0) { score = 75; factors.length = 0; factors.push({ label: 'No tasks yet', impact: 0, detail: 'Add work to start tracking health' }); }
+
+  score = Math.max(0, Math.min(100, Math.round(score)));
+  let band, color, label;
+  if (score >= 80) { band = 'green'; color = '#16A34A'; label = 'Healthy'; }
+  else if (score >= 55) { band = 'yellow'; color = '#D97706'; label = 'At risk'; }
+  else { band = 'red'; color = '#DC2626'; label = 'Critical'; }
+  factors.sort((a, b) => a.impact - b.impact);
+  return { score, band, color, label, factors, pct, overdue: overdue.length, blocked: blocked.length };
+}
+
+function HealthRing({ score, color, size = 46 }) {
+  const r = (size - 6) / 2, circ = 2 * Math.PI * r;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(128,128,128,.18)" strokeWidth="4"/>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round"
+        strokeDasharray={circ} strokeDashoffset={circ * (1 - score/100)} transform={`rotate(-90 ${size/2} ${size/2})`}/>
+      <text x="50%" y="52%" dominantBaseline="middle" textAnchor="middle" fontSize={size*0.30} fontWeight="800" fill={color}>{score}</text>
+    </svg>
+  );
+}
+
 const SPACE_TEMPLATES = [
   { id: 'pm',       name: 'Project management', icon: '📋', color: '#2563EB', desc: 'Plan and deliver business projects.' },
   { id: 'software', name: 'Software development', icon: '💻', color: '#7C3AED', desc: 'Build, ship, and iterate on products.' },
@@ -7016,6 +7655,50 @@ function SpacesArea({ team, session, members = [] }) {
       {/* Project highlights — moved here from Home */}
       <div style={{ marginBottom: 24 }}><ProjectHighlights teamId={teamId} onGoto={() => {}}/></div>
 
+      {/* Executive project-health overview */}
+      {spaces.length > 0 && (() => {
+        const scored = spaces.map(s => ({ s, h: computeHealth(s) })).sort((a, b) => a.h.score - b.h.score);
+        const avg = Math.round(scored.reduce((sum, x) => sum + x.h.score, 0) / scored.length);
+        const counts = { green: 0, yellow: 0, red: 0 };
+        scored.forEach(x => counts[x.h.band]++);
+        return (
+          <div style={{ marginBottom: 24, borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, padding: '18px 22px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 14 }}>
+              <span style={{ color: '#6366F1', display: 'flex' }}>{boardIcon('summary', 20)}</span>
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: c.text }}>Project health</div>
+                <div style={{ fontSize: 12, color: c.mut }}>AI-scored across delays, blockers, workload & progress</div>
+              </div>
+              <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                {[['Healthy', counts.green, '#16A34A'], ['At risk', counts.yellow, '#D97706'], ['Critical', counts.red, '#DC2626']].map(([l, n, col]) => (
+                  <div key={l} style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: col }}>{n}</div>
+                    <div style={{ fontSize: 10, color: c.mut, textTransform: 'uppercase', letterSpacing: '.04em' }}>{l}</div>
+                  </div>
+                ))}
+                <div style={{ borderLeft: `1px solid ${c.bord}`, paddingLeft: 14, textAlign: 'center' }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: c.text }}>{avg}</div>
+                  <div style={{ fontSize: 10, color: c.mut, textTransform: 'uppercase', letterSpacing: '.04em' }}>Avg</div>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {scored.map(({ s, h }) => (
+                <button key={s.id} onClick={() => { setSelId(s.id); setView('space'); }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 10px', borderRadius: 10, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}
+                  onMouseEnter={e => e.currentTarget.style.background = c.row} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <span style={{ fontSize: 16, width: 22, textAlign: 'center' }}>{s.icon}</span>
+                  <span style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                  {h.overdue > 0 && <span style={{ fontSize: 11, color: '#DC2626' }}>{h.overdue} overdue</span>}
+                  {h.blocked > 0 && <span style={{ fontSize: 11, color: '#D97706' }}>{h.blocked} blocked</span>}
+                  <span style={{ fontSize: 11, fontWeight: 700, color: h.color, background: h.color + '1f', padding: '3px 9px', borderRadius: 20, whiteSpace: 'nowrap' }}>{h.band === 'red' ? 'Critical' : `${h.score}/100`}</span>
+                  <div style={{ width: 90 }}><Bar pct={h.score} h={6} color={h.color}/></div>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {spaces.length === 0 ? (
         <div style={{ padding: '48px 20px', textAlign: 'center', borderRadius: 16, border: `1.5px dashed ${c.bord}` }}>
           <div style={{ fontSize: 42, marginBottom: 12 }}>▦</div>
@@ -7028,6 +7711,7 @@ function SpacesArea({ team, session, members = [] }) {
           {spaces.map(s => {
             const open = s.items.filter(i => i.status !== 'done').length;
             const tpl = SPACE_TEMPLATES.find(t => t.id === s.template);
+            const health = computeHealth(s);
             return (
               <div key={s.id} onClick={() => { setSelId(s.id); setView('space'); }}
                 style={{ padding: '18px', borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, cursor: 'pointer', transition: 'border-color .15s', position: 'relative' }}
@@ -7039,6 +7723,7 @@ function SpacesArea({ team, session, members = [] }) {
                     <div style={{ fontSize: 15, fontWeight: 700, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</div>
                     <div style={{ fontSize: 11.5, color: c.mut }}>{tpl?.name || 'Space'} · {s.key}</div>
                   </div>
+                  <div title={`Health: ${health.label} (${health.score}/100)`}><HealthRing score={health.score} color={health.color} size={42}/></div>
                 </div>
                 <div style={{ display: 'flex', gap: 16 }}>
                   <div><span style={{ fontSize: 18, fontWeight: 800, color: c.text }}>{s.items.length}</span><span style={{ fontSize: 11, color: c.mut, marginLeft: 5 }}>items</span></div>
@@ -7281,6 +7966,33 @@ function SpaceSummary({ space, items, stColor, stLabel }) {
   const byStatus = SPACE_STATUSES.map(s => ({ ...s, n: items.filter(i => i.status === s.id).length }));
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {(() => {
+        const h = computeHealth(space);
+        return (
+          <div style={{ borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, padding: '20px 22px', display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 200 }}>
+              <HealthRing score={h.score} color={h.color} size={76}/>
+              <div>
+                <div style={{ fontSize: 11, color: c.mut, textTransform: 'uppercase', letterSpacing: '.05em' }}>Project health</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: h.color }}>{h.label}</div>
+                <div style={{ fontSize: 12, color: c.mut, marginTop: 2 }}>{h.score}/100 · {h.pct}% complete</div>
+              </div>
+            </div>
+            <div style={{ flex: 1, minWidth: 240 }}>
+              <div style={{ fontSize: 11, color: c.mut, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>What's affecting the score</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {h.factors.slice(0, 5).map((f, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
+                    <span style={{ width: 46, textAlign: 'right', fontWeight: 700, color: f.impact < 0 ? '#DC2626' : f.impact > 0 ? '#16A34A' : c.mut }}>{f.impact > 0 ? '+' : ''}{f.impact || '·'}</span>
+                    <span style={{ fontWeight: 600, color: c.text }}>{f.label}</span>
+                    <span style={{ color: c.mut }}>— {f.detail}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
         {cards.map(cd => (
           <div key={cd.label} style={{ padding: '16px 18px', borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}` }}>
@@ -8372,7 +9084,7 @@ function ShiftConfigModal({ teamId, members, onClose, onSaved }) {
   );
 }
 
-function NotificationPanel({ notifs, onClose, onAction, onMarkAllRead, unread, onDigest, emailBusy }) {
+function NotificationPanel({ notifs, onClose, onAction, onMarkAllRead, onClearAll, unread, onDigest, emailBusy }) {
   const c = useC();
   const { dark } = useTheme();
   const [showAll, setShowAll] = useState(false);
@@ -8390,7 +9102,12 @@ function NotificationPanel({ notifs, onClose, onAction, onMarkAllRead, unread, o
           <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Notifications</div>
           <div style={{ fontSize: 11, color: c.mut, marginTop: 1 }}>{dateLabel} · {unread} unread</div>
         </div>
-        {notifs.length > 0 && unread > 0 && <button onClick={onMarkAllRead} style={{ fontSize: 12, color: c.accent, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Mark all as read</button>}
+        {notifs.length > 0 && (
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            {unread > 0 && <button onClick={onMarkAllRead} style={{ fontSize: 12, color: c.accent, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Mark all read</button>}
+            <button onClick={onClearAll} style={{ fontSize: 12, color: c.mut, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Clear</button>
+          </div>
+        )}
       </div>
       <div style={{ maxHeight: 420, overflowY: 'auto' }}>
         {notifs.length === 0 ? (
@@ -8519,6 +9236,10 @@ function ManagerView({
   const persistRead = (set) => { try { localStorage.setItem('ss-notif-read', JSON.stringify({ day: todayKey, ids: [...set] })); } catch {} };
   const markRead = (id) => setReadIds(prev => { const n = new Set(prev); n.add(id); persistRead(n); return n; });
   const markAllRead = () => setReadIds(prev => { const n = new Set(prev); notifs.forEach(x => n.add(x.id)); persistRead(n); return n; });
+  const [dismissedIds, setDismissedIds] = useState(() => {
+    try { const raw = JSON.parse(localStorage.getItem('ss-notif-dismissed') || '{}'); return raw.day === todayKey ? new Set(raw.ids || []) : new Set(); } catch { return new Set(); }
+  });
+  const clearAllNotifs = () => setDismissedIds(prev => { const n = new Set(prev); notifs.forEach(x => n.add(x.id)); try { localStorage.setItem('ss-notif-dismissed', JSON.stringify({ day: todayKey, ids: [...n] })); } catch {} return n; });
 
   const notifs = useMemo(() => {
     const out = [];
@@ -8577,8 +9298,8 @@ function ManagerView({
         action: { label: 'Open chat', go: 'communication' },
       }));
     } catch {}
-    return out.slice(0, 20).map(n => ({ ...n, read: readIds.has(n.id) }));
-  }, [tasks, messages, readIds, session, todayKey, team]);
+    return out.slice(0, 20).filter(n => !dismissedIds.has(n.id)).map(n => ({ ...n, read: readIds.has(n.id) }));
+  }, [tasks, messages, readIds, dismissedIds, session, todayKey, team]);
 
   const unreadNotifs = notifs.filter(n => !n.read).length;
   const [presenceOpen, setPresenceOpen] = useState(false);
@@ -8766,7 +9487,7 @@ function ManagerView({
       background: dark ? '#0D1322' : '#FFFFFF', borderRight: `1px solid ${c.bord}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Logo + workspace */}
       <div style={{ padding: '18px 20px 8px', display: 'flex', alignItems: 'center', gap: 11 }}>
-        <Logo size={28} onClick={onBack}/>
+        <Logo size={30} iconOnly onClick={onBack}/>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-.01em' }}>{team?.name || 'StandSync'}</div>
           <div style={{ fontSize: 11.5, color: c.mut, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName.split(' ')[0]}'s workspace</div>
@@ -8913,7 +9634,7 @@ function ManagerView({
           <ThemeToggle/>
           <ProfileMenu session={session} onSettings={onSettings} onLogout={onLogout}/>
 
-          {notifOpen && <NotificationPanel notifs={notifs} onClose={() => setNotifOpen(false)} onAction={handleNotifAction} onMarkAllRead={markAllRead} unread={unreadNotifs} onDigest={isManager ? onDigest : null} emailBusy={emailBusy}/>}
+          {notifOpen && <NotificationPanel notifs={notifs} onClose={() => setNotifOpen(false)} onAction={handleNotifAction} onMarkAllRead={markAllRead} onClearAll={clearAllNotifs} unread={unreadNotifs} onDigest={isManager ? onDigest : null} emailBusy={emailBusy}/>}
         </div>
 
         {/* Live status strip (only on Home/Tasks) */}
@@ -8937,12 +9658,16 @@ function ManagerView({
             canPerf ? (
               <>
                 <SubTabs value={tasksSub} onChange={setTasksSub}
-                  tabs={[{ id: 'board', label: 'Tasks' }, { id: 'overview', label: 'Overview' }, { id: 'report', label: 'Daily Report' }, { id: 'ai', label: 'Ask AI' }, { id: 'history', label: 'History' }]}/>
+                  tabs={[{ id: 'board', label: 'Tasks' }, { id: 'overview', label: 'Overview' }, { id: 'reliability', label: 'Reliability' }, { id: 'report', label: 'Daily Report' }, { id: 'ai', label: 'Ask AI' }, { id: 'history', label: 'History' }, ...(isManager ? [{ id: 'weekly', label: 'Weekly summary' }, { id: 'elevate', label: 'Elevate' }, { id: 'timesaved', label: 'Time saved' }] : [])]}/>
                 {tasksSub === 'board' && <LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} onDelete={onDeleteTask} session={session} isManager={isManager}/>}
                 {tasksSub === 'overview' && <TeamAnalysisTab tasks={tasks} members={members} history={history}/>}
+                {tasksSub === 'reliability' && <ReliabilityTab tasks={tasks} members={members} history={history} team={team}/>}
                 {tasksSub === 'report' && <DailyReportTab tasks={tasks} session={session} team={team} members={members}/>}
                 {tasksSub === 'ai' && <AIAssistant tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name || 'Team'}/>}
                 {tasksSub === 'history' && <HistTab history={history} members={members}/>}
+                {tasksSub === 'weekly' && isManager && <WeeklyExecSummary tasks={tasks} members={members} history={history} team={team}/>}
+                {tasksSub === 'elevate' && isManager && <ElevateTab tasks={tasks} members={members} history={history} team={team}/>}
+                {tasksSub === 'timesaved' && isManager && <TimeSavedTab tasks={tasks} members={members} history={history} team={team}/>}
               </>
             ) : (
               <>
@@ -9293,7 +10018,7 @@ function StandupOptionsModal({ team, onClose, onJoin, onPip }) {
 // ─── PIP TASK WINDOW ─────────────────────────────────────────────────────────
 // Floats over Google Meet / any video call so you can write tasks without switching windows
 // ─── PIP MODE ────────────────────────────────────────────────────────────────
-function usePip({ tasks, onAdd, onStatus, session, team, standup }) {
+function usePip({ tasks, onAdd, onStatus, session, team, standup, isManager = false, members = [] }) {
   const [isOpen, setIsOpen] = useState(false);
   const winRef = useRef(null);
   const myEmail = session?.user?.email || '';
@@ -9331,7 +10056,7 @@ function usePip({ tasks, onAdd, onStatus, session, team, standup }) {
 
     // Send init data once window loads
     win.addEventListener('load', function() {
-      win.postMessage({ type:'init', mode, tasks, myEmail, myName, teamName: team ? team.name : 'Team' }, '*');
+      win.postMessage({ type:'init', mode, tasks, myEmail, myName, teamName: team ? team.name : 'Team', isManager, members: (members||[]).map(m=>({email:m.email,name:m.name||m.email})) }, '*');
     });
 
     // Listen for messages from pip window
@@ -9340,13 +10065,16 @@ function usePip({ tasks, onAdd, onStatus, session, team, standup }) {
       if (e.data.type === 'status') onStatus(e.data.id, e.data.status);
       if (e.data.type === 'addTask') {
         const t = e.data.task || {};
+        // Members can only ever assign to themselves; managers may assign to anyone.
+        const assignEmail = isManager ? (t.assignee_email || myEmail) : myEmail;
+        const assignName = isManager ? (t.assignee_name || myName) : myName;
         onAdd({
           title: t.title || e.data.title || '',
           status: 'todo',
           priority: t.priority || 'medium',
           due_label: t.due_label || '',
-          assignee_email: t.assignee_email || myEmail,
-          assignee_name: t.assignee_name || myName,
+          assignee_email: assignEmail,
+          assignee_name: assignName,
           standup_id: standup ? standup.id : null,
           team_id: team ? team.id : null,
         });
@@ -9587,7 +10315,7 @@ export default function App() {
   const handleDeleteTask=useCallback(async(id)=>{ setTasks(p=>p.filter(t=>t.id!==id)); if(SB.IS_LIVE){ try{ const del=sbFn('deleteTask'); if(del){ await del(id); } else if(SB.supabase){ await SB.supabase.from('tasks').delete().eq('id',id); } }catch(e){} } },[]);
   const handlePriority=useCallback(async(id,priority)=>{ if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,priority}:t));return;} await SB.updateTask(id,{priority}); },[]);
   const handleNote=useCallback(async(id,manager_note)=>{ if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,manager_note}:t));return;} await SB.updateTask(id,{manager_note}); },[]);
-  const handleBlocker=useCallback(async(id,blocker)=>{ const u={status:'blocked',blocker}; if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));showToast('⚠️ Blocker reported');return;} await SB.updateTask(id,u); const task=tasks.find(t=>t.id===id),manager=members.find(m=>m.role==='manager'); if(task&&manager)await Email.sendBlockerAlert(manager.email,{email:session.user.email,name:session.user.user_metadata?.name},{...task,blocker}); showToast('⚠️ Blocker reported — manager notified'); },[tasks,members,session,showToast]);
+  const handleBlocker=useCallback(async(id,blocker)=>{ const u={status:'blocked',blocker,blocked_at:new Date().toISOString()}; if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));showToast('⚠️ Blocker reported');return;} await SB.updateTask(id,u); const task=tasks.find(t=>t.id===id),manager=members.find(m=>m.role==='manager'); if(task&&manager)await Email.sendBlockerAlert(manager.email,{email:session.user.email,name:session.user.user_metadata?.name},{...task,blocker}); showToast('⚠️ Blocker reported — manager notified'); },[tasks,members,session,showToast]);
   // Records an in-app "digest delivered" notification each member will see in their bell.
   const recordDigest=useCallback((kind,perMemberTasks,subjectFn,bodyFn)=>{
     try{
@@ -9694,7 +10422,7 @@ export default function App() {
 
   // PiP popup — declared AFTER all handlers to avoid TDZ
   const { openPip, isOpen: pipOpen } = usePip({
-    tasks, onAdd: handleAddTask, onStatus: handleStatus, session, team, standup
+    tasks, onAdd: handleAddTask, onStatus: handleStatus, session, team, standup, isManager, members
   });
 
   const myMember=members.find(m=>m.user_id===(session?.user?.id||'u1'));
@@ -9890,6 +10618,105 @@ function NotesTab({ session, team, role='manager' }) {
 function ManagerNotesTab({ session, team }) { return <NotesTab session={session} team={team} role="manager"/>; }
 
 // ─── TEAM ANALYSIS TAB ───────────────────────────────────────────────────────
+// ─── BLOCKER INTELLIGENCE ─────────────────────────────────────────────────────
+// Goes beyond listing blockers: groups by who/what is blocking, how long each has
+// been stuck, which projects are affected, and an estimated delivery impact.
+const BLOCKER_SOURCES = [
+  { id: 'design', label: 'Design', re: /\bdesign(er|s)?\b/i },
+  { id: 'eng', label: 'Engineering', re: /\b(eng|engineer(ing|s)?|dev(s|elopers?)?|backend|frontend|api)\b/i },
+  { id: 'qa', label: 'QA / Testing', re: /\b(qa|test(ing|ers?)?|review(er|ers)?)\b/i },
+  { id: 'product', label: 'Product', re: /\b(product|pm|spec|requirements?)\b/i },
+  { id: 'client', label: 'Client', re: /\b(client|customer|stakeholder)\b/i },
+  { id: 'data', label: 'Data / Access', re: /\b(data|access|credential|permission|api key|env)\b/i },
+  { id: 'vendor', label: 'External / Vendor', re: /\b(vendor|third[- ]?party|external|supplier)\b/i },
+];
+function classifyBlocker(text, members) {
+  if (!text) return { id: 'unspecified', label: 'Unspecified' };
+  // explicit member name match first
+  for (const m of (members || [])) {
+    const first = (m.name || m.email.split('@')[0]).split(' ')[0];
+    if (first && first.length > 2 && new RegExp('\\b' + first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(text)) {
+      return { id: 'member:' + m.email, label: m.name || first };
+    }
+  }
+  for (const s of BLOCKER_SOURCES) if (s.re.test(text)) return { id: s.id, label: s.label };
+  return { id: 'other', label: 'Other dependency' };
+}
+function blockerAgeDays(t) {
+  const ts = t.blocked_at ? new Date(t.blocked_at).getTime() : (t.created_at ? new Date(t.created_at).getTime() : null);
+  if (!ts) return null;
+  return Math.max(0, Math.floor((Date.now() - ts) / 864e5));
+}
+
+function BlockerIntelligence({ tasks, members }) {
+  const c = useC();
+  const blocked = (tasks || []).filter(t => t.status === 'blocked' || t.blocker);
+  if (blocked.length === 0) return null;
+
+  // group by source
+  const groups = {};
+  blocked.forEach(t => {
+    const src = classifyBlocker(t.blocker || '', members);
+    if (!groups[src.id]) groups[src.id] = { label: src.label, items: [] };
+    groups[src.id].items.push(t);
+  });
+  const ranked = Object.values(groups).sort((a, b) => b.items.length - a.items.length);
+
+  // longest-running
+  const withAge = blocked.map(t => ({ t, age: blockerAgeDays(t) })).filter(x => x.age != null).sort((a, b) => b.age - a.age);
+  const maxAge = withAge.length ? withAge[0].age : 0;
+
+  // crude impact estimate: a blocker chain on critical/high work pushes delivery.
+  // Estimate days ≈ longest open blocker age capped, weighted by how many are stuck.
+  const impactDays = Math.max(1, Math.min(10, Math.round((maxAge || 1) * 0.6 + blocked.length * 0.4)));
+
+  const topGroup = ranked[0];
+
+  return (
+    <Card style={{ padding: '18px 22px', marginBottom: 16, border: '1px solid rgba(239,68,68,.25)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 4 }}>
+        <span style={{ fontSize: 16 }}>🧠</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Blocker intelligence</span>
+        <span style={{ fontSize: 11, color: '#DC2626', background: 'rgba(239,68,68,.1)', padding: '2px 9px', borderRadius: 20, fontWeight: 700 }}>{blocked.length} blocked</span>
+      </div>
+
+      {/* Headline insight */}
+      {topGroup && (
+        <div style={{ fontSize: 13.5, color: c.text, lineHeight: 1.6, margin: '8px 0 14px' }}>
+          <strong style={{ color: '#DC2626' }}>{topGroup.items.length} task{topGroup.items.length !== 1 ? 's' : ''}</strong> blocked by <strong>{topGroup.label}</strong>.
+          {maxAge >= 1 && <> Longest stuck for <strong>{maxAge} day{maxAge !== 1 ? 's' : ''}</strong>.</>}
+          {' '}Potential impact: delivery delayed by <strong style={{ color: '#DC2626' }}>~{impactDays} day{impactDays !== 1 ? 's' : ''}</strong>.
+        </div>
+      )}
+
+      {/* By source */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {ranked.map((g, i) => {
+          const ages = g.items.map(blockerAgeDays).filter(a => a != null);
+          const longest = ages.length ? Math.max(...ages) : null;
+          return (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, background: c.row }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#DC2626', flexShrink: 0 }}/>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: c.text }}>Blocked by {g.label}</div>
+                <div style={{ fontSize: 11.5, color: c.mut, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {g.items.map(t => (t.assignee_name || t.assignee_email || '').split(' ')[0]).filter(Boolean).slice(0, 3).join(', ')}
+                  {g.items.length > 3 ? ` +${g.items.length - 3} more` : ''} affected
+                </div>
+              </div>
+              {longest != null && longest >= 1 && <span style={{ fontSize: 11, color: '#D97706', whiteSpace: 'nowrap' }}>{longest}d</span>}
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#DC2626', width: 22, textAlign: 'right' }}>{g.items.length}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <p style={{ fontSize: 11, color: c.mut, marginTop: 12, lineHeight: 1.5 }}>Sources are detected from each blocker's description. Duration counts from when the blocker was reported. The delay estimate is a heuristic from the oldest blocker and how many are stuck — treat it as a directional signal.</p>
+    </Card>
+  );
+}
+
+
 function TeamAnalysisTab({ tasks, members, history = [] }) {
   const c = useC();
   const total = tasks.length, done = tasks.filter(t => t.status === 'done').length;
@@ -9933,6 +10760,8 @@ function TeamAnalysisTab({ tasks, members, history = [] }) {
     <div>
       <h2 style={{ fontSize: 18, fontWeight: 700, color: c.text, marginBottom: 4 }}>📊 Executive summary</h2>
       <p style={{ fontSize: 12.5, color: c.mut, marginBottom: 18 }}>A high-level snapshot of today — what needs attention and what's going well. Detailed per-member metrics live in Performance.</p>
+
+      <BlockerIntelligence tasks={tasks} members={members}/>
 
       {/* Today at a glance — one hero strip (does NOT duplicate the Tasks tab cards) */}
       <Card style={{ padding: '20px 22px', marginBottom: 16 }}>
