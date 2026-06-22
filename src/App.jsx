@@ -5860,6 +5860,7 @@ function BrainstormSpace({ team, session, members=[] }) {
       {/* ══ CANVAS ══ */}
       <div
         ref={canvasRef}
+        data-bs-canvas="1"
         onMouseDown={onCanvasMouseDown}
         style={{flex:1,position:'relative',overflow:'hidden',
           cursor:isPanning?'grabbing':tool==='draw'?'crosshair':['sticky','text','shape'].includes(tool)?'cell':tool==='connect'?'crosshair':'default',
@@ -8082,6 +8083,11 @@ function ManagerView({
       title: 'Backlog item', body: (t.title || t.text || 'A task') + ' has been open a while',
       action: { label: 'Review', go: 'tasks' },
     }));
+    tasks.filter(t => t.status === 'done' && t.assignee_email !== session?.user?.email).slice(0,10).forEach(t => out.push({
+      id: 'done-' + todayKey + '-' + t.id, kind: 'done', icon: '✅', accent: '#34D399',
+      title: 'Task completed', body: (t.assignee_name || (t.assignee_email||'Someone').split('@')[0]) + ' completed "' + (t.title || t.text || 'a task') + '"',
+      action: { label: 'View tasks', go: 'tasks' },
+    }));
     // Digest / EOD mails delivered to ME (members see the manager's digest as a notification)
     try {
       const myEmail = session?.user?.email;
@@ -8094,10 +8100,33 @@ function ManagerView({
         action: { label: 'Open email', mail: true },
       }));
     } catch {}
+    // New chat messages from others (today), newest first
+    try {
+      const myEmail = session?.user?.email;
+      (messages || []).filter(m => m.sender_email && m.sender_email !== myEmail && m.type === 'text').slice(-8).forEach(m => out.unshift({
+        id: 'msg-' + m.id, kind: 'chat', icon: '💬', accent: '#38BDF8',
+        title: 'New message from ' + (m.sender_name || m.sender_email.split('@')[0]),
+        body: (m.text || '').slice(0, 80),
+        action: { label: 'Open chat', go: 'communication' },
+      }));
+    } catch {}
     return out.slice(0, 20).map(n => ({ ...n, read: readIds.has(n.id) }));
-  }, [tasks, readIds, session, todayKey, team]);
+  }, [tasks, messages, readIds, session, todayKey, team]);
 
   const unreadNotifs = notifs.filter(n => !n.read).length;
+
+  // Fire a desktop notification for genuinely-new items (once each), if allowed.
+  const seenNotifRef = useRef(null);
+  useEffect(() => {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    // First run: record what's already here, don't fire for the backlog.
+    if (seenNotifRef.current === null) { seenNotifRef.current = new Set(notifs.map(n => n.id)); return; }
+    const fresh = notifs.filter(n => !n.read && !seenNotifRef.current.has(n.id));
+    fresh.slice(0, 3).forEach(n => {
+      try { const d = new Notification(n.title, { body: n.body, tag: n.id, icon: '/favicon.ico' }); setTimeout(() => d.close(), 6000); } catch (e) {}
+    });
+    notifs.forEach(n => seenNotifRef.current.add(n.id));
+  }, [notifs]);
 
   const [mailView, setMailView] = useState(null);
   const handleNotifAction = (n) => {
@@ -8122,6 +8151,61 @@ function ManagerView({
   }, [messages, area]);
 
   const goArea = (a) => { setArea(a); setMobileNav(false); if (a === 'communication') setUnreadChat(0); };
+
+  // ── Navigation history (for two-finger swipe back/forward) ──
+  const navHist = useRef(['home']);   // stack of visited areas
+  const navIdx = useRef(0);           // current position in the stack
+  const navLock = useRef(false);      // true while we're navigating via back/forward (don't re-push)
+  useEffect(() => {
+    if (navLock.current) { navLock.current = false; return; }
+    // New navigation: drop any forward entries, push current area
+    if (navHist.current[navIdx.current] !== area) {
+      navHist.current = navHist.current.slice(0, navIdx.current + 1);
+      navHist.current.push(area);
+      navIdx.current = navHist.current.length - 1;
+    }
+  }, [area]);
+  const goBack = () => {
+    if (navIdx.current <= 0) return;
+    navIdx.current -= 1; navLock.current = true;
+    setArea(navHist.current[navIdx.current]); setMobileNav(false);
+  };
+  const goForward = () => {
+    if (navIdx.current >= navHist.current.length - 1) return;
+    navIdx.current += 1; navLock.current = true;
+    setArea(navHist.current[navIdx.current]); setMobileNav(false);
+  };
+
+  // Two-finger horizontal swipe: right → back, left → forward.
+  // Skipped while the pointer is over the Brainstorm canvas (it pans there).
+  useEffect(() => {
+    let accum = 0, cooldown = false, idleTimer = null;
+    const overCanvas = (t) => { let el = t; while (el) { if (el.dataset && el.dataset.bsCanvas) return true; el = el.parentElement; } return false; };
+    const onWheel = (e) => {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY) * 1.4) return; // horizontal only
+      if (cooldown || overCanvas(e.target)) return;
+      accum += e.deltaX;
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => { accum = 0; }, 160); // reset if the gesture pauses
+      if (accum < -110) { goBack(); accum = 0; cooldown = true; setTimeout(() => cooldown = false, 600); }
+      else if (accum > 110) { goForward(); accum = 0; cooldown = true; setTimeout(() => cooldown = false, 600); }
+    };
+    window.addEventListener('wheel', onWheel, { passive: true });
+    let tx = null, ty = null, fingers = 0;
+    const onTS = (e) => { fingers = e.touches.length; if (fingers === 2) { tx = e.touches[0].clientX; ty = e.touches[0].clientY; } };
+    const onTE = (e) => {
+      if (fingers === 2 && tx !== null) {
+        const dx = (e.changedTouches[0].clientX) - tx, dy = (e.changedTouches[0].clientY) - ty;
+        if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.4 && !overCanvas(e.target)) {
+          if (dx > 0) goBack(); else goForward();
+        }
+      }
+      tx = ty = null; fingers = 0;
+    };
+    window.addEventListener('touchstart', onTS, { passive: true });
+    window.addEventListener('touchend', onTE, { passive: true });
+    return () => { window.removeEventListener('wheel', onWheel); window.removeEventListener('touchstart', onTS); window.removeEventListener('touchend', onTE); clearTimeout(idleTimer); };
+  }, []);
 
   // ── Global search ──
   const NAV_TARGETS = [
