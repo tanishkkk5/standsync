@@ -4031,8 +4031,17 @@ function detectSilentRisk(members, tasks, history, commitments) {
 function SilentRiskPanel({ members, tasks, history, commitments }) {
   const c = useC();
   const flagged = detectSilentRisk(members, tasks, history, commitments);
-  if (flagged.length === 0) return null;
   const levelMeta = { high: { col: '#DC2626', bg: 'rgba(220,38,38,.08)', bd: 'rgba(220,38,38,.28)', l: 'Execution risk' }, watch: { col: '#D97706', bg: 'rgba(217,119,6,.07)', bd: 'rgba(217,119,6,.25)', l: 'Watch' } };
+  if (flagged.length === 0) return (
+    <Card style={{ padding: '18px 20px', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 4 }}>
+        <span style={{ fontSize: 16 }}>🔍</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Silent execution risk</span>
+        <span style={{ fontSize: 11, color: '#16A34A', background: 'rgba(22,163,74,.1)', padding: '2px 9px', borderRadius: 20, fontWeight: 700 }}>All clear</span>
+      </div>
+      <p style={{ fontSize: 12.5, color: c.mut, lineHeight: 1.5, margin: 0 }}>No one is showing the "busy but not delivering" pattern right now. This watches for people who attend stand-ups and hold tasks but miss commitments or create bottlenecks — they'll surface here automatically.</p>
+    </Card>
+  );
   return (
     <Card style={{ padding: '18px 20px', marginBottom: 16, border: '1px solid rgba(220,38,38,.22)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 4 }}>
