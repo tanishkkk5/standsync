@@ -46,6 +46,17 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 @keyframes ssGlow{0%,100%{transform:scale(.92);opacity:.6}50%{transform:scale(1.08);opacity:1}}
+.ss-home-root>*{animation:fadeUp .5s cubic-bezier(.22,1,.36,1) both}
+.ss-home-root>*:nth-child(1){animation-delay:.02s}
+.ss-home-root>*:nth-child(2){animation-delay:.08s}
+.ss-home-root>*:nth-child(3){animation-delay:.14s}
+.ss-home-root>*:nth-child(4){animation-delay:.20s}
+.ss-home-root>*:nth-child(5){animation-delay:.26s}
+.ss-home-root>*:nth-child(6){animation-delay:.32s}
+.ss-home-root>*:nth-child(7){animation-delay:.38s}
+.ss-card-hover{transition:transform .18s cubic-bezier(.22,1,.36,1),box-shadow .18s,border-color .18s}
+.ss-card-hover:hover{transform:translateY(-3px)}
+@media(prefers-reduced-motion:reduce){.ss-home-root>*{animation:none!important}}
 input,select,textarea,button{font-family:inherit}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -1810,7 +1821,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
     acc[acc.length-1].msgs.push(m); return acc;
   },[]);
 
-  const DEFAULT_SPACES=[{id:'teamboard',label:'team board',icon:'📋'},{id:'general',label:'general',icon:'#'},{id:'announcements',label:'announcements',icon:'#'},{id:'random',label:'random',icon:'#'}]; // kept for chat sidebar
+  const DEFAULT_SPACES=[{id:'general',label:'general',icon:'#'},{id:'announcements',label:'announcements',icon:'#'},{id:'random',label:'random',icon:'#'}]; // kept for chat sidebar
   // ── Per-DM unread tracking ──
   const [dmReads,setDmReads]=useState(()=>{ try{ return JSON.parse(localStorage.getItem('ss-dm-reads-'+myEmail)||'{}'); }catch{ return {}; } });
   const dmUnread=useMemo(()=>{
@@ -1923,8 +1934,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
         <div style={{ padding:'0 16px',height:52,display:'flex',alignItems:'center',gap:10,borderBottom:`1px solid ${c.bord}`,background:c.nav,flexShrink:0 }}>
           <span style={{ fontSize:13,fontWeight:700,color:c.mut }}>{activeSpace.startsWith('dm-')?'@':'#'}</span>
           <span style={{ fontSize:14,fontWeight:700,color:c.text }}>{activeLabel}</span>
-          {!activeSpace.startsWith('dm-')&&activeSpace!=='teamboard'&&<span style={{ fontSize:12,color:c.mut }}>· {members.length} members</span>}
-          {activeSpace==='teamboard'&&<span style={{ fontSize:12,color:c.mut }}>· everyone can post, reply & claim (✋) tasks</span>}
+          {!activeSpace.startsWith('dm-')&&<span style={{ fontSize:12,color:c.mut }}>· {members.length} members</span>}
           <div style={{ flex:1 }}/>
           {pinnedMsgs.length>0&&<button onClick={()=>setShowPinned(!showPinned)} style={{ display:'flex',alignItems:'center',gap:5,padding:'4px 10px',borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',color:c.mut,fontSize:12 }}>📌 {pinnedMsgs.length}</button>}
           <button onClick={()=>setShowFiles(!showFiles)} title="Files & links" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:showFiles?'rgba(99,102,241,.12)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:showFiles?'#818CF8':c.mut }}>🗂️</button>
@@ -2045,7 +2055,6 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
                         ))}
                         <button onClick={()=>{setReplyTo(m);inputRef.current?.focus();}} style={{ width:28,height:28,borderRadius:7,border:'none',background:'transparent',cursor:'pointer',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',color:c.mut }} title="Reply">↩</button>
                         <button onClick={()=>pinMsg(m)} style={{ width:28,height:28,borderRadius:7,border:'none',background:'transparent',cursor:'pointer',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',color:c.mut }} title="Pin">📌</button>
-                        {activeSpace==='teamboard'&&m.type==='text'&&onCreateTask&&<button onClick={()=>{ onCreateTask({title:(m.text||'').slice(0,140),assignee_email:myEmail,assignee_name:myName,priority:'medium',status:'todo',timeline:'Today EOD (6 PM)',notes:'From team board · posted by '+(m.sender_name||''),manager_note:'',blocker:''}); sendMsg('✋ '+myName+' claimed this as a task','tasknote'); }} style={{ width:28,height:28,borderRadius:7,border:'none',background:'transparent',cursor:'pointer',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',color:'#6366F1' }} title="Claim as my task">✋</button>}
                       </div>
                     </div>
                   );
@@ -6215,6 +6224,171 @@ function BrainstormSpace({ team, session, members=[] }) {
 // ─── HOME COMMAND CENTER ──────────────────────────────────────────────────────
 // Daily landing page. Focus, not clutter. Replaces the "everything exposed" dashboard.
 // Aggregates client-report rows across all spaces → "doing good" vs "needs focus".
+// ─── HOME TEAM BOARD ─────────────────────────────────────────────────────────
+// Managers post a Task / Message / Reminder to the whole team. Open tasks can be
+// claimed by any member. Stored per-team in localStorage (ss-teamboard-<id>).
+function teamBoardKey(teamId){ return 'ss-teamboard-'+teamId; }
+function readTeamBoard(teamId){ try{ return JSON.parse(localStorage.getItem(teamBoardKey(teamId))||'[]'); }catch{ return []; } }
+function writeTeamBoard(teamId,posts){ try{ localStorage.setItem(teamBoardKey(teamId),JSON.stringify(posts)); }catch{} }
+
+function TeamBoard({ teamId='demo', session, isManager, onClaimTask, onGoto }){
+  const c=useC(); const { dark }=useTheme();
+  const myEmail=session?.user?.email||'me@demo';
+  const myName=session?.user?.user_metadata?.name||myEmail.split('@')[0];
+  const [posts,setPosts]=useState(()=>readTeamBoard(teamId));
+  const [kind,setKind]=useState('task');
+  const [text,setText]=useState('');
+  const [priority,setPriority]=useState('medium');
+  const [composing,setComposing]=useState(false);
+
+  useEffect(()=>{
+    const refresh=()=>setPosts(readTeamBoard(teamId));
+    const onStorage=(e)=>{ if(e.key===teamBoardKey(teamId)) refresh(); };
+    const t=setInterval(refresh,15000);
+    window.addEventListener('storage',onStorage);
+    return ()=>{ clearInterval(t); window.removeEventListener('storage',onStorage); };
+  },[teamId]);
+
+  const persist=(next)=>{ setPosts(next); writeTeamBoard(teamId,next); };
+
+  const post=()=>{
+    if(!text.trim())return;
+    const p={ id:'tb'+Date.now(), kind, text:text.trim(), priority:kind==='task'?priority:undefined,
+      author:myName, authorEmail:myEmail, at:Date.now(), claimedBy:null, claimedByEmail:null, replies:[] };
+    persist([p,...posts]);
+    setText(''); setComposing(false); setKind('task');
+  };
+
+  const claim=(p)=>{
+    const next=posts.map(x=>x.id===p.id?{...x,claimedBy:myName,claimedByEmail:myEmail}:x);
+    persist(next);
+    if(onClaimTask) onClaimTask({ title:p.text.slice(0,140), assignee_email:myEmail, assignee_name:myName,
+      priority:p.priority||'medium', status:'todo', timeline:'Today EOD (6 PM)',
+      notes:'Claimed from team board · posted by '+p.author, manager_note:'', blocker:'' });
+  };
+
+  const reply=(p,replyText)=>{
+    if(!replyText.trim())return;
+    const next=posts.map(x=>x.id===p.id?{...x,replies:[...(x.replies||[]),{ id:'r'+Date.now(),author:myName,authorEmail:myEmail,text:replyText.trim(),at:Date.now() }]}:x);
+    persist(next);
+  };
+
+  const removePost=(p)=>persist(posts.filter(x=>x.id!==p.id));
+
+  const KIND_META={
+    task:{ label:'Task', icon:'✓', color:'#6366F1', bg:'rgba(99,102,241,.12)' },
+    message:{ label:'Message', icon:'💬', color:'#38BDF8', bg:'rgba(56,189,248,.12)' },
+    reminder:{ label:'Reminder', icon:'⏰', color:'#F59E0B', bg:'rgba(245,158,11,.12)' },
+  };
+
+  return (
+    <div style={{ borderRadius:18, background:c.surf, border:`1px solid ${c.bord}`, overflow:'hidden' }}>
+      <div style={{ padding:'18px 22px', borderBottom:`1px solid ${c.bord}`, display:'flex', alignItems:'center', gap:10 }}>
+        <span style={{ fontSize:17 }}>📋</span>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:15, fontWeight:700, color:c.text }}>Team board</div>
+          <div style={{ fontSize:12, color:c.mut }}>Open tasks, messages & reminders for the whole team{isManager?' · post below':''}</div>
+        </div>
+        {isManager&&!composing&&<button onClick={()=>setComposing(true)} style={{ padding:'8px 15px', borderRadius:10, border:'none', background:'linear-gradient(135deg,#6366F1,#818CF8)', color:'#fff', cursor:'pointer', fontSize:13, fontWeight:600 }}>＋ Post</button>}
+      </div>
+
+      {/* Composer (managers) */}
+      {isManager&&composing&&(
+        <div style={{ padding:'18px 22px', borderBottom:`1px solid ${c.bord}`, background:dark?'rgba(255,255,255,.02)':'rgba(99,102,241,.03)' }}>
+          <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' }}>
+            {Object.entries(KIND_META).map(([k,m])=>(
+              <button key={k} onClick={()=>setKind(k)} style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:20, border:`1px solid ${kind===k?m.color:c.bord}`, background:kind===k?m.bg:'transparent', color:kind===k?m.color:c.sub, cursor:'pointer', fontSize:12.5, fontWeight:600 }}>
+                <span>{m.icon}</span>{m.label}
+              </button>
+            ))}
+          </div>
+          <textarea value={text} onChange={e=>setText(e.target.value)} autoFocus placeholder={kind==='task'?'Describe the task anyone can pick up...':kind==='reminder'?'What should the team remember?':'Share a message with the team...'} style={{ width:'100%', boxSizing:'border-box', minHeight:70, background:c.inp, border:`1px solid ${c.inpB}`, borderRadius:10, padding:'11px 13px', color:c.text, fontSize:13.5, lineHeight:1.5, outline:'none', resize:'vertical', fontFamily:'inherit', marginBottom:12 }}/>
+          <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+            {kind==='task'&&(
+              <select value={priority} onChange={e=>setPriority(e.target.value)} style={{ background:c.inp, border:`1px solid ${c.inpB}`, borderRadius:9, padding:'8px 11px', color:c.text, fontSize:12.5, outline:'none' }}>
+                {['critical','high','medium','low'].map(v=><option key={v} value={v}>{v.charAt(0).toUpperCase()+v.slice(1)} priority</option>)}
+              </select>
+            )}
+            <div style={{ flex:1 }}/>
+            <button onClick={()=>{setComposing(false);setText('');}} style={{ padding:'8px 14px', borderRadius:9, border:`1px solid ${c.bord}`, background:'transparent', color:c.mut, cursor:'pointer', fontSize:13 }}>Cancel</button>
+            <button onClick={post} disabled={!text.trim()} style={{ padding:'8px 18px', borderRadius:9, border:'none', background:text.trim()?'#6366F1':c.bord, color:'#fff', cursor:text.trim()?'pointer':'default', fontSize:13, fontWeight:600 }}>Post to team</button>
+          </div>
+        </div>
+      )}
+
+      {/* Feed */}
+      <div style={{ padding:'8px 0', maxHeight:440, overflowY:'auto' }}>
+        {posts.length===0?(
+          <div style={{ padding:'40px 20px', textAlign:'center', color:c.mut }}>
+            <div style={{ fontSize:30, marginBottom:8 }}>📋</div>
+            <div style={{ fontSize:13.5, fontWeight:600, color:c.sub }}>Nothing on the board yet</div>
+            <div style={{ fontSize:12.5, marginTop:3 }}>{isManager?'Post a task, message, or reminder for your team.':'Tasks and updates from your manager will appear here.'}</div>
+          </div>
+        ):posts.map(p=>(
+          <TeamBoardPost key={p.id} post={p} meta={KIND_META[p.kind]||KIND_META.message} c={c} dark={dark} myEmail={myEmail} isManager={isManager}
+            onClaim={()=>claim(p)} onReply={(t)=>reply(p,t)} onRemove={()=>removePost(p)} onGoto={onGoto}/>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TeamBoardPost({ post, meta, c, dark, myEmail, isManager, onClaim, onReply, onRemove, onGoto }){
+  const [replyOpen,setReplyOpen]=useState(false);
+  const [replyText,setReplyText]=useState('');
+  const ago=(ts)=>{ const m=Math.round((Date.now()-ts)/60000); if(m<1)return'just now'; if(m<60)return m+'m ago'; const h=Math.floor(m/60); if(h<24)return h+'h ago'; return Math.floor(h/24)+'d ago'; };
+  const isTask=post.kind==='task';
+  const mine=post.authorEmail===myEmail;
+  return (
+    <div style={{ padding:'14px 22px', borderBottom:`1px solid ${c.bord}` }}>
+      <div style={{ display:'flex', alignItems:'flex-start', gap:11 }}>
+        <span style={{ width:30, height:30, borderRadius:9, background:meta.bg, color:meta.color, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0 }}>{meta.icon}</span>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4, flexWrap:'wrap' }}>
+            <span style={{ fontSize:10.5, fontWeight:700, color:meta.color, textTransform:'uppercase', letterSpacing:'.04em' }}>{meta.label}</span>
+            {isTask&&post.priority&&<span style={{ fontSize:10, fontWeight:700, color:getPriority(post.priority).color }}>{post.priority.toUpperCase()}</span>}
+            <span style={{ fontSize:11.5, color:c.mut }}>· {post.author} · {ago(post.at)}</span>
+          </div>
+          <div style={{ fontSize:13.5, color:c.text, lineHeight:1.5, whiteSpace:'pre-wrap' }}>{post.text}</div>
+
+          {/* Task claim status */}
+          {isTask&&(
+            post.claimedBy?(
+              <div style={{ marginTop:9, display:'inline-flex', alignItems:'center', gap:6, fontSize:12, color:'#34D399', background:'rgba(52,211,153,.1)', border:'1px solid rgba(52,211,153,.25)', padding:'4px 11px', borderRadius:20 }}>
+                ✓ Claimed by {post.claimedByEmail===myEmail?'you':post.claimedBy}
+              </div>
+            ):(
+              <button onClick={onClaim} style={{ marginTop:9, display:'inline-flex', alignItems:'center', gap:6, fontSize:12.5, fontWeight:600, color:'#6366F1', background:'rgba(99,102,241,.1)', border:'1px solid rgba(99,102,241,.3)', padding:'6px 14px', borderRadius:20, cursor:'pointer' }}>✋ Claim this task</button>
+            )
+          )}
+
+          {/* Replies */}
+          {(post.replies||[]).length>0&&(
+            <div style={{ marginTop:10, paddingLeft:12, borderLeft:`2px solid ${c.bord}`, display:'flex', flexDirection:'column', gap:7 }}>
+              {post.replies.map(r=>(
+                <div key={r.id} style={{ fontSize:12.5, color:c.sub }}><strong style={{ color:c.text }}>{r.author}:</strong> {r.text} <span style={{ color:c.mut, fontSize:11 }}>· {ago(r.at)}</span></div>
+              ))}
+            </div>
+          )}
+
+          {/* Reply action */}
+          <div style={{ marginTop:8, display:'flex', gap:14 }}>
+            <button onClick={()=>setReplyOpen(!replyOpen)} style={{ fontSize:12, color:c.mut, background:'none', border:'none', cursor:'pointer', padding:0, fontWeight:600 }}>↩ Reply</button>
+            {(mine||isManager)&&<button onClick={onRemove} style={{ fontSize:12, color:c.mut, background:'none', border:'none', cursor:'pointer', padding:0 }}>Delete</button>}
+          </div>
+          {replyOpen&&(
+            <div style={{ marginTop:8, display:'flex', gap:8 }}>
+              <input value={replyText} onChange={e=>setReplyText(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){onReply(replyText);setReplyText('');setReplyOpen(false);}}} autoFocus placeholder="Write a reply..." style={{ flex:1, background:c.inp, border:`1px solid ${c.inpB}`, borderRadius:8, padding:'7px 11px', color:c.text, fontSize:12.5, outline:'none' }}/>
+              <button onClick={()=>{onReply(replyText);setReplyText('');setReplyOpen(false);}} disabled={!replyText.trim()} style={{ padding:'7px 14px', borderRadius:8, border:'none', background:replyText.trim()?'#6366F1':c.bord, color:'#fff', cursor:replyText.trim()?'pointer':'default', fontSize:12.5, fontWeight:600 }}>Send</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function ProjectHighlights({ teamId, onGoto }) {
   const c = useC();
   const { dark } = useTheme();
@@ -6363,7 +6537,7 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
   ];
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 22 }}>
+    <div className="ss-home-root" style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 32 }}>
 
       {/* Greeting */}
       <div>
@@ -6406,6 +6580,9 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
       <AttendanceWidget teamId={team?.id || 'demo'} email={session?.user?.email || 'me@demo'} shift={getShiftConfig(team?.id || 'demo', session?.user?.email)} onOpenFull={() => onOpenAttendance && onOpenAttendance()}/>
 
       <ProjectHighlights teamId={team?.id || 'demo'} onGoto={onGoto}/>
+
+      {/* Team board — managers post tasks/messages/reminders; anyone claims open tasks */}
+      <TeamBoard teamId={team?.id || 'demo'} session={session} isManager={isManager} onClaimTask={(t)=>onAddTask&&onAddTask(t)} onGoto={onGoto}/>
 
       {/* Focus + AI insights */}
       <div className="ss-home-mid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr)', gap: 16 }}>
