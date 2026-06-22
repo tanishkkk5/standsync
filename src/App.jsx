@@ -2969,6 +2969,12 @@ function SettingsPage({ session, onBack, onSaved }) {
   const handleAvatar=async(e)=>{ const file=e.target.files[0]; if(!file)return; if(SB.IS_LIVE){setSaving(true);const url=await SB.uploadAvatar(session.user.id,file);if(url)setAvatarUrl(url);setSaving(false);} };
   const TABS=[{id:'profile',l:'Profile',i:'👤'},{id:'security',l:'Security',i:'🔒'},{id:'appearance',l:'Appearance',i:'🎨'},{id:'notifications',l:'Notifications',i:'🔔'},{id:'faq',l:'FAQ & Help',i:'❓'}];
   const [chatNotifsEnabled,setChatNotifsEnabled]=useState(true);
+  const [notifPerm,setNotifPerm]=useState(typeof Notification!=='undefined'?Notification.permission:'unsupported');
+  const requestNotif=()=>{
+    if(typeof Notification==='undefined'){ setNotifPerm('unsupported'); return; }
+    if(Notification.permission==='denied'){ setNotifPerm('denied'); return; } // browser won't re-prompt
+    Notification.requestPermission().then(p=>{ setNotifPerm(p); if(p==='granted'){ try{ new Notification('StandSync',{body:'Desktop notifications are on 🎉'}); }catch(e){} } });
+  };
   const [soundEnabled,setSoundEnabled]=useState(false);
   return (
     <div style={{ position:'relative',zIndex:1,minHeight:'100vh' }}>
@@ -3016,7 +3022,18 @@ function SettingsPage({ session, onBack, onSaved }) {
                     </button>
                   </div>
                 ))}
-                <button onClick={()=>{ if('Notification' in window) Notification.requestPermission().then(p=>alert(p==='granted'?'Desktop notifications enabled!':'Permission denied. Enable in browser settings.')); }} style={{ marginTop:14,fontSize:13,color:'#818CF8',background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.25)',borderRadius:8,cursor:'pointer',padding:'8px 14px',fontWeight:600 }}>Enable desktop notifications</button>
+                {notifPerm==='granted' ? (
+                  <div style={{ marginTop:14,display:'flex',alignItems:'center',gap:8,fontSize:13,color:'#34D399',background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.25)',borderRadius:8,padding:'10px 14px' }}>✅ Desktop notifications are enabled.</div>
+                ) : notifPerm==='denied' ? (
+                  <div style={{ marginTop:14,fontSize:13,color:c.sub,background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.3)',borderRadius:8,padding:'12px 14px',lineHeight:1.6 }}>
+                    <div style={{ fontWeight:700,color:'#F59E0B',marginBottom:4 }}>Notifications are blocked for this site</div>
+                    Your browser blocked them earlier, so it won't ask again — this is a browser security rule no website can override. To turn them on: click the <strong>🔒 lock icon</strong> in the address bar → <strong>Notifications</strong> → <strong>Allow</strong>, then reload.
+                  </div>
+                ) : notifPerm==='unsupported' ? (
+                  <div style={{ marginTop:14,fontSize:13,color:c.mut,background:c.row,borderRadius:8,padding:'10px 14px' }}>This browser doesn't support desktop notifications.</div>
+                ) : (
+                  <button onClick={requestNotif} style={{ marginTop:14,fontSize:13,color:'#818CF8',background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.25)',borderRadius:8,cursor:'pointer',padding:'8px 14px',fontWeight:600 }}>Enable desktop notifications</button>
+                )}
               </Card>
               <RemindersPanel/>
             </div>
@@ -3578,6 +3595,15 @@ function DailyReportTab({ tasks = [], session, team, members = [] }) {
     setBusy(false);
   };
 
+  const emailFallback = (subject) => {
+    // Open a real Gmail compose draft (works for the common case), and copy the
+    // report to clipboard so it can be pasted anywhere as a backup.
+    try { navigator.clipboard && navigator.clipboard.writeText(report); } catch {}
+    const gmail = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(myEmail)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(report)}`;
+    window.open(gmail, '_blank', 'noopener');
+    flash('Opened a Gmail draft + copied the report to clipboard.');
+  };
+
   const emailReport = async () => {
     if (!report.trim()) { flash('Generate or write a report first.'); return; }
     setEmailBusy(true);
@@ -3588,17 +3614,14 @@ function DailyReportTab({ tasks = [], session, team, members = [] }) {
         body: JSON.stringify({ to: myEmail, subject, text: report, html: '<pre style="font:14px/1.6 system-ui,sans-serif;white-space:pre-wrap">' + report.replace(/</g, '&lt;') + '</pre>' }),
       });
       if (res.ok) { const d = await res.json().catch(() => ({})); flash(d.id ? '📧 Report emailed to ' + myEmail : (d.demo ? '📧 Sent (demo) — set RESEND_API_KEY to deliver' : '📧 Report sent')); }
-      else {
-        // Fallback: open the user's own mail client pre-filled
-        window.open(`mailto:${myEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(report)}`, '_blank');
-        flash('Server email not set up — opened your mail app instead.');
-      }
+      else emailFallback(subject);
     } catch (e) {
-      window.open(`mailto:${myEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(report)}`, '_blank');
-      flash('Opened your mail app to send it.');
+      emailFallback(subject);
     }
     setEmailBusy(false);
   };
+
+  const copyReport = () => { try { navigator.clipboard.writeText(report); flash('📋 Report copied — paste into any email or chat.'); } catch { flash('Could not copy.'); } };
 
   return (
     <div>
@@ -3624,6 +3647,7 @@ function DailyReportTab({ tasks = [], session, team, members = [] }) {
         <Btn onClick={generateAI} loading={busy}>✨ Generate today's report</Btn>
         <Btn v="ghost" onClick={() => setMode(mode === 'edit' ? 'view' : 'edit')}>{mode === 'edit' ? '✓ Done editing' : '✏️ Write / edit manually'}</Btn>
         <Btn v="ghost" onClick={emailReport} loading={emailBusy}>📧 Email to me</Btn>
+        <Btn v="ghost" onClick={copyReport}>📋 Copy report</Btn>
         {toast && <span style={{ alignSelf: 'center', fontSize: 12.5, color: c.sub }}>{toast}</span>}
       </div>
 
