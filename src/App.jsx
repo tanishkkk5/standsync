@@ -3204,12 +3204,14 @@ function LiveTab({ tasks, members, onStatus, onPriority, onNote, onAddTask, onDe
         <div style={{ padding:'12px 16px',borderBottom:`1px solid ${c.bord}`,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center' }}>
           <div style={{ display:'flex',gap:5,flex:1,flexWrap:'wrap' }}>{[{v:'all',l:'All'},...members.map(m=>({v:m.email,l:(m.name||m.email).split(' ')[0]}))].map(f=><button key={f.v} onClick={()=>setFu(f.v)} style={{ fontSize:12,padding:'5px 12px',borderRadius:20,border:`1px solid ${c.bord}`,background:fu===f.v?'rgba(129,140,248,.2)':'transparent',color:fu===f.v?'#818CF8':c.mut,cursor:'pointer',fontWeight:fu===f.v?700:400,transition:'all .15s' }}>{f.l}</button>)}</div>
           <div style={{ display:'flex',gap:5 }}>{['all','todo','in-progress','done','blocked'].map(s=><button key={s} onClick={()=>setFs(s)} style={{ fontSize:11,padding:'4px 10px',borderRadius:20,border:`1px solid ${c.bord}`,background:fs===s?'rgba(128,128,128,.12)':'transparent',color:c.mut,cursor:'pointer',fontWeight:fs===s?700:400,textTransform:'capitalize' }}>{s==='all'?'All':s.replace('-',' ')}</button>)}</div>
-          <Btn onClick={()=>setShowModal(true)} style={{ padding:'7px 14px',fontSize:12,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',flexShrink:0 }}>+ Assign task</Btn>
+          {isManager
+            ? <Btn onClick={()=>setShowModal(true)} style={{ padding:'7px 14px',fontSize:12,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',flexShrink:0 }}>+ Assign task</Btn>
+            : <Btn onClick={()=>setShowModal(true)} style={{ padding:'7px 14px',fontSize:12,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',flexShrink:0 }}>+ Add my task</Btn>}
         </div>
         {filtered.length===0?<div style={{ padding:'40px',textAlign:'center',color:c.mut,fontSize:14 }}>{total===0?'⏳ Waiting for team to add tasks...':'No tasks match this filter'}</div>
           :filtered.map(t=><MgrRow key={t.id} task={t} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onDelete={onDelete} session={session} isManager={isManager}/>)}
       </Card>
-      {showModal&&<AssignModal members={members} onClose={()=>setShowModal(false)} onAdd={onAddTask}/>}
+      {showModal&&<AssignModal members={members} onClose={()=>setShowModal(false)} onAdd={onAddTask} isManager={isManager} session={session}/>}
     </div>
   );
 }
@@ -3249,11 +3251,14 @@ function MgrRow({ task, members, onStatus, onPriority, onNote, onDelete, session
   );
 }
 
-function AssignModal({ members, onClose, onAdd }) {
-  const c=useC(); const [title,setTitle]=useState(''); const [assignee,setAssignee]=useState(members[0]?.email||''); const [priority,setPriority]=useState('medium'); const [timeline,setTimeline]=useState('Today EOD (6 PM)'); const [note,setNote]=useState('');
+function AssignModal({ members, onClose, onAdd, isManager = true, session }) {
+  const c=useC();
+  const myEmail=session?.user?.email||members[0]?.email||'';
+  const me=members.find(m=>m.email===myEmail);
+  const [title,setTitle]=useState(''); const [assignee,setAssignee]=useState(isManager?(members[0]?.email||''):myEmail); const [priority,setPriority]=useState('medium'); const [timeline,setTimeline]=useState('Today EOD (6 PM)'); const [note,setNote]=useState('');
   const [schedOn,setSchedOn]=useState(false); const [sDate,setSDate]=useState(()=>new Date().toISOString().slice(0,10)); const [sStart,setSStart]=useState('10:00'); const [sEnd,setSEnd]=useState('12:00');
-  const submit=()=>{ if(!title.trim())return; const m=members.find(x=>x.email===assignee); const payload={title:title.trim(),assignee_email:assignee,assignee_name:m?.name||assignee,priority,status:'todo',timeline,manager_note:note,notes:'',blocker:''}; if(schedOn&&sStart&&sEnd&&sEnd>sStart) payload._timeBlock={date:sDate,start:sStart,end:sEnd,repeat:'none'}; onAdd(payload); onClose(); };
-  return <Modal onClose={onClose} title="Assign a task"><Inp value={title} onChange={e=>setTitle(e.target.value)} placeholder="Task description..." style={{ marginBottom:12 }} autoFocus/><div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10 }}><Sel label="Assign to" value={assignee} onChange={e=>setAssignee(e.target.value)}>{members.map(m=><option key={m.id||m.email} value={m.email}>{m.name||m.email}</option>)}</Sel><Sel label="Priority" value={priority} onChange={e=>setPriority(e.target.value)}>{['critical','high','medium','low'].map(v=><option key={v} value={v}>{v.charAt(0).toUpperCase()+v.slice(1)}</option>)}</Sel></div><Sel label="Timeline" value={timeline} onChange={e=>setTimeline(e.target.value)} style={{ marginBottom:10 }}>{['Today noon (12 PM)','Today 3 PM','Today EOD (6 PM)','Tomorrow morning','Tomorrow EOD','This week'].map(t=><option key={t} value={t}>{t}</option>)}</Sel><Inp value={note} onChange={e=>setNote(e.target.value)} placeholder="Note to team member (optional)" style={{ marginBottom:12 }}/>
+  const submit=()=>{ if(!title.trim())return; const targetEmail=isManager?assignee:myEmail; const m=members.find(x=>x.email===targetEmail); const payload={title:title.trim(),assignee_email:targetEmail,assignee_name:m?.name||targetEmail,priority,status:'todo',timeline,manager_note:isManager?note:'',notes:'',blocker:''}; if(schedOn&&sStart&&sEnd&&sEnd>sStart) payload._timeBlock={date:sDate,start:sStart,end:sEnd,repeat:'none'}; onAdd(payload); onClose(); };
+  return <Modal onClose={onClose} title={isManager?'Assign a task':'Add my task'}><Inp value={title} onChange={e=>setTitle(e.target.value)} placeholder="Task description..." style={{ marginBottom:12 }} autoFocus/><div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10 }}>{isManager?<Sel label="Assign to" value={assignee} onChange={e=>setAssignee(e.target.value)}>{members.map(m=><option key={m.id||m.email} value={m.email}>{m.name||m.email}</option>)}</Sel>:<div><Lbl>Assigned to</Lbl><div style={{ display:'flex',alignItems:'center',gap:8,padding:'9px 12px',background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:10 }}>{me&&<Av member={me} size={22} url={me.avatar_url}/>}<span style={{ fontSize:13,color:c.text }}>{me?.name||myEmail.split('@')[0]} (you)</span></div></div>}<Sel label="Priority" value={priority} onChange={e=>setPriority(e.target.value)}>{['critical','high','medium','low'].map(v=><option key={v} value={v}>{v.charAt(0).toUpperCase()+v.slice(1)}</option>)}</Sel></div><Sel label="Timeline" value={timeline} onChange={e=>setTimeline(e.target.value)} style={{ marginBottom:10 }}>{['Today noon (12 PM)','Today 3 PM','Today EOD (6 PM)','Tomorrow morning','Tomorrow EOD','This week'].map(t=><option key={t} value={t}>{t}</option>)}</Sel>{isManager&&<Inp value={note} onChange={e=>setNote(e.target.value)} placeholder="Note to team member (optional)" style={{ marginBottom:12 }}/>}
     <div style={{ marginBottom:14 }}>
       <label style={{ display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontSize:13,color:c.sub }}>
         <input type="checkbox" checked={schedOn} onChange={e=>setSchedOn(e.target.checked)} style={{ accentColor:'#6366F1' }}/>
@@ -3265,7 +3270,7 @@ function AssignModal({ members, onClose, onAdd }) {
         <input type="time" value={sEnd} onChange={e=>setSEnd(e.target.value)} style={inpS(c)}/>
       </div>}
     </div>
-    <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}><Btn v="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={submit} disabled={!title.trim()}>Assign task</Btn></div></Modal>;
+    <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}><Btn v="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={submit} disabled={!title.trim()}>{isManager?'Assign task':'Add task'}</Btn></div></Modal>;
 }
 
 function TeamTab({ tasks, members, isManager = true, teamId = 'demo' }) {
@@ -7961,12 +7966,12 @@ function ManagerView({
 
   // ── Sub-tab pill bar ──
   const SubTabs = ({ tabs, value, onChange }) => (
-    <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: `1px solid ${c.bord}`, paddingBottom: 0 }}>
+    <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: `1px solid ${c.bord}`, paddingBottom: 0, overflowX: 'auto', scrollbarWidth: 'thin' }}>
       {tabs.map(t => {
         const on = value === t.id;
         return (
           <button key={t.id} onClick={() => onChange(t.id)}
-            style={{ padding: '8px 14px', border: 'none', borderBottom: `2px solid ${on ? c.accent : 'transparent'}`, background: 'transparent', color: on ? c.text : c.mut, fontSize: 13, fontWeight: on ? 700 : 500, cursor: 'pointer', marginBottom: -1, transition: 'all .12s' }}>
+            style={{ padding: '8px 14px', border: 'none', borderBottom: `2px solid ${on ? c.accent : 'transparent'}`, background: 'transparent', color: on ? c.text : c.mut, fontSize: 13, fontWeight: on ? 700 : 500, cursor: 'pointer', marginBottom: -1, transition: 'all .12s', whiteSpace: 'nowrap', flexShrink: 0 }}>
             {t.label}
           </button>
         );
