@@ -3346,6 +3346,165 @@ function TeamTab({ tasks, members, isManager = true, teamId = 'demo' }) {
   );
 }
 
+// ─── DAILY REPORT (completed tasks only) ──────────────────────────────────────
+// One-click AI summary of the current user's COMPLETED tasks, a manual editor,
+// and "email now" via the serverless /api/send endpoint. Reports are saved per
+// day in localStorage so the in-site space always shows today's report.
+function reportKey(teamId, email) { return `ss-dailyreport-${teamId}-${email}`; }
+
+function DailyReportTab({ tasks = [], session, team, members = [] }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const myEmail = session?.user?.email || 'me@demo';
+  const myName = session?.user?.user_metadata?.name || myEmail.split('@')[0];
+  const teamId = team?.id || 'demo';
+  const today = new Date().toISOString().slice(0, 10);
+  const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+  // Only THIS user's tasks; completed ones drive the report
+  const myTasks = tasks.filter(t => t.assignee_email === myEmail);
+  const completed = myTasks.filter(t => t.status === 'done');
+  const open = myTasks.filter(t => t.status !== 'done');
+  const blocked = myTasks.filter(t => t.status === 'blocked');
+
+  const [report, setReport] = useState(''); // the report body (AI or manual)
+  const [mode, setMode] = useState('view'); // view | edit
+  const [busy, setBusy] = useState(false);
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [savedAt, setSavedAt] = useState(null);
+  const [toast, setToast] = useState('');
+
+  // Load today's saved report
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(reportKey(teamId, myEmail));
+      if (raw) { const d = JSON.parse(raw); if (d.date === today) { setReport(d.body || ''); setSavedAt(d.at || null); } else { setReport(''); setSavedAt(null); } }
+    } catch {}
+  }, [teamId, myEmail, today]);
+
+  const flash = (m) => { setToast(m); setTimeout(() => setToast(''), 2600); };
+  const save = (body) => { try { localStorage.setItem(reportKey(teamId, myEmail), JSON.stringify({ date: today, body, at: Date.now() })); setSavedAt(Date.now()); } catch {} };
+
+  // Plain fallback report — used if AI is unavailable
+  const buildPlain = () => {
+    if (completed.length === 0) return `Daily report — ${myName} — ${todayLabel}\n\nNo tasks were completed today.`;
+    const lines = completed.map(t => `• ${t.title || t.text}${t.priority ? ` (${t.priority})` : ''}`).join('\n');
+    let body = `Daily report — ${myName} — ${todayLabel}\n\nCompleted today (${completed.length}):\n${lines}`;
+    if (open.length) body += `\n\nStill open: ${open.length} task${open.length !== 1 ? 's' : ''}.`;
+    if (blocked.length) body += `\nBlocked: ${blocked.length}.`;
+    return body;
+  };
+
+  const generateAI = async () => {
+    if (completed.length === 0) { setReport(buildPlain()); save(buildPlain()); flash('No completed tasks today — nothing to summarize.'); return; }
+    setBusy(true);
+    try {
+      const list = completed.map(t => `- ${t.title || t.text}${t.priority ? ` [${t.priority}]` : ''}${t.manager_note ? ` (note: ${t.manager_note})` : ''}`).join('\n');
+      const prompt = `You are writing a concise, professional end-of-day work report for ${myName} on ${todayLabel}. Summarize ONLY the tasks they COMPLETED today — do not mention open, pending, or incomplete work. Write 2-4 short sentences in first person ("Today I..."), grouping related items, highlighting impact. Be specific but brief. Completed tasks:\n${list}\n\nReturn only the report text, no preamble or headings.`;
+      const res = await askAI(prompt, { tasks: completed, members, teamName: team?.name || 'Team', userName: myName });
+      const text = (typeof res === 'string' ? res : (res?.text || '')).trim();
+      const finalBody = text || buildPlain();
+      setReport(finalBody); save(finalBody);
+      flash(text ? '✨ AI report generated' : 'Used a basic summary (AI unavailable).');
+    } catch (e) {
+      const fb = buildPlain(); setReport(fb); save(fb);
+      flash('AI unavailable — generated a basic summary.');
+    }
+    setBusy(false);
+  };
+
+  const emailReport = async () => {
+    if (!report.trim()) { flash('Generate or write a report first.'); return; }
+    setEmailBusy(true);
+    const subject = `Daily report — ${myName} — ${todayLabel}`;
+    try {
+      const res = await fetch('/api/send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: myEmail, subject, text: report, html: '<pre style="font:14px/1.6 system-ui,sans-serif;white-space:pre-wrap">' + report.replace(/</g, '&lt;') + '</pre>' }),
+      });
+      if (res.ok) { const d = await res.json().catch(() => ({})); flash(d.id ? '📧 Report emailed to ' + myEmail : '📧 Report sent'); }
+      else flash('Email failed — set RESEND_API_KEY in Vercel & verify your domain.');
+    } catch (e) {
+      flash('Email needs the /api/send function deployed. Saved in-app for now.');
+    }
+    setEmailBusy(false);
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 6 }}>
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: c.text, marginBottom: 4 }}>🗒️ Daily report</h2>
+          <p style={{ fontSize: 12.5, color: c.mut }}>A summary of what <strong style={{ color: c.sub }}>you completed</strong> today. {todayLabel}.</p>
+        </div>
+      </div>
+
+      {/* Completed-today snapshot */}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '14px 0 16px' }}>
+        {[{ l: 'Completed today', v: completed.length, col: '#16A34A' }, { l: 'Still open', v: open.length, col: '#64748B' }, { l: 'Blocked', v: blocked.length, col: blocked.length ? '#DC2626' : '#16A34A' }].map(s => (
+          <div key={s.l} style={{ flex: '1 1 120px', padding: '14px 18px', borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}` }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: s.col }}>{s.v}</div>
+            <div style={{ fontSize: 11, color: c.mut, textTransform: 'uppercase', letterSpacing: '.05em', marginTop: 2 }}>{s.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        <Btn onClick={generateAI} loading={busy}>✨ Generate today's report</Btn>
+        <Btn v="ghost" onClick={() => setMode(mode === 'edit' ? 'view' : 'edit')}>{mode === 'edit' ? '✓ Done editing' : '✏️ Write / edit manually'}</Btn>
+        <Btn v="ghost" onClick={emailReport} loading={emailBusy}>📧 Email to me</Btn>
+        {toast && <span style={{ alignSelf: 'center', fontSize: 12.5, color: c.sub }}>{toast}</span>}
+      </div>
+
+      {/* Report body */}
+      <div style={{ borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}`, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 18px', borderBottom: `1px solid ${c.bord}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: c.text }}>{`Report — ${todayLabel}`}</span>
+          {savedAt && <span style={{ fontSize: 11, color: c.mut, marginLeft: 'auto' }}>Saved {new Date(savedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>}
+        </div>
+        {mode === 'edit' ? (
+          <div style={{ padding: 16 }}>
+            <textarea value={report} onChange={e => setReport(e.target.value)} onBlur={() => save(report)} placeholder="Write your daily report here, or click 'Generate' to let AI summarize your completed tasks..." style={{ width: '100%', minHeight: 220, background: c.inp, border: `1px solid ${c.inpB}`, borderRadius: 10, padding: '12px 14px', color: c.text, fontSize: 13.5, lineHeight: 1.6, outline: 'none', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }}/>
+          </div>
+        ) : (
+          <div style={{ padding: '18px 20px', minHeight: 160 }}>
+            {report.trim() ? (
+              <div style={{ fontSize: 14, color: c.text, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{report}</div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '30px 16px', color: c.mut }}>
+                <div style={{ fontSize: 34, marginBottom: 10 }}>🗒️</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: c.sub, marginBottom: 4 }}>No report yet for today</div>
+                <div style={{ fontSize: 12.5 }}>Click <strong>Generate today's report</strong> for an AI summary of your completed tasks, or write one manually.</div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* What goes in (completed list preview) */}
+      {completed.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Completed today ({completed.length})</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {completed.map(t => (
+              <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: 10, background: c.surf, border: `1px solid ${c.bord}` }}>
+                <span style={{ color: '#16A34A', flexShrink: 0 }}>✓</span>
+                <span style={{ flex: 1, fontSize: 13, color: c.text }}>{t.title || t.text}</span>
+                {t.priority && <span style={{ fontSize: 10.5, color: getPriority(t.priority).color, fontWeight: 700, textTransform: 'uppercase' }}>{t.priority}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p style={{ fontSize: 11.5, color: c.mut, marginTop: 16, lineHeight: 1.6 }}>
+        💡 The report summarizes <strong>only completed tasks</strong>. To receive it automatically every evening by email, a scheduled job (Vercel Cron) is needed — the in-app report and "Email to me" work right now.
+      </p>
+    </div>
+  );
+}
+
 function PerfTab({ tasks, history, members }) {
   const c=useC(); const allDays=useMemo(()=>[...history,{id:'today',date:TODAY(),tasks}],[history,tasks]);
   const stats=useMemo(()=>members.map(member=>{ const all=allDays.flatMap(d=>(d.tasks||[]).filter(t=>t.assignee_email===member.email)); const total=all.length,done=all.filter(t=>t.status==='done').length,blocked=all.filter(t=>t.status==='blocked'||t.blocker).length; const rate=total?Math.round(done/total*100):0,activeDays=allDays.filter(d=>(d.tasks||[]).some(t=>t.assignee_email===member.email)).length,avg=activeDays?+(total/activeDays).toFixed(1):0; const week=history.slice(0,7).map(d=>{const dt=(d.tasks||[]).filter(t=>t.assignee_email===member.email);if(!dt.length)return null;return{date:d.date,pct:Math.round(dt.filter(x=>x.status==='done').length/dt.length*100)};}).filter(Boolean).reverse(); const bscore=total?Math.round((total-blocked)/total*100):100,consist=Math.min(100,Math.round(activeDays/Math.max(allDays.length,1)*100)),score=Math.round(rate*.6+consist*.2+bscore*.2); const grade=score>=90?'A':score>=75?'B':score>=60?'C':score>=40?'D':'F',gc=score>=90?'#34D399':score>=75?'#818CF8':score>=60?'#F59E0B':'#EF4444'; const tod=tasks.filter(t=>t.assignee_email===member.email),tdone=tod.filter(t=>t.status==='done').length; return{member,total,done,blocked,rate,avg,week,score,grade,gc,tod,tdone,todPct:tod.length?Math.round(tdone/tod.length*100):0}; }),[allDays,members,tasks,history]);
@@ -7906,15 +8065,22 @@ function ManagerView({
             canPerf ? (
               <>
                 <SubTabs value={tasksSub} onChange={setTasksSub}
-                  tabs={[{ id: 'board', label: 'Tasks' }, { id: 'overview', label: 'Overview' }, { id: 'performance', label: 'Performance' }, { id: 'ai', label: 'Ask AI' }, { id: 'history', label: 'History' }]}/>
+                  tabs={[{ id: 'board', label: 'Tasks' }, { id: 'overview', label: 'Overview' }, { id: 'performance', label: 'Performance' }, { id: 'report', label: 'Daily Report' }, { id: 'ai', label: 'Ask AI' }, { id: 'history', label: 'History' }]}/>
                 {tasksSub === 'board' && <LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} onDelete={onDeleteTask} session={session} isManager={isManager}/>}
                 {tasksSub === 'overview' && <TeamAnalysisTab tasks={tasks} members={members} history={history}/>}
                 {tasksSub === 'performance' && <PerfTab tasks={tasks} history={history} members={members}/>}
+                {tasksSub === 'report' && <DailyReportTab tasks={tasks} session={session} team={team} members={members}/>}
                 {tasksSub === 'ai' && <AIAssistant tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name || 'Team'}/>}
                 {tasksSub === 'history' && <HistTab history={history} members={members}/>}
               </>
             ) : (
-              <LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} onDelete={onDeleteTask} session={session} isManager={isManager}/>
+              <>
+                <SubTabs value={tasksSub} onChange={setTasksSub}
+                  tabs={[{ id: 'board', label: 'My Tasks' }, { id: 'report', label: 'Daily Report' }]}/>
+                {tasksSub === 'report'
+                  ? <DailyReportTab tasks={tasks} session={session} team={team} members={members}/>
+                  : <LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} onDelete={onDeleteTask} session={session} isManager={isManager}/>}
+              </>
             )
           )}
 
