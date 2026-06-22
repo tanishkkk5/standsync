@@ -237,14 +237,22 @@ function ProfileMenu({ session, onSettings, onLogout }) {
             <div style={{ fontSize:13,fontWeight:700,color:c.text }}>{name}</div>
             <div style={{ fontSize:11,color:c.mut,marginTop:2 }}>{email}</div>
           </div>
-          {[{i:'⚙️',l:'Settings'},{i:'🎨',l:'Appearance'},{i:'❓',l:'FAQ & Help'}].map(item=>(
-            <button key={item.l} onClick={()=>{onSettings();setOpen(false);}} style={{ width:'100%',display:'flex',alignItems:'center',gap:10,padding:'9px 12px',borderRadius:8,border:'none',background:'transparent',color:c.text,cursor:'pointer',fontSize:13,textAlign:'left',transition:'background .15s' }} onMouseEnter={e=>e.currentTarget.style.background=c.surfH} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-              <span>{item.i}</span>{item.l}
-            </button>
-          ))}
+          {(() => {
+            const ic = { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' };
+            const icons = {
+              Settings: <svg {...ic}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+              Appearance: <svg {...ic}><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.563-2.512 5.563-5.563C21.5 5.74 17.262 2 12 2z"/></svg>,
+              'FAQ & Help': <svg {...ic}><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+            };
+            return [{ l: 'Settings' }, { l: 'Appearance' }, { l: 'FAQ & Help' }].map(item => (
+              <button key={item.l} onClick={() => { onSettings(); setOpen(false); }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: 'none', background: 'transparent', color: c.text, cursor: 'pointer', fontSize: 13, textAlign: 'left', transition: 'background .15s' }} onMouseEnter={e => e.currentTarget.style.background = c.surfH} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <span style={{ color: c.sub, display: 'flex' }}>{icons[item.l]}</span>{item.l}
+              </button>
+            ));
+          })()}
           <div style={{ borderTop:`1px solid ${c.bord}`,marginTop:4,paddingTop:4 }}>
             <button onClick={()=>{onLogout();setOpen(false);}} style={{ width:'100%',display:'flex',alignItems:'center',gap:10,padding:'9px 12px',borderRadius:8,border:'none',background:'transparent',color:'#F87171',cursor:'pointer',fontSize:13,textAlign:'left',transition:'background .15s' }} onMouseEnter={e=>e.currentTarget.style.background='rgba(239,68,68,.08)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-              <span>🚪</span>Sign out
+              <span style={{ display:'flex' }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span>Sign out
             </button>
           </div>
         </div>
@@ -3024,7 +3032,18 @@ function SettingsPage({ session, onBack, onSaved, team, members = [], setMembers
   const save=async()=>{ setSaving(true); if(SB.IS_LIVE)await SB.updateProfile({name,avatar_url:avatarUrl,avatar_fit:avatarFit,avatar_pos:avatarPos,avatar_posx:avatarPosX,avatar_zoom:avatarZoom}); setSaving(false); onSaved({name,avatar_url:avatarUrl,avatar_fit:avatarFit,avatar_pos:avatarPos,avatar_posx:avatarPosX,avatar_zoom:avatarZoom}); };
   const changePw=async()=>{ setPwErr(''); if(newPw.length<6){setPwErr('Min 6 characters');return;} setSaving(true); const {error}=SB.IS_LIVE?await SB.updatePassword(newPw):{error:null}; if(error)setPwErr(error.message); else{setPwOk(true);setNewPw('');setTimeout(()=>setPwOk(false),3000);} setSaving(false); };
   const handleAvatar=async(e)=>{ const file=e.target.files[0]; if(!file)return; if(SB.IS_LIVE){setSaving(true);const url=await SB.uploadAvatar(session.user.id,file);if(url)setAvatarUrl(url);setSaving(false);} };
-  const TABS=[{id:'profile',l:'Profile',i:'👤'},{id:'security',l:'Security',i:'🔒'},{id:'appearance',l:'Appearance',i:'🎨'},{id:'notifications',l:'Notifications',i:'🔔'},...(isManager&&team?[{id:'team',l:'Team & invites',i:'🔑'}]:[]),{id:'faq',l:'FAQ & Help',i:'❓'}];
+  const TABS=[{id:'profile',l:'Profile'},{id:'security',l:'Security'},{id:'appearance',l:'Appearance'},{id:'notifications',l:'Notifications'},...(isManager&&team?[{id:'team',l:'Team & invites'}]:[]),{id:'faq',l:'FAQ & Help'}];
+  const tabIcon=(id)=>{ const p={width:16,height:16,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.8,strokeLinecap:'round',strokeLinejoin:'round'};
+    switch(id){
+      case 'profile': return <svg {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+      case 'security': return <svg {...p}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+      case 'appearance': return <svg {...p}><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.563-2.512 5.563-5.563C21.5 5.74 17.262 2 12 2z"/></svg>;
+      case 'notifications': return <svg {...p}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;
+      case 'team': return <svg {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+      case 'faq': return <svg {...p}><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+      default: return null;
+    }
+  };
   const [chatNotifsEnabled,setChatNotifsEnabled]=useState(true);
   const [notifPerm,setNotifPerm]=useState(typeof Notification!=='undefined'?Notification.permission:'unsupported');
   const requestNotif=()=>{
@@ -3044,7 +3063,7 @@ function SettingsPage({ session, onBack, onSaved, team, members = [], setMembers
       <div style={{ maxWidth:900,margin:'0 auto',padding:'32px 24px 60px',display:'grid',gridTemplateColumns:'190px 1fr',gap:24 }}>
         <div>
           <div style={{ fontSize:18,fontWeight:700,color:c.text,marginBottom:20 }}>Settings</div>
-          {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{ width:'100%',display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,border:'none',background:tab===t.id?'rgba(99,102,241,.15)':'transparent',color:tab===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:13,fontWeight:tab===t.id?700:400,marginBottom:4,textAlign:'left',transition:'all .15s' }}><span>{t.i}</span>{t.l}</button>)}
+          {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{ width:'100%',display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,border:'none',background:tab===t.id?'rgba(99,102,241,.15)':'transparent',color:tab===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:13,fontWeight:tab===t.id?700:400,marginBottom:4,textAlign:'left',transition:'all .15s' }}><span style={{ display:'flex' }}>{tabIcon(t.id)}</span>{t.l}</button>)}
         </div>
         <div style={{ animation:'fadeIn .3s ease' }}>
           {tab==='profile'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>Profile</h2><div style={{ display:'flex',alignItems:'center',gap:16,marginBottom:16 }}><div style={{ position:'relative' }}>{avatarUrl?<div style={{ width:80,height:80,borderRadius:'50%',overflow:'hidden',border:'3px solid #818CF8',background:c.row }}><img src={avatarUrl} alt="av" style={{ width:'100%',height:'100%',objectFit:avatarFit==='contain'?'contain':'cover',objectPosition:avatarFit==='manual'?`${avatarPosX}% ${avatarPos}%`:'center',transform:avatarFit==='manual'?`scale(${avatarZoom})`:'none' }}/></div>:<div style={{ width:80,height:80,borderRadius:'50%',background:'rgba(99,102,241,.2)',border:'3px solid #818CF8',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'#818CF8' }}>{name?name[0].toUpperCase():'?'}</div>}<button onClick={()=>fileRef.current.click()} style={{ position:'absolute',bottom:0,right:0,width:26,height:26,borderRadius:'50%',background:'#6366F1',border:'2px solid #fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13 }}>✏️</button><input ref={fileRef} type="file" accept="image/*" onChange={handleAvatar} style={{ display:'none' }}/></div><div><div style={{ fontSize:16,fontWeight:700,color:c.text }}>{name||session?.user?.email}</div><div style={{ fontSize:13,color:c.mut }}>{session?.user?.email}</div><div style={{ display:'flex',gap:12,marginTop:6 }}><button onClick={()=>fileRef.current.click()} style={{ fontSize:12,color:'#818CF8',background:'none',border:'none',cursor:'pointer',padding:0 }}>Change photo</button>{avatarUrl&&<button onClick={()=>{setAvatarUrl('');setAvatarFit('cover');}} style={{ fontSize:12,color:'#F87171',background:'none',border:'none',cursor:'pointer',padding:0 }}>Delete photo</button>}</div></div></div>
@@ -6328,7 +6347,7 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
             </button>
             <button onClick={() => onNewTask && onNewTask()}
               style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 11, border: 'none', background: 'linear-gradient(135deg,#6366F1,#818CF8)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', boxShadow: '0 2px 10px rgba(99,102,241,.3)' }}>
-              <span style={{ fontSize: 16 }}>＋</span> New task
+              <span style={{ fontSize: 16 }}>＋</span> {isManager ? 'Assign task' : 'New task'}
             </button>
           </div>
         </div>
@@ -8605,7 +8624,7 @@ function ManagerView({
       </div>
 
       {/* ── Quick-action modals ── */}
-      {taskModal && <QuickTaskModal members={members} session={session} onClose={() => setTaskModal(false)} onAdd={(d) => { onAddTask && onAddTask(d); setTaskModal(false); }} onOpenBoard={() => { setTaskModal(false); goArea('tasks'); }}/>}
+      {taskModal && <AssignModal members={members} onClose={() => setTaskModal(false)} onAdd={(d) => { onAddTask && onAddTask(d); setTaskModal(false); }} isManager={isManager} session={session}/>}
       {noteModal && <QuickNoteModal session={session} team={team} onClose={() => setNoteModal(false)} onOpenKnowledge={() => { setNoteModal(false); setKnowledgeSub('meetings'); goArea('knowledge'); }}/>}
       {standupModal && <StandupOptionsModal team={team} onClose={() => setStandupModal(false)}
         onJoin={() => { setStandupModal(false); goArea('tasks'); }}
