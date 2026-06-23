@@ -981,7 +981,7 @@ function buildSiteContext({ teamId = 'demo', tasks = [], members = [], history =
     const r = attendance[m.email] || {};
     const breaks = (r.breaks || []);
     const totalBreak = breaks.reduce((s, b) => s + (b.mins || 0), 0);
-    const online = r.online !== false && r.lastSeen && (Date.now() - r.lastSeen) < 70000;
+    const online = r.online !== false && r.lastSeen && (Date.now() - r.lastSeen) < 120000;
     const onBreak = breaks.some(b => !b.end);
     return `${m.name || m.email}: ${onBreak ? 'on break' : online ? 'online' : 'offline'}, clocked in ${fmtT(r.clockIn)}${r.clockOut ? ', out ' + fmtT(r.clockOut) : ''}, ${totalBreak}m break, last seen ${fmtT(r.lastSeen)}`;
   });
@@ -1962,7 +1962,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
           let att={}; try{ att=JSON.parse(localStorage.getItem('ss-attendance-'+teamId+'-'+new Date().toISOString().slice(0,10))||'{}'); }catch{}
           const r=att[who]||{};
           const ab=(r.breaks||[]).find(b=>!b.end);
-          const online=r.online!==false&&r.lastSeen&&(Date.now()-r.lastSeen)<70000;
+          const online=r.online!==false&&r.lastSeen&&(Date.now()-r.lastSeen)<120000;
           if(ab){
             const backAt=ab.plannedMins?new Date(ab.start+ab.plannedMins*60000):null;
             const backStr=backAt?backAt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):null;
@@ -3373,25 +3373,28 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
 function LiveTab({ tasks: allTasks, members, onStatus, onPriority, onNote, onAddTask, onDelete, session, isManager = true }) {
   const c=useC(); const [fu,setFu]=useState('all'); const [fs,setFs]=useState('all'); const [showModal,setShowModal]=useState(false);
   const myEmail=(session?.user?.email||'').toLowerCase();
-  // Members only ever see their OWN tasks; managers/leads see everyone's.
+  // The task LIST is self-only for members; the team STATS/progress are always team-wide.
   const tasks=isManager?allTasks:allTasks.filter(t=>(t.assignee_email||'').toLowerCase()===myEmail);
   const filtered=tasks.filter(t=>fu==='all'||t.assignee_email===fu).filter(t=>fs==='all'||t.status===fs);
-  const total=tasks.length,done=tasks.filter(t=>t.status==='done').length,inProg=tasks.filter(t=>t.status==='in-progress').length,blocked=tasks.filter(t=>t.status==='blocked').length,todo=tasks.filter(t=>t.status==='todo').length,pct=total?Math.round(done/total*100):0;
+  // Team-wide totals (everyone sees the whole team's progress, even members)
+  const total=allTasks.length,done=allTasks.filter(t=>t.status==='done').length,inProg=allTasks.filter(t=>t.status==='in-progress').length,blocked=allTasks.filter(t=>t.status==='blocked').length,todo=allTasks.filter(t=>t.status==='todo').length,pct=total?Math.round(done/total*100):0;
+  // My own counts (for the member list header)
+  const myDone=tasks.filter(t=>t.status==='done').length;
   return (
     <div>
       <div style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:20 }}>
         <StatCard label="Total" value={total} color="#818CF8" icon="📋"/><StatCard label="To do" value={todo} color="#94A3B8" icon="⭕"/><StatCard label="In progress" value={inProg} color="#38BDF8" icon="⚡"/><StatCard label="Done" value={done} color="#34D399" icon="✅"/><StatCard label="Blocked" value={blocked} color={blocked>0?'#EF4444':'#34D399'} icon="⚠️" sub={blocked>0?'needs attention':'all clear'}/>
       </div>
-      {total>0&&<Card style={{ padding:'14px 18px',marginBottom:16 }}><div style={{ display:'flex',justifyContent:'space-between',marginBottom:8 }}><span style={{ fontSize:13,color:c.mut }}>Team progress</span><span style={{ fontSize:13,fontWeight:700,color:'#818CF8' }}>{pct}% · {done}/{total}</span></div><Bar pct={pct} h={8} color="linear-gradient(90deg,#6366F1,#34D399)"/></Card>}
+      {total>0&&<Card style={{ padding:'14px 18px',marginBottom:16 }}><div style={{ display:'flex',justifyContent:'space-between',marginBottom:8 }}><span style={{ fontSize:13,color:c.mut }}>Team progress{!isManager?<span style={{ color:c.mut }}> · you: {myDone}/{tasks.length} done</span>:''}</span><span style={{ fontSize:13,fontWeight:700,color:'#818CF8' }}>{pct}% · {done}/{total}</span></div><Bar pct={pct} h={8} color="linear-gradient(90deg,#6366F1,#34D399)"/></Card>}
       <Card style={{ overflow:'hidden' }}>
         <div style={{ padding:'12px 16px',borderBottom:`1px solid ${c.bord}`,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center' }}>
-          <div style={{ display:'flex',gap:5,flex:1,flexWrap:'wrap' }}>{(isManager?[{v:'all',l:'All'},...members.map(m=>({v:m.email,l:(m.name||m.email).split(' ')[0]}))]:[]).map(f=><button key={f.v} onClick={()=>setFu(f.v)} style={{ fontSize:12,padding:'5px 12px',borderRadius:20,border:`1px solid ${c.bord}`,background:fu===f.v?'rgba(129,140,248,.2)':'transparent',color:fu===f.v?'#818CF8':c.mut,cursor:'pointer',fontWeight:fu===f.v?700:400,transition:'all .15s' }}>{f.l}</button>)}</div>
+          <div style={{ display:'flex',gap:5,flex:1,flexWrap:'wrap',alignItems:'center' }}>{!isManager&&<span style={{ fontSize:12.5,fontWeight:700,color:c.text,marginRight:4 }}>My tasks</span>}{(isManager?[{v:'all',l:'All'},...members.map(m=>({v:m.email,l:(m.name||m.email).split(' ')[0]}))]:[]).map(f=><button key={f.v} onClick={()=>setFu(f.v)} style={{ fontSize:12,padding:'5px 12px',borderRadius:20,border:`1px solid ${c.bord}`,background:fu===f.v?'rgba(129,140,248,.2)':'transparent',color:fu===f.v?'#818CF8':c.mut,cursor:'pointer',fontWeight:fu===f.v?700:400,transition:'all .15s' }}>{f.l}</button>)}</div>
           <div style={{ display:'flex',gap:5 }}>{['all','todo','in-progress','done','blocked'].map(s=><button key={s} onClick={()=>setFs(s)} style={{ fontSize:11,padding:'4px 10px',borderRadius:20,border:`1px solid ${c.bord}`,background:fs===s?'rgba(128,128,128,.12)':'transparent',color:c.mut,cursor:'pointer',fontWeight:fs===s?700:400,textTransform:'capitalize' }}>{s==='all'?'All':s.replace('-',' ')}</button>)}</div>
           {isManager
             ? <Btn onClick={()=>setShowModal(true)} style={{ padding:'7px 14px',fontSize:12,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',flexShrink:0 }}>+ Assign task</Btn>
             : <Btn onClick={()=>setShowModal(true)} style={{ padding:'7px 14px',fontSize:12,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',flexShrink:0 }}>+ Add my task</Btn>}
         </div>
-        {filtered.length===0?<div style={{ padding:'40px',textAlign:'center',color:c.mut,fontSize:14 }}>{total===0?'⏳ Waiting for team to add tasks...':'No tasks match this filter'}</div>
+        {filtered.length===0?<div style={{ padding:'40px',textAlign:'center',color:c.mut,fontSize:14 }}>{(isManager?total:tasks.length)===0?(isManager?'⏳ Waiting for team to add tasks...':'You have no tasks yet — add one above.'):'No tasks match this filter'}</div>
           :filtered.map(t=><MgrRow key={t.id} task={t} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onDelete={onDelete} session={session} isManager={isManager}/>)}
       </Card>
       {showModal&&<AssignModal members={members} onClose={()=>setShowModal(false)} onAdd={onAddTask} isManager={isManager} session={session}/>}
@@ -3517,7 +3520,7 @@ function MemberCard({ member, tasks = [], teamId = 'demo', isManager, session, o
   const day = new Date().toISOString().slice(0, 10);
   let att = {}; try { att = JSON.parse(localStorage.getItem('ss-attendance-' + teamId + '-' + day) || '{}'); } catch {}
   const r = att[member.email] || {};
-  const online = r.online !== false && r.lastSeen && (Date.now() - r.lastSeen) < 70000;
+  const online = r.online !== false && r.lastSeen && (Date.now() - r.lastSeen) < 120000;
   const onBreak = (r.breaks || []).some(b => !b.end);
   const presence = onBreak ? { label: 'On break', col: '#F59E0B' } : online ? { label: 'Online', col: '#34D399' } : (r.clockIn && !r.clockOut) ? { label: 'Away', col: '#FBBF24' } : { label: 'Offline', col: '#94A3B8' };
   const roleLabel = member.role === 'manager' ? 'Manager' : member.role === 'team_lead' ? 'Team Lead' : (member.designation || 'Member');
@@ -3625,7 +3628,7 @@ function TeamTab({ tasks, members, isManager = true, teamId = 'demo', session, o
   try{ att=JSON.parse(localStorage.getItem('ss-attendance-'+teamId+'-'+day)||'{}'); }catch{}
   const presence=(email)=>{
     const r=att[email]||{};
-    const online=r.online!==false && r.lastSeen && (now-r.lastSeen)<70000;
+    const online=r.online!==false && r.lastSeen && (now-r.lastSeen)<120000;
     const onBreak=(r.breaks||[]).some(b=>!b.end);
     if(onBreak) return {label:'On break',col:'#F59E0B',dot:'#F59E0B'};
     if(online) return {label:'Online',col:'#34D399',dot:'#34D399'};
@@ -3697,6 +3700,10 @@ function TeamTab({ tasks, members, isManager = true, teamId = 'demo', session, o
 // and "email now" via the serverless /api/send endpoint. Reports are saved per
 // day in localStorage so the in-site space always shows today's report.
 function reportKey(teamId, email) { return `ss-dailyreport-${teamId}-${email}`; }
+// Submitted reports the manager can review & question (shared store per team)
+function submittedReportsKey(teamId) { return `ss-reports-${teamId}`; }
+function readSubmittedReports(teamId) { try { return JSON.parse(localStorage.getItem(submittedReportsKey(teamId)) || '[]'); } catch { return []; } }
+function writeSubmittedReports(teamId, list) { try { localStorage.setItem(submittedReportsKey(teamId), JSON.stringify(list)); } catch {} }
 
 function DailyReportTab({ tasks = [], session, team, members = [] }) {
   const c = useC();
@@ -3738,11 +3745,46 @@ function DailyReportTab({ tasks = [], session, team, members = [] }) {
 
   // Rich data-built report (reliable primary path — never a generic greeting)
   const buildPlain = () => {
-    if (completed.length === 0) return `Daily Report — ${myName}\n${todayLabel}\n\nNo tasks were completed today.`;
-    const lines = completed.map(t => `• ${t.title || t.text}${t.priority && t.priority !== 'medium' ? ` (${t.priority} priority)` : ''}`).join('\n');
-    let body = `Daily Report — ${myName}\n${todayLabel}\n\n✅ Completed today (${completed.length}):\n${lines}`;
-    if (open.length) body += `\n\n⏳ Still in progress: ${open.length} task${open.length !== 1 ? 's' : ''}.`;
-    if (blocked.length) body += `\n🚧 Blocked: ${blocked.length}.`;
+    const headLines = [`Daily Report — ${myName}`, todayLabel, ''];
+    if (completed.length === 0 && open.length === 0) return [...headLines, 'No tasks on record today.'].join('\n');
+
+    // Completed, grouped with priority/label context
+    let body = headLines.join('\n');
+    if (completed.length) {
+      const lines = completed.map(t => {
+        const bits = [];
+        if (t.priority && t.priority !== 'medium') bits.push(`${t.priority} priority`);
+        if (t.label) bits.push(t.label);
+        return `• ${t.title || t.text}${bits.length ? ` — ${bits.join(', ')}` : ''}`;
+      }).join('\n');
+      body += `\n✅ Completed today (${completed.length}):\n${lines}`;
+      // a quick insight line
+      const highDone = completed.filter(t => t.priority === 'high' || t.priority === 'critical').length;
+      if (highDone) body += `\n   ↳ ${highDone} of these ${highDone > 1 ? 'were' : 'was'} high/critical priority.`;
+    } else {
+      body += `\n✅ Completed today: none yet.`;
+    }
+
+    // In progress — what's actively moving
+    const inProg = open.filter(t => t.status === 'in-progress');
+    if (inProg.length) {
+      body += `\n\n⏳ In progress (${inProg.length}):\n` + inProg.slice(0, 5).map(t => `• ${t.title || t.text}${t.timeline ? ` — due ${t.timeline}` : ''}`).join('\n');
+    }
+
+    // Blockers with reasons (so the manager sees the "why")
+    if (blocked.length) {
+      body += `\n\n🚧 Blocked (${blocked.length}):\n` + blocked.map(t => `• ${t.title || t.text}${t.blocker ? ` — ${t.blocker}` : ''}`).join('\n');
+    }
+
+    // Planned next — open, not blocked, not in progress
+    const next = open.filter(t => t.status === 'todo');
+    if (next.length) {
+      body += `\n\n🎯 Up next (${next.length}):\n` + next.slice(0, 5).map(t => `• ${t.title || t.text}${t.timeline ? ` (${t.timeline})` : ''}`).join('\n');
+    }
+
+    // One-line summary footer
+    const rate = myTasks.length ? Math.round(completed.length / myTasks.length * 100) : 0;
+    body += `\n\n— ${completed.length} done · ${inProg.length} in progress · ${blocked.length} blocked · ${rate}% of today's load complete.`;
     return body;
   };
 
@@ -3758,22 +3800,26 @@ function DailyReportTab({ tasks = [], session, team, members = [] }) {
 
   const generateAI = async () => {
     const plain = buildPlain();
-    if (completed.length === 0) { setReport(plain); save(plain); flash('No completed tasks today — nothing to summarize.'); return; }
+    if (completed.length === 0 && open.length === 0) { setReport(plain); save(plain); flash('No tasks on record today.'); return; }
     setBusy(true);
     setReport(plain); // show the reliable version immediately
     try {
-      const list = completed.map(t => `- ${t.title || t.text}${t.priority ? ` [${t.priority}]` : ''}`).join('\n');
-      const prompt = `Write a short professional end-of-day work report. Summarize ONLY these COMPLETED tasks in 2-3 first-person sentences ("Today I completed..."). Do not greet, do not ask questions, do not mention incomplete work. Output only the report.\n\nCompleted tasks:\n${list}`;
-      const res = await askAI(prompt, { tasks: completed, members, teamName: team?.name || 'Team', userName: myName });
+      const doneList = completed.map(t => `- ${t.title || t.text}${t.priority ? ` [${t.priority}]` : ''}${t.label ? ` {${t.label}}` : ''}`).join('\n') || '(none)';
+      const progList = open.filter(t => t.status === 'in-progress').map(t => `- ${t.title || t.text}`).join('\n') || '(none)';
+      const blockList = blocked.map(t => `- ${t.title || t.text}${t.blocker ? `: ${t.blocker}` : ''}`).join('\n') || '(none)';
+      const nextList = open.filter(t => t.status === 'todo').map(t => `- ${t.title || t.text}`).join('\n') || '(none)';
+      const prompt = `Write a concise, insightful first-person end-of-day work report for a manager (4-6 sentences). Cover: what I accomplished and its impact, what's still moving, any blockers and why they matter, and what I'll tackle next. Be specific and professional. No greeting, no questions, no bullet headers — flowing prose.\n\nCOMPLETED:\n${doneList}\n\nIN PROGRESS:\n${progList}\n\nBLOCKED:\n${blockList}\n\nUP NEXT:\n${nextList}`;
+      const res = await askAI(prompt, { tasks: myTasks, members, teamName: team?.name || 'Team', userName: myName });
       const text = (typeof res === 'string' ? res : (res?.text || '')).trim();
       if (text && !looksLikeJunk(text)) {
-        const polished = `Daily Report — ${myName}\n${todayLabel}\n\n${text}`;
+        const rate = myTasks.length ? Math.round(completed.length / myTasks.length * 100) : 0;
+        const polished = `Daily Report — ${myName}\n${todayLabel}\n\n${text}\n\n— ${completed.length} done · ${open.filter(t=>t.status==='in-progress').length} in progress · ${blocked.length} blocked · ${rate}% of today's load complete.`;
         setReport(polished); save(polished); flash('✨ AI report generated');
       } else {
-        save(plain); flash('Generated from your completed tasks. (AI summary unavailable.)');
+        save(plain); flash('Generated from your tasks. (AI summary unavailable.)');
       }
     } catch (e) {
-      save(plain); flash('Generated from your completed tasks.');
+      save(plain); flash('Generated from your tasks.');
     }
     setBusy(false);
   };
@@ -3806,6 +3852,23 @@ function DailyReportTab({ tasks = [], session, team, members = [] }) {
 
   const copyReport = () => { try { navigator.clipboard.writeText(report); flash('📋 Report copied — paste into any email or chat.'); } catch { flash('Could not copy.'); } };
 
+  const submitReport = () => {
+    if (!report.trim()) { flash('Generate or write a report first.'); return; }
+    const list = readSubmittedReports(teamId);
+    const id = `${myEmail}|${today}`;
+    const entry = {
+      id, date: today, dateLabel: todayLabel,
+      authorEmail: myEmail, authorName: myName,
+      body: report,
+      stats: { completed: completed.length, open: open.length, blocked: blocked.length },
+      submittedAt: Date.now(),
+      questions: (list.find(r => r.id === id)?.questions) || [], // preserve any existing thread
+    };
+    const next = [entry, ...list.filter(r => r.id !== id)]; // upsert by member+day
+    writeSubmittedReports(teamId, next);
+    flash('✅ Report submitted to your manager.');
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 6 }}>
@@ -3829,6 +3892,7 @@ function DailyReportTab({ tasks = [], session, team, members = [] }) {
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
         <Btn onClick={generateAI} loading={busy}>✨ Generate today's report</Btn>
         <Btn v="ghost" onClick={() => setMode(mode === 'edit' ? 'view' : 'edit')}>{mode === 'edit' ? '✓ Done editing' : '✏️ Write / edit manually'}</Btn>
+        <Btn onClick={submitReport}>📤 Submit to manager</Btn>
         <Btn v="ghost" onClick={emailReport} loading={emailBusy}>📧 Email to me</Btn>
         <Btn v="ghost" onClick={copyReport}>📋 Copy report</Btn>
         {toast && <span style={{ alignSelf: 'center', fontSize: 12.5, color: c.sub }}>{toast}</span>}
@@ -3875,12 +3939,154 @@ function DailyReportTab({ tasks = [], session, team, members = [] }) {
         </div>
       )}
 
+      {/* Manager questions on today's report (member can reply) */}
+      <MemberReportThread teamId={teamId} myEmail={myEmail} myName={myName} today={today}/>
+
       <p style={{ fontSize: 11.5, color: c.mut, marginTop: 16, lineHeight: 1.6 }}>
-        💡 The report summarizes <strong>only completed tasks</strong>. To receive it automatically every evening by email, a scheduled job (Vercel Cron) is needed — the in-app report and "Email to me" work right now.
+        💡 The report covers your day's work. <strong>Submit to manager</strong> files it on the manager's Reports page, where they can review and ask follow-up questions you'll see here. "Email to me" works now; scheduled evening delivery needs a backend cron.
       </p>
     </div>
   );
 }
+
+// Member's view of manager questions on their submitted report (with reply)
+function MemberReportThread({ teamId, myEmail, myName, today }) {
+  const c = useC();
+  const [entry, setEntry] = useState(null);
+  const [replyText, setReplyText] = useState('');
+  const id = `${myEmail}|${today}`;
+  const load = () => { const list = readSubmittedReports(teamId); setEntry(list.find(r => r.id === id) || null); };
+  useEffect(() => { load(); const t = setInterval(load, 8000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [teamId, myEmail, today]);
+  if (!entry || !(entry.questions || []).length) return null;
+
+  const sendReply = (qid) => {
+    if (!replyText.trim()) return;
+    const list = readSubmittedReports(teamId);
+    const next = list.map(r => r.id === id ? { ...r, questions: r.questions.map(q => q.id === qid ? { ...q, reply: replyText.trim(), repliedAt: Date.now() } : q) } : r);
+    writeSubmittedReports(teamId, next); setReplyText(''); load();
+  };
+
+  return (
+    <div style={{ marginTop: 16, borderRadius: 14, background: c.surf, border: '1px solid rgba(99,102,241,.25)', overflow: 'hidden' }}>
+      <div style={{ padding: '12px 18px', borderBottom: `1px solid ${c.bord}`, fontSize: 13, fontWeight: 700, color: c.text }}>💬 Questions from your manager</div>
+      <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {entry.questions.map(q => (
+          <div key={q.id}>
+            <div style={{ fontSize: 13, color: c.text }}><strong>{q.byName || 'Manager'}:</strong> {q.text}</div>
+            {q.reply ? (
+              <div style={{ fontSize: 13, color: c.sub, marginTop: 6, paddingLeft: 12, borderLeft: `2px solid ${c.bord}` }}>You: {q.reply}</div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <input value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Reply…" style={{ flex: 1, background: c.inp, border: `1px solid ${c.inpB}`, borderRadius: 8, padding: '7px 11px', color: c.text, fontSize: 12.5, outline: 'none' }}/>
+                <Btn onClick={() => sendReply(q.id)} style={{ padding: '7px 14px', fontSize: 12.5 }}>Send</Btn>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// MANAGER — submitted reports inbox with the ability to question each report
+function ReportsTab({ team, members = [], session }) {
+  const c = useC();
+  const teamId = team?.id || 'demo';
+  const myName = session?.user?.user_metadata?.name || 'Manager';
+  const [reports, setReports] = useState(() => readSubmittedReports(teamId));
+  const [openId, setOpenId] = useState(null);
+  const [qText, setQText] = useState('');
+  const [dayFilter, setDayFilter] = useState('all');
+  const refresh = () => setReports(readSubmittedReports(teamId));
+  useEffect(() => { const t = setInterval(refresh, 8000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [teamId]);
+
+  const days = Array.from(new Set(reports.map(r => r.date)));
+  const shown = reports.filter(r => dayFilter === 'all' || r.date === dayFilter).sort((a, b) => b.submittedAt - a.submittedAt);
+
+  const askQuestion = (rid) => {
+    if (!qText.trim()) return;
+    const list = readSubmittedReports(teamId);
+    const next = list.map(r => r.id === rid ? { ...r, questions: [...(r.questions || []), { id: 'q' + Date.now(), text: qText.trim(), byName: myName, at: Date.now() }] } : r);
+    writeSubmittedReports(teamId, next); setQText(''); refresh();
+  };
+
+  const fmt = (ts) => new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  return (
+    <div>
+      <div style={{ marginBottom: 16 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: c.text, marginBottom: 4 }}>📥 Submitted reports</h2>
+        <p style={{ fontSize: 12.5, color: c.mut }}>Daily reports your team has submitted. Open one to read it and ask follow-up questions.</p>
+      </div>
+
+      {reports.length === 0 ? (
+        <Card style={{ padding: '44px', textAlign: 'center' }}>
+          <div style={{ fontSize: 34, marginBottom: 12 }}>📭</div>
+          <div style={{ color: c.sub, fontSize: 14, fontWeight: 600, marginBottom: 4 }}>No reports submitted yet</div>
+          <div style={{ color: c.mut, fontSize: 12.5 }}>When team members click "Submit to manager" on their daily report, it shows up here.</div>
+        </Card>
+      ) : (
+        <>
+          {/* Day filter */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+            <button onClick={() => setDayFilter('all')} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 20, border: `1px solid ${c.bord}`, background: dayFilter === 'all' ? 'rgba(99,102,241,.15)' : 'transparent', color: dayFilter === 'all' ? '#818CF8' : c.mut, cursor: 'pointer', fontWeight: dayFilter === 'all' ? 700 : 400 }}>All</button>
+            {days.map(d => (
+              <button key={d} onClick={() => setDayFilter(d)} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 20, border: `1px solid ${c.bord}`, background: dayFilter === d ? 'rgba(99,102,241,.15)' : 'transparent', color: dayFilter === d ? '#818CF8' : c.mut, cursor: 'pointer', fontWeight: dayFilter === d ? 700 : 400 }}>{new Date(d + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</button>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {shown.map(r => {
+              const m = members.find(x => (x.email || '').toLowerCase() === (r.authorEmail || '').toLowerCase());
+              const isOpen = openId === r.id;
+              const unanswered = (r.questions || []).filter(q => !q.reply).length;
+              return (
+                <Card key={r.id} style={{ padding: 0, overflow: 'hidden' }}>
+                  <button onClick={() => setOpenId(isOpen ? null : r.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                    <Av member={m || { name: r.authorName, email: r.authorEmail }} size={34} url={m?.avatar_url}/>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: c.text }}>{r.authorName}</div>
+                      <div style={{ fontSize: 11.5, color: c.mut }}>{r.dateLabel} · submitted {fmt(r.submittedAt)}</div>
+                    </div>
+                    <span style={{ fontSize: 11, color: '#16A34A' }}>{r.stats?.completed || 0} done</span>
+                    {(r.stats?.blocked || 0) > 0 && <span style={{ fontSize: 11, color: '#DC2626' }}>{r.stats.blocked} blocked</span>}
+                    {(r.questions || []).length > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: unanswered ? '#D97706' : '#16A34A', background: (unanswered ? '#D97706' : '#16A34A') + '1a', padding: '2px 8px', borderRadius: 20 }}>{(r.questions || []).length} Q{unanswered ? ` · ${unanswered} open` : ''}</span>}
+                    <span style={{ color: c.mut, fontSize: 13 }}>{isOpen ? '▴' : '▾'}</span>
+                  </button>
+                  {isOpen && (
+                    <div style={{ padding: '0 18px 18px' }}>
+                      <div style={{ fontSize: 13.5, color: c.text, lineHeight: 1.7, whiteSpace: 'pre-wrap', padding: '14px 16px', background: c.row, borderRadius: 10, marginBottom: 14 }}>{r.body}</div>
+
+                      {/* Question thread */}
+                      {(r.questions || []).length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 14 }}>
+                          {r.questions.map(q => (
+                            <div key={q.id}>
+                              <div style={{ fontSize: 13, color: c.text }}><strong>{q.byName}:</strong> {q.text}</div>
+                              {q.reply ? <div style={{ fontSize: 13, color: c.sub, marginTop: 5, paddingLeft: 12, borderLeft: `2px solid ${c.bord}` }}>{r.authorName.split(' ')[0]}: {q.reply}</div>
+                                : <div style={{ fontSize: 11.5, color: '#D97706', marginTop: 5 }}>Awaiting reply…</div>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Ask a question */}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input value={openId === r.id ? qText : ''} onChange={e => setQText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') askQuestion(r.id); }} placeholder="Ask a question about this report…" style={{ flex: 1, background: c.inp, border: `1px solid ${c.inpB}`, borderRadius: 8, padding: '8px 12px', color: c.text, fontSize: 12.5, outline: 'none' }}/>
+                        <Btn onClick={() => askQuestion(r.id)} style={{ padding: '8px 16px', fontSize: 12.5 }}>Ask</Btn>
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 
 function PerfTab({ tasks, history, members }) {
   const c=useC(); const allDays=useMemo(()=>[...history,{id:'today',date:TODAY(),tasks}],[history,tasks]);
@@ -7237,6 +7443,9 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
   // Members see only their own tasks across home metrics; managers see the whole team's.
   const myEmail0 = session?.user?.email;
   const tasks = isManager ? allTasks : allTasks.filter(t => t.assignee_email === myEmail0);
+  // Team-wide figures for the bottom stat cards (members see the whole team, not just themselves)
+  const teamCompletion = allTasks.length ? Math.round(allTasks.filter(t => t.status === 'done').length / allTasks.length * 100) : 0;
+  const teamBlocked = allTasks.filter(t => t.status === 'blocked');
   const c = useC();
   const { dark } = useTheme();
   const fullName = session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || 'there';
@@ -7268,7 +7477,7 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
     const online = [], offline = [];
     members.forEach(m => {
       const r = att[m.email] || {};
-      const isOn = r.online !== false && r.lastSeen && (Date.now() - r.lastSeen) < 70000;
+      const isOn = r.online !== false && r.lastSeen && (Date.now() - r.lastSeen) < 120000;
       (isOn ? online : offline).push(m);
     });
     return { online, offline };
@@ -7317,17 +7526,17 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
     setShowCompletion(true);
     if (cmpInsight) return;
     setCmpBusy(true);
+    const teamDone = allTasks.filter(t => t.status === 'done').length;
     const fallback = (() => {
-      let s = `Your team has completed ${done.length} of ${tasks.length} task${tasks.length!==1?'s':''} (${completion}%). `;
-      if (completion >= 80) s += 'Strong throughput — the team is closing work reliably. ';
-      else if (completion >= 50) s += 'Steady progress, with room to push a few more over the line. ';
+      let s = `Your team has completed ${teamDone} of ${allTasks.length} task${allTasks.length!==1?'s':''} (${teamCompletion}%). `;
+      if (teamCompletion >= 80) s += 'Strong throughput — the team is closing work reliably. ';
+      else if (teamCompletion >= 50) s += 'Steady progress, with room to push a few more over the line. ';
       else s += 'Completion is lagging — worth checking for blockers or overloaded members. ';
-      if (blocked.length) s += `${blocked.length} blocked task${blocked.length!==1?'s are':' is'} likely holding the rate down. `;
-      if (dueToday.length) s += `${dueToday.length} due today — prioritize those to lift the number.`;
+      if (teamBlocked.length) s += `${teamBlocked.length} blocked task${teamBlocked.length!==1?'s are':' is'} likely holding the rate down. `;
       return s.trim();
     })();
     try {
-      const res = await askAI(`You are a delivery analyst. The team has completed ${done.length}/${tasks.length} tasks (${completion}%), with ${blocked.length} blocked and ${dueToday.length} due today. Write 2-3 short sentences: how completion is trending, what's holding it back, and one concrete action. No greeting, no preamble.`, { completion, done: done.length, total: tasks.length, blocked: blocked.length, teamName: team?.name });
+      const res = await askAI(`You are a delivery analyst. The team has completed ${teamDone}/${allTasks.length} tasks (${teamCompletion}%), with ${teamBlocked.length} blocked. Write 2-3 short sentences: how completion is trending, what's holding it back, and one concrete action. No greeting, no preamble.`, { completion: teamCompletion, done: teamDone, total: allTasks.length, blocked: teamBlocked.length, teamName: team?.name });
       const text = (typeof res === 'string' ? res : res?.text || '').trim();
       const junk = /good (morning|afternoon)|how can i|what can i help/i;
       setCmpInsight(text && !junk.test(text) && text.length > 25 ? text : fallback);
@@ -7365,8 +7574,8 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
 
   // ── Bottom stat cards ──
   const STATS = [
-    { label: 'Completion rate', value: `${completion}%`, delta: completion >= 50 ? '+3%' : null, deltaColor: '#34D399', sub: 'click for AI insight', onClick: openCompletion },
-    { label: 'Open blockers', value: blocked.length, delta: blocked.length ? `+${blocked.length}` : null, deltaColor: '#F87171', sub: blocked.length ? 'click to view' : 'across the team', onClick: () => { if (blocked.length) setShowBlockers(true); } },
+    { label: 'Completion rate', value: `${teamCompletion}%`, delta: teamCompletion >= 50 ? '+3%' : null, deltaColor: '#34D399', sub: 'click for AI insight', onClick: openCompletion },
+    { label: 'Open blockers', value: teamBlocked.length, delta: teamBlocked.length ? `+${teamBlocked.length}` : null, deltaColor: '#F87171', sub: teamBlocked.length ? 'click to view' : 'across the team', onClick: () => { if (teamBlocked.length) setShowBlockers(true); } },
     { label: 'Avg workload', value: `${avgWorkload}%`, sub: 'click for AI insight', onClick: openWorkload },
   ];
 
@@ -7524,9 +7733,9 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
 
       {/* Blockers detail card */}
       {showBlockers && (
-        <Modal onClose={() => setShowBlockers(false)} title={`🚧 Open blockers (${blocked.length})`} width={460}>
+        <Modal onClose={() => setShowBlockers(false)} title={`🚧 Open blockers (${teamBlocked.length})`} width={460}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {blocked.map(t => (
+            {teamBlocked.map(t => (
               <div key={t.id} style={{ padding: '12px 14px', borderRadius: 11, background: 'rgba(239,68,68,.06)', border: '1px solid rgba(239,68,68,.2)' }}>
                 <div style={{ fontSize: 13.5, fontWeight: 600, color: c.text, marginBottom: 3 }}>{t.title || t.text}</div>
                 <div style={{ fontSize: 12, color: c.mut }}>{t.assignee_name || (t.assignee_email||'Unassigned').split('@')[0]}{t.blocker ? ` · ${t.blocker}` : ''}</div>
@@ -7544,7 +7753,7 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
             {cmpBusy ? <span style={{ color: c.mut }}>Analyzing completion trend…</span> : cmpInsight}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            {[{ l: 'Completed', v: done.length, col: '#34D399' }, { l: 'Active', v: active.length, col: '#818CF8' }, { l: 'Blocked', v: blocked.length, col: blocked.length?'#F87171':'#94A3B8' }].map(s => (
+            {[{ l: 'Completed', v: allTasks.filter(t=>t.status==='done').length, col: '#34D399' }, { l: 'Active', v: allTasks.filter(t=>t.status!=='done').length, col: '#818CF8' }, { l: 'Blocked', v: teamBlocked.length, col: teamBlocked.length?'#F87171':'#94A3B8' }].map(s => (
               <div key={s.l} style={{ flex: 1, textAlign: 'center', padding: '12px 8px', borderRadius: 12, background: c.row }}>
                 <div style={{ fontSize: 20, fontWeight: 800, color: s.col }}>{s.v}</div>
                 <div style={{ fontSize: 10.5, color: c.mut, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>{s.l}</div>
@@ -9834,11 +10043,12 @@ function ManagerView({
             canPerf ? (
               <>
                 <SubTabs value={tasksSub} onChange={setTasksSub}
-                  tabs={[{ id: 'board', label: 'Tasks' }, { id: 'overview', label: 'Overview' }, { id: 'reliability', label: 'Reliability Engine' }, { id: 'report', label: 'Daily Report' }, { id: 'ai', label: 'Ask AI' }, { id: 'history', label: 'History' }, ...(isManager ? [{ id: 'weekly', label: 'Weekly summary' }, { id: 'elevate', label: 'Elevate' }, { id: 'timesaved', label: 'Time saved' }] : [])]}/>
+                  tabs={[{ id: 'board', label: 'Tasks' }, { id: 'overview', label: 'Overview' }, { id: 'reliability', label: 'Reliability Engine' }, { id: 'report', label: 'Daily Report' }, ...(isManager ? [{ id: 'reports', label: 'Reports' }] : []), { id: 'ai', label: 'Ask AI' }, { id: 'history', label: 'History' }, ...(isManager ? [{ id: 'weekly', label: 'Weekly summary' }, { id: 'elevate', label: 'Elevate' }, { id: 'timesaved', label: 'Time saved' }] : [])]}/>
                 {tasksSub === 'board' && <LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} onDelete={onDeleteTask} session={session} isManager={isManager}/>}
                 {tasksSub === 'overview' && <TeamAnalysisTab tasks={tasks} members={members} history={history}/>}
                 {tasksSub === 'reliability' && <ReliabilityTab tasks={tasks} members={members} history={history} team={team}/>}
                 {tasksSub === 'report' && <DailyReportTab tasks={tasks} session={session} team={team} members={members}/>}
+                {tasksSub === 'reports' && isManager && <ReportsTab team={team} members={members} session={session}/>}
                 {tasksSub === 'ai' && <AIAssistant tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name || 'Team'}/>}
                 {tasksSub === 'history' && <HistTab history={history} members={members}/>}
                 {tasksSub === 'weekly' && isManager && <WeeklyExecSummary tasks={tasks} members={members} history={history} team={team}/>}
@@ -9848,8 +10058,10 @@ function ManagerView({
             ) : (
               <>
                 <SubTabs value={tasksSub} onChange={setTasksSub}
-                  tabs={[{ id: 'board', label: 'My Tasks' }, { id: 'report', label: 'Daily Report' }]}/>
-                {tasksSub === 'report'
+                  tabs={[{ id: 'board', label: 'My Tasks' }, { id: 'overview', label: 'Overview' }, { id: 'report', label: 'Daily Report' }]}/>
+                {tasksSub === 'overview'
+                  ? <TeamAnalysisTab tasks={tasks} members={members} history={history} memberView={true}/>
+                  : tasksSub === 'report'
                   ? <DailyReportTab tasks={tasks} session={session} team={team} members={members}/>
                   : <LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} onDelete={onDeleteTask} session={session} isManager={isManager}/>}
               </>
@@ -10232,8 +10444,29 @@ function usePip({ tasks, onAdd, onStatus, session, team, standup, isManager = fa
 
     // Send init data once window loads
     win.addEventListener('load', function() {
-      win.postMessage({ type:'init', mode, tasks, myEmail, myName, teamName: team ? team.name : 'Team', isManager, members: (members||[]).map(m=>({email:m.email,name:m.name||m.email})) }, '*');
+      win.postMessage({ type:'init', mode, tasks, myEmail, myName, teamName: team ? team.name : 'Team', isManager,
+        members: (members||[]).map(m=>({email:m.email,name:m.name||m.email})),
+        timelineOptions: ['Today noon (12 PM)','Today 3 PM','Today EOD (6 PM)','Tomorrow morning','Tomorrow EOD','This week'] }, '*');
     });
+
+    // Translate a timeline label into a calendar block (start=now, end=deadline).
+    const pipBlockFromTimeline = (tl) => {
+      const now = new Date();
+      const hhmm = (d) => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+      const iso = (d) => d.toISOString().slice(0,10);
+      const tomorrow = new Date(now); tomorrow.setDate(now.getDate()+1);
+      const at = (base,h,m=0)=>{ const d=new Date(base); d.setHours(h,m,0,0); return d; };
+      let date=iso(now), startD=now, endD;
+      switch (tl) {
+        case 'Today noon (12 PM)': endD=at(now,12); break;
+        case 'Today 3 PM': endD=at(now,15); break;
+        case 'Tomorrow morning': date=iso(tomorrow); startD=at(tomorrow,9); endD=at(tomorrow,12); break;
+        case 'Tomorrow EOD': date=iso(tomorrow); startD=at(tomorrow,9); endD=at(tomorrow,18); break;
+        default: endD=at(now,18); // Today EOD / This week
+      }
+      if (endD<=startD) endD=new Date(startD.getTime()+60*60000);
+      return { date, start: hhmm(startD), end: hhmm(endD), repeat:'none' };
+    };
 
     // Listen for messages from pip window
     const handler = (e) => {
@@ -10244,16 +10477,22 @@ function usePip({ tasks, onAdd, onStatus, session, team, standup, isManager = fa
         // Members can only ever assign to themselves; managers may assign to anyone.
         const assignEmail = isManager ? (t.assignee_email || myEmail) : myEmail;
         const assignName = isManager ? (t.assignee_name || myName) : myName;
-        onAdd({
+        const timeline = t.timeline || 'Today EOD (6 PM)';
+        const payload = {
           title: t.title || e.data.title || '',
           status: 'todo',
           priority: t.priority || 'medium',
           due_label: t.due_label || '',
+          timeline,
           assignee_email: assignEmail,
           assignee_name: assignName,
           standup_id: standup ? standup.id : null,
           team_id: team ? team.id : null,
-        });
+        };
+        // Time block: use one the PiP supplied, else derive from the timeline if requested.
+        if (t._timeBlock && t._timeBlock.start && t._timeBlock.end) payload._timeBlock = t._timeBlock;
+        else if (t.addTimeBlock) payload._timeBlock = pipBlockFromTimeline(timeline);
+        onAdd(payload);
       }
     };
     window.addEventListener('message', handler);
@@ -10622,9 +10861,11 @@ export default function App() {
       try{ const up=sbFn('upsertPresence'); if(SB.IS_LIVE&&up) up(teamId,email,Date.now(),online); }catch(e){}
     };
     setPresence(true);
-    const beat=setInterval(()=>{ if(document.visibilityState==='visible') setPresence(true); },25000);
-    const onVis=()=>setPresence(document.visibilityState==='visible');
-    const onLeave=()=>setPresence(false);
+    // Heartbeat keeps running even when the tab is backgrounded, so "app open" = online.
+    const beat=setInterval(()=>{ setPresence(true); },25000);
+    // Becoming visible again refreshes immediately; backgrounding does NOT mark offline.
+    const onVis=()=>{ if(document.visibilityState==='visible') setPresence(true); };
+    const onLeave=()=>setPresence(false); // only on actual tab/window close
     document.addEventListener('visibilitychange',onVis);
     window.addEventListener('beforeunload',onLeave);
     window.addEventListener('pagehide',onLeave);
@@ -10893,7 +11134,7 @@ function BlockerIntelligence({ tasks, members }) {
 }
 
 
-function TeamAnalysisTab({ tasks, members, history = [] }) {
+function TeamAnalysisTab({ tasks, members, history = [], memberView = false }) {
   const c = useC();
   const total = tasks.length, done = tasks.filter(t => t.status === 'done').length;
   const inProg = tasks.filter(t => t.status === 'in-progress').length;
@@ -10934,10 +11175,10 @@ function TeamAnalysisTab({ tasks, members, history = [] }) {
 
   return (
     <div>
-      <h2 style={{ fontSize: 18, fontWeight: 700, color: c.text, marginBottom: 4 }}>📊 Executive summary</h2>
-      <p style={{ fontSize: 12.5, color: c.mut, marginBottom: 18 }}>A high-level snapshot of today — what needs attention and what's going well. Detailed per-member metrics live in Performance.</p>
+      <h2 style={{ fontSize: 18, fontWeight: 700, color: c.text, marginBottom: 4 }}>📊 {memberView ? 'Team overview' : 'Executive summary'}</h2>
+      <p style={{ fontSize: 12.5, color: c.mut, marginBottom: 18 }}>{memberView ? "How the whole team is tracking today — overall progress and momentum." : "A high-level snapshot of today — what needs attention and what's going well. Detailed per-member metrics live in Performance."}</p>
 
-      <BlockerIntelligence tasks={tasks} members={members}/>
+      {!memberView && <BlockerIntelligence tasks={tasks} members={members}/>}
 
       {/* Today at a glance — one hero strip (does NOT duplicate the Tasks tab cards) */}
       <Card style={{ padding: '20px 22px', marginBottom: 16 }}>
@@ -10961,9 +11202,9 @@ function TeamAnalysisTab({ tasks, members, history = [] }) {
         <div style={{ marginTop: 16 }}><Bar pct={pct} h={8} color="linear-gradient(90deg,#6366F1,#34D399)"/></div>
       </Card>
 
-      {/* Alerts + Highlights side by side */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <Card style={{ overflow: 'hidden' }}>
+      {/* Alerts + Highlights side by side (members see Highlights only — no per-person call-outs) */}
+      <div style={{ display: 'grid', gridTemplateColumns: memberView ? '1fr' : '1fr 1fr', gap: 14 }}>
+        {!memberView && <Card style={{ overflow: 'hidden' }}>
           <div style={{ padding: '13px 18px', borderBottom: '1px solid ' + c.bord, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: alerts.length ? '#EF4444' : '#34D399' }}/>
             <span style={{ fontSize: 13, fontWeight: 700, color: c.text }}>Needs attention</span>
@@ -10979,7 +11220,7 @@ function TeamAnalysisTab({ tasks, members, history = [] }) {
                 </div>
               ))}
           </div>
-        </Card>
+        </Card>}
         <Card style={{ overflow: 'hidden' }}>
           <div style={{ padding: '13px 18px', borderBottom: '1px solid ' + c.bord, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#34D399' }}/>
