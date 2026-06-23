@@ -3441,7 +3441,38 @@ function AssignModal({ members, onClose, onAdd, isManager = true, session }) {
   const me=members.find(m=>m.email===myEmail);
   const [title,setTitle]=useState(''); const [assignee,setAssignee]=useState(isManager?(members[0]?.email||''):myEmail); const [priority,setPriority]=useState('medium'); const [timeline,setTimeline]=useState('Today EOD (6 PM)'); const [note,setNote]=useState('');
   const [schedOn,setSchedOn]=useState(false); const [sDate,setSDate]=useState(()=>new Date().toISOString().slice(0,10)); const [sStart,setSStart]=useState('10:00'); const [sEnd,setSEnd]=useState('12:00');
+  const [schedTouched,setSchedTouched]=useState(false); // once the user hand-edits, stop auto-deriving
   const [labelId,setLabelId]=useState(''); const [customLabel,setCustomLabel]=useState(''); const [customColor,setCustomColor]=useState('#6366F1');
+
+  // Translate the chosen timeline into a concrete date + start/end window.
+  // Start = now (when the task is assigned); End = the deadline the timeline implies.
+  const blockFromTimeline=(tl)=>{
+    const now=new Date();
+    const hhmm=(d)=>`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const iso=(d)=>d.toISOString().slice(0,10);
+    const tomorrow=new Date(now); tomorrow.setDate(now.getDate()+1);
+    const endOn=(base,h,m=0)=>{ const d=new Date(base); d.setHours(h,m,0,0); return d; };
+    let date=iso(now), startD=now, endD;
+    switch(tl){
+      case 'Today noon (12 PM)': endD=endOn(now,12); break;
+      case 'Today 3 PM': endD=endOn(now,15); break;
+      case 'Today EOD (6 PM)': endD=endOn(now,18); break;
+      case 'Tomorrow morning': date=iso(tomorrow); startD=endOn(tomorrow,9); endD=endOn(tomorrow,12); break;
+      case 'Tomorrow EOD': date=iso(tomorrow); startD=endOn(tomorrow,9); endD=endOn(tomorrow,18); break;
+      case 'This week': { const fri=new Date(now); const add=(5-now.getDay()+7)%7; fri.setDate(now.getDate()+(add||0)); date=iso(now); startD=now; endD=endOn(now,18); break; }
+      default: endD=endOn(now,18);
+    }
+    // If the implied end is already past for "today" options, give at least a 1h block from now.
+    if(endD<=startD){ endD=new Date(startD.getTime()+60*60000); }
+    return { date, start: hhmm(startD), end: hhmm(endD) };
+  };
+  // When the time-block is switched on (or timeline changes while on & untouched), auto-fill it.
+  const enableSched=(on)=>{
+    setSchedOn(on);
+    if(on && !schedTouched){ const b=blockFromTimeline(timeline); setSDate(b.date); setSStart(b.start); setSEnd(b.end); }
+  };
+  useEffect(()=>{ if(schedOn && !schedTouched){ const b=blockFromTimeline(timeline); setSDate(b.date); setSStart(b.start); setSEnd(b.end); } /* eslint-disable-next-line */ },[timeline]);
+
   const submit=()=>{ if(!title.trim())return; const targetEmail=isManager?assignee:myEmail; const m=members.find(x=>x.email===targetEmail); const payload={title:title.trim(),assignee_email:targetEmail,assignee_name:m?.name||targetEmail,priority,status:'todo',timeline,manager_note:isManager?note:'',notes:'',blocker:''}; if(labelId==='__custom'&&customLabel.trim()){ payload.label=customLabel.trim(); payload.label_color=customColor; } else if(labelId){ const L=TASK_LABELS.find(x=>x.id===labelId); if(L){ payload.label=L.label; payload.label_color=L.color; } } if(schedOn&&sStart&&sEnd&&sEnd>sStart) payload._timeBlock={date:sDate,start:sStart,end:sEnd,repeat:'none'}; onAdd(payload); onClose(); };
   return <Modal onClose={onClose} title={isManager?'Assign a task':'Add my task'}><Inp value={title} onChange={e=>setTitle(e.target.value)} placeholder="Task description..." style={{ marginBottom:12 }} autoFocus/><div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10 }}>{isManager?<Sel label="Assign to" value={assignee} onChange={e=>setAssignee(e.target.value)}>{members.map(m=><option key={m.id||m.email} value={m.email}>{m.name||m.email}</option>)}</Sel>:<div><Lbl>Assigned to</Lbl><div style={{ display:'flex',alignItems:'center',gap:8,padding:'9px 12px',background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:10 }}>{me&&<Av member={me} size={22} url={me.avatar_url}/>}<span style={{ fontSize:13,color:c.text }}>{me?.name||myEmail.split('@')[0]} (you)</span></div></div>}<Sel label="Priority" value={priority} onChange={e=>setPriority(e.target.value)}>{['critical','high','medium','low'].map(v=><option key={v} value={v}>{v.charAt(0).toUpperCase()+v.slice(1)}</option>)}</Sel></div><Sel label="Timeline" value={timeline} onChange={e=>setTimeline(e.target.value)} style={{ marginBottom:10 }}>{['Today noon (12 PM)','Today 3 PM','Today EOD (6 PM)','Tomorrow morning','Tomorrow EOD','This week'].map(t=><option key={t} value={t}>{t}</option>)}</Sel>{isManager&&<Inp value={note} onChange={e=>setNote(e.target.value)} placeholder="Note to team member (optional)" style={{ marginBottom:12 }}/>}
     <div style={{ marginBottom:14 }}>
@@ -3461,14 +3492,16 @@ function AssignModal({ members, onClose, onAdd, isManager = true, session }) {
     </div>
     <div style={{ marginBottom:14 }}>
       <label style={{ display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontSize:13,color:c.sub }}>
-        <input type="checkbox" checked={schedOn} onChange={e=>setSchedOn(e.target.checked)} style={{ accentColor:'#6366F1' }}/>
-        Add a time block to the calendar (e.g. 10am–12pm)
+        <input type="checkbox" checked={schedOn} onChange={e=>enableSched(e.target.checked)} style={{ accentColor:'#6366F1' }}/>
+        Add a time block to the calendar
       </label>
-      {schedOn&&<div style={{ display:'grid',gridTemplateColumns:'1.3fr 1fr 1fr',gap:8,marginTop:10 }}>
-        <input type="date" value={sDate} onChange={e=>setSDate(e.target.value)} style={inpS(c)}/>
-        <input type="time" value={sStart} onChange={e=>setSStart(e.target.value)} style={inpS(c)}/>
-        <input type="time" value={sEnd} onChange={e=>setSEnd(e.target.value)} style={inpS(c)}/>
-      </div>}
+      {schedOn&&<>
+      <div style={{ fontSize:11,color:c.mut,marginTop:6 }}>Auto-set from your timeline ({timeline}) — adjust if needed.</div>
+      <div style={{ display:'grid',gridTemplateColumns:'1.3fr 1fr 1fr',gap:8,marginTop:8 }}>
+        <input type="date" value={sDate} onChange={e=>{setSDate(e.target.value);setSchedTouched(true);}} style={inpS(c)}/>
+        <input type="time" value={sStart} onChange={e=>{setSStart(e.target.value);setSchedTouched(true);}} style={inpS(c)}/>
+        <input type="time" value={sEnd} onChange={e=>{setSEnd(e.target.value);setSchedTouched(true);}} style={inpS(c)}/>
+      </div></>}
     </div>
     <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}><Btn v="ghost" onClick={onClose}>Cancel</Btn><Btn onClick={submit} disabled={!title.trim()}>{isManager?'Assign task':'Add task'}</Btn></div></Modal>;
 }
