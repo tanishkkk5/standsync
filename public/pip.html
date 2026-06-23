@@ -28,17 +28,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .tag.low{background:rgba(16,185,129,.15);color:#6EE7B7}
 .tag.deadline{background:rgba(124,110,245,.15);color:#A78BFA}
 .tag.status{background:rgba(56,189,248,.12);color:#7DD3FC}
+.tag.label{color:#fff}
+.tag.who{background:rgba(255,255,255,.1);color:rgba(240,236,255,.7)}
 .empty{padding:24px 16px;text-align:center;font-size:12px;color:rgba(240,236,255,.3);line-height:1.8}
 .add-form{border-top:1px solid rgba(255,255,255,.07);padding:8px 10px;flex-shrink:0;background:rgba(255,255,255,.02)}
-.add-row1{display:flex;gap:6px;margin-bottom:6px}
-.add-row2{display:flex;gap:5px}
+.add-row{display:flex;gap:6px;margin-bottom:6px}
+.add-row:last-child{margin-bottom:0}
 input[type=text]{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:6px 10px;color:#F0ECFF;font-size:12px;outline:none;font-family:inherit}
 input[type=text]:focus{border-color:rgba(124,110,245,.5)}
 input[type=text]::placeholder{color:rgba(240,236,255,.28)}
-select{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:5px 6px;color:#F0ECFF;font-size:11px;outline:none;cursor:pointer;flex:1}
+select{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:5px 6px;color:#F0ECFF;font-size:11px;outline:none;cursor:pointer;flex:1;min-width:0}
 select option{background:#0D0B24;color:#F0ECFF}
 .send{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#6B5FE4,#9B8AFB);border:none;color:#fff;cursor:pointer;font-size:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .send:disabled{opacity:.35;cursor:default}
+.labels{display:flex;gap:4px;flex-wrap:wrap}
+.lbl-chip{font-size:10px;padding:3px 9px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:transparent;color:rgba(240,236,255,.6);cursor:pointer;white-space:nowrap}
+.lbl-chip.on{color:#fff}
+.tb-row{display:flex;align-items:center;gap:7px;font-size:11px;color:rgba(240,236,255,.6);cursor:pointer;user-select:none}
+.tb-row input{accent-color:#7C6EF5}
+.tb-hint{font-size:10px;color:rgba(240,236,255,.4);margin-top:4px}
 ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:rgba(124,110,245,.3);border-radius:3px}
 </style>
 </head>
@@ -52,60 +60,150 @@ select option{background:#0D0B24;color:#F0ECFF}
 </div>
 <div class="bar-wrap"><div class="bar-fill" id="bar" style="width:0%"></div></div>
 <div class="tasks" id="task-list"><div class="empty">⏳ Connecting to StandSync...</div></div>
+
 <div class="add-form">
-  <div class="add-row1">
+  <!-- Task text + send -->
+  <div class="add-row">
     <input type="text" id="inp" placeholder="Add a task..."/>
     <button class="send" id="send-btn" disabled>↑</button>
   </div>
-  <div class="add-row2">
+
+  <!-- Assignee (managers only) + Priority -->
+  <div class="add-row">
+    <select id="assignee" style="display:none"></select>
     <select id="pri">
       <option value="medium">⚡ Medium</option>
       <option value="critical">🔴 Critical</option>
       <option value="high">🟠 High</option>
       <option value="low">🟢 Low</option>
     </select>
-    <select id="deadline">
-      <option value="">No deadline</option>
-      <option value="Today EOD (6 PM)">Today EOD</option>
+  </div>
+
+  <!-- Timeline -->
+  <div class="add-row">
+    <select id="timeline">
+      <option value="Today noon (12 PM)">Today noon (12 PM)</option>
+      <option value="Today 3 PM">Today 3 PM</option>
+      <option value="Today EOD (6 PM)" selected>Today EOD (6 PM)</option>
+      <option value="Tomorrow morning">Tomorrow morning</option>
       <option value="Tomorrow EOD">Tomorrow EOD</option>
       <option value="This week">This week</option>
-      <option value="Next week">Next week</option>
     </select>
   </div>
+
+  <!-- Labels -->
+  <div class="add-row labels" id="labels"></div>
+
+  <!-- Time block toggle -->
+  <div class="add-row" style="flex-direction:column;align-items:flex-start">
+    <label class="tb-row"><input type="checkbox" id="timeblock"/> Add a time block to the calendar</label>
+    <div class="tb-hint" id="tb-hint" style="display:none"></div>
+  </div>
 </div>
+
 <script>
 var tasks=[], myEmail='', myName='', teamName='Team';
+var isManager=false, members=[];
+var selectedLabel=null;
 var nextStatus={todo:'in-progress','in-progress':'done',done:'todo',blocked:'todo'};
 var statusLabel={'in-progress':'In progress','done':'Done','blocked':'Blocked','todo':''};
 
+// Same label set as the main app
+var LABELS=[
+  {id:'bug',label:'Bug',color:'#EF4444'},
+  {id:'feature',label:'Feature',color:'#6366F1'},
+  {id:'urgent',label:'Urgent',color:'#F59E0B'},
+  {id:'review',label:'Review',color:'#8B5CF6'},
+  {id:'design',label:'Design',color:'#EC4899'},
+  {id:'research',label:'Research',color:'#06B6D4'},
+  {id:'ops',label:'Ops',color:'#10B981'},
+  {id:'docs',label:'Docs',color:'#64748B'}
+];
+
+function buildLabels(){
+  var wrap=document.getElementById('labels'); wrap.innerHTML='';
+  LABELS.forEach(function(L){
+    var b=document.createElement('button');
+    b.className='lbl-chip'; b.textContent=L.label; b.dataset.id=L.id;
+    b.style.borderColor='rgba(255,255,255,.15)';
+    b.onclick=function(){
+      if(selectedLabel===L.id){ selectedLabel=null; }
+      else { selectedLabel=L.id; }
+      // repaint chips
+      Array.prototype.forEach.call(wrap.children,function(ch){
+        var on=ch.dataset.id===selectedLabel;
+        var def=LABELS.filter(function(x){return x.id===ch.dataset.id;})[0];
+        ch.classList.toggle('on',on);
+        ch.style.background=on?def.color:'transparent';
+        ch.style.borderColor=on?def.color:'rgba(255,255,255,.15)';
+        ch.style.color=on?'#fff':'rgba(240,236,255,.6)';
+      });
+    };
+    wrap.appendChild(b);
+  });
+}
+
+function buildAssignee(){
+  var sel=document.getElementById('assignee');
+  if(isManager && members.length){
+    sel.style.display='';
+    sel.innerHTML='';
+    members.forEach(function(m){
+      var o=document.createElement('option');
+      o.value=m.email; o.textContent=m.name||m.email;
+      sel.appendChild(o);
+    });
+    // default to me if present
+    if(members.some(function(m){return m.email===myEmail;})) sel.value=myEmail;
+  } else {
+    sel.style.display='none';
+  }
+}
+
 function render(){
-  var mine=tasks.filter(function(t){return t.assignee_email===myEmail;});
-  var done=mine.filter(function(t){return t.status==='done';}).length;
-  var pct=mine.length?Math.round(done/mine.length*100):0;
+  // Members see only their own tasks; managers see everyone's.
+  var visible = isManager ? tasks : tasks.filter(function(t){return t.assignee_email===myEmail;});
+  // progress is team-wide for everyone
+  var done=tasks.filter(function(t){return t.status==='done';}).length;
+  var pct=tasks.length?Math.round(done/tasks.length*100):0;
   document.getElementById('team-name').textContent=teamName;
-  document.getElementById('progress').textContent=done+'/'+mine.length+' done · '+pct+'%';
+  document.getElementById('progress').textContent=done+'/'+tasks.length+' done · '+pct+'%';
   document.getElementById('bar').style.width=pct+'%';
   var html='';
-  if(!mine.length){
+  if(!visible.length){
     html='<div class="empty">No tasks yet.<br>Add one below!</div>';
   } else {
-    mine.forEach(function(t){
+    visible.forEach(function(t){
       var cls=t.status==='done'?'done':t.status==='in-progress'?'inprog':t.status==='blocked'?'blocked':'';
       var priTag=t.priority?'<span class="tag '+t.priority+'">'+t.priority+'</span>':'';
-      var dlTag=t.due_label?'<span class="tag deadline">📅 '+t.due_label+'</span>':'';
+      var dlTag=(t.timeline||t.due_label)?'<span class="tag deadline">📅 '+(t.timeline||t.due_label)+'</span>':'';
       var stTag=statusLabel[t.status]?'<span class="tag status">'+statusLabel[t.status]+'</span>':'';
+      var lbTag=t.label?'<span class="tag label" style="background:'+(t.label_color||'#6366F1')+'">'+t.label+'</span>':'';
+      var whoTag=(isManager && t.assignee_name && t.assignee_email!==myEmail)?'<span class="tag who">'+(t.assignee_name||'').split(' ')[0]+'</span>':'';
       html+='<div class="task">'+
         '<button class="cb '+cls+'" data-id="'+t.id+'" data-next="'+(nextStatus[t.status]||'todo')+'"></button>'+
         '<div class="task-body">'+
           '<div class="task-title '+(t.status==='done'?'done':'')+'">'+
             (t.title||'').replace(/</g,'&lt;')+
           '</div>'+
-          '<div class="task-meta">'+priTag+stTag+dlTag+'</div>'+
+          '<div class="task-meta">'+priTag+stTag+lbTag+dlTag+whoTag+'</div>'+
         '</div>'+
       '</div>';
     });
   }
   document.getElementById('task-list').innerHTML=html;
+}
+
+// Time-block hint reflects the chosen timeline
+function updateTbHint(){
+  var on=document.getElementById('timeblock').checked;
+  var hint=document.getElementById('tb-hint');
+  if(on){
+    hint.style.display='';
+    hint.textContent='Auto-set from timeline ('+document.getElementById('timeline').value+') — starts now, ends at the deadline.';
+  } else {
+    hint.style.display='none';
+  }
 }
 
 document.addEventListener('click',function(e){
@@ -123,26 +221,56 @@ var sendBtn=document.getElementById('send-btn');
 inp.addEventListener('input',function(){sendBtn.disabled=!inp.value.trim();});
 inp.addEventListener('keydown',function(e){if(e.key==='Enter'&&inp.value.trim())send();});
 sendBtn.addEventListener('click',send);
+document.getElementById('timeblock').addEventListener('change',updateTbHint);
+document.getElementById('timeline').addEventListener('change',updateTbHint);
 
 function send(){
   var v=inp.value.trim(); if(!v) return;
   var pri=document.getElementById('pri').value||'medium';
-  var dl=document.getElementById('deadline').value||'';
-  var task={id:'tmp'+Date.now(),title:v,status:'todo',priority:pri,due_label:dl,assignee_email:myEmail,assignee_name:myName};
+  var timeline=document.getElementById('timeline').value||'Today EOD (6 PM)';
+  var addTimeBlock=document.getElementById('timeblock').checked;
+  // Assignee: managers can pick; members are always themselves (enforced in app too)
+  var assignEmail=myEmail, assignName=myName;
+  if(isManager){
+    var sel=document.getElementById('assignee');
+    if(sel && sel.value){ assignEmail=sel.value; var mm=members.filter(function(m){return m.email===sel.value;})[0]; assignName=mm?(mm.name||mm.email):sel.value; }
+  }
+  var task={
+    id:'tmp'+Date.now(), title:v, status:'todo', priority:pri,
+    timeline:timeline, due_label:timeline,
+    assignee_email:assignEmail, assignee_name:assignName,
+    addTimeBlock:addTimeBlock
+  };
+  if(selectedLabel){
+    var L=LABELS.filter(function(x){return x.id===selectedLabel;})[0];
+    if(L){ task.label=L.label; task.label_color=L.color; }
+  }
   if(window.opener) window.opener.postMessage({type:'addTask',task:task},'*');
   tasks.push(task); render();
+  // reset
   inp.value=''; sendBtn.disabled=true;
   document.getElementById('pri').value='medium';
-  document.getElementById('deadline').value='';
+  document.getElementById('timeline').value='Today EOD (6 PM)';
+  document.getElementById('timeblock').checked=false;
+  selectedLabel=null; buildLabels(); updateTbHint();
 }
 
 window.addEventListener('message',function(e){
   if(!e.data) return;
   if(e.data.type==='init'){
     tasks=e.data.tasks||[]; myEmail=e.data.myEmail||''; myName=e.data.myName||''; teamName=e.data.teamName||'Team';
-    render();
+    isManager=!!e.data.isManager; members=e.data.members||[];
+    if(e.data.timelineOptions && e.data.timelineOptions.length){
+      var tl=document.getElementById('timeline'); tl.innerHTML='';
+      e.data.timelineOptions.forEach(function(opt){
+        var o=document.createElement('option'); o.value=opt; o.textContent=opt;
+        if(opt.indexOf('EOD')>-1 && opt.indexOf('Today')>-1) o.selected=true;
+        tl.appendChild(o);
+      });
+    }
+    buildAssignee(); buildLabels(); updateTbHint(); render();
   }
-  if(e.data.type==='tasks'){tasks=e.data.tasks||[];render();}
+  if(e.data.type==='tasks'){ tasks=e.data.tasks||[]; render(); }
 });
 </script>
 </body>
