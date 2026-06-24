@@ -111,7 +111,12 @@ let _ssAudioCtx = null;
 // ── Activity event log — real, time-stamped events (not daily-recomputed state) ──
 // Stored per team; auto-pruned to recent items. Each event powers a notification.
 function eventsKey(teamId){ return 'ss-events-' + (teamId || 'demo'); }
-function readEvents(teamId){ try { return JSON.parse(localStorage.getItem(eventsKey(teamId)) || '[]'); } catch { return []; } }
+function readEvents(teamId){
+  // Prefer the shared (team-wide) event history if hydrated.
+  const shared = sharedGetCached(teamId, '__events__');
+  if (shared && Array.isArray(shared)) return shared;
+  try { return JSON.parse(localStorage.getItem(eventsKey(teamId)) || '[]'); } catch { return []; }
+}
 function pushEvent(teamId, ev){
   try {
     const list = readEvents(teamId);
@@ -120,8 +125,39 @@ function pushEvent(teamId, ev){
     const cutoff = Date.now() - 3 * 864e5;
     const next = [entry, ...list].filter(e => e.at >= cutoff).slice(0, 80);
     localStorage.setItem(eventsKey(teamId), JSON.stringify(next));
+    // Mirror to the shared backend (append-only history) so teammates see it too.
+    try { if (SB.IS_LIVE && SB.logEvent && teamId) SB.logEvent(teamId, ev); } catch {}
     return entry;
   } catch { return null; }
+}
+
+// ── SHARED STORE BRIDGE ───────────────────────────────────────────────────────
+// Makes browser-local features (team board, reports, spaces, attendance, notes…)
+// shared across the team and historical, by mirroring each localStorage key to
+// the Supabase team_store. Reads prefer the shared copy; writes go to BOTH (so
+// the app still works offline / before the SQL is run). A small in-memory cache
+// lets synchronous code (existing read* helpers) see shared data after hydration.
+const _sharedCache = {}; // { 'teamId::storeKey': value }
+function _scKey(teamId, k){ return (teamId||'demo') + '::' + k; }
+
+// storeKey from a full localStorage key by stripping the 'ss-' prefix and teamId.
+// We keep the human-readable suffix (e.g. 'teamboard', 'reports', 'attendance-2026-06-24').
+function sharedSet(teamId, storeKey, value){
+  _sharedCache[_scKey(teamId, storeKey)] = value;
+  try { if (SB.IS_LIVE && SB.setShared && teamId) SB.setShared(teamId, storeKey, value); } catch {}
+}
+function sharedGetCached(teamId, storeKey){
+  const v = _sharedCache[_scKey(teamId, storeKey)];
+  return v === undefined ? null : v;
+}
+// Hydrate the cache for a team from the backend; calls onReady when done so UI can refresh.
+async function hydrateShared(teamId, onReady){
+  if (!SB.IS_LIVE || !SB.getSharedByPrefix || !teamId) { onReady && onReady(false); return; }
+  try {
+    const all = await SB.getSharedByPrefix(teamId, ''); // all keys for this team
+    Object.entries(all || {}).forEach(([k, v]) => { _sharedCache[_scKey(teamId, k)] = v; });
+    onReady && onReady(true);
+  } catch { onReady && onReady(false); }
 }
 
 function playChime() {
@@ -3939,8 +3975,15 @@ function TeamTab({ tasks, members, isManager = true, teamId = 'demo', session, o
 function reportKey(teamId, email) { return `ss-dailyreport-${teamId}-${email}`; }
 // Submitted reports the manager can review & question (shared store per team)
 function submittedReportsKey(teamId) { return `ss-reports-${teamId}`; }
-function readSubmittedReports(teamId) { try { return JSON.parse(localStorage.getItem(submittedReportsKey(teamId)) || '[]'); } catch { return []; } }
-function writeSubmittedReports(teamId, list) { try { localStorage.setItem(submittedReportsKey(teamId), JSON.stringify(list)); } catch {} }
+function readSubmittedReports(teamId) {
+  const shared = sharedGetCached(teamId, 'reports');
+  if (shared && Array.isArray(shared)) return shared;
+  try { return JSON.parse(localStorage.getItem(submittedReportsKey(teamId)) || '[]'); } catch { return []; }
+}
+function writeSubmittedReports(teamId, list) {
+  try { localStorage.setItem(submittedReportsKey(teamId), JSON.stringify(list)); } catch {}
+  sharedSet(teamId, 'reports', list); // mirror → manager on any device sees submissions
+}
 
 function DailyReportTab({ tasks = [], session, team, members = [], isManager = false }) {
   const c = useC();
@@ -4238,7 +4281,13 @@ function ReportsTab({ team, members = [], session }) {
   const [dayFilter, setDayFilter] = useState('all');
   const [period, setPeriod] = useState('week'); // week | month | year | all
   const refresh = () => setReports(readSubmittedReports(teamId));
-  useEffect(() => { const t = setInterval(refresh, 8000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [teamId]);
+  useEffect(() => {
+    hydrateShared(teamId, () => refresh());
+    let unsub = () => {};
+    try { if (SB.IS_LIVE && SB.subscribeToStore) unsub = SB.subscribeToStore(teamId, (key, value) => { if (key === 'reports' && Array.isArray(value)) { _sharedCache[_scKey(teamId, 'reports')] = value; setReports(value); } }); } catch {}
+    const t = setInterval(refresh, 8000);
+    return () => { clearInterval(t); try { unsub(); } catch {} }; /* eslint-disable-next-line */
+  }, [teamId]);
 
   // Period window: keep reports within the selected look-back range.
   const now = Date.now();
@@ -7465,8 +7514,16 @@ function boardIcon(name, size=17){
   }
 }
 function teamBoardKey(teamId){ return 'ss-teamboard-'+teamId; }
-function readTeamBoard(teamId){ try{ return JSON.parse(localStorage.getItem(teamBoardKey(teamId))||'[]'); }catch{ return []; } }
-function writeTeamBoard(teamId,posts){ try{ localStorage.setItem(teamBoardKey(teamId),JSON.stringify(posts)); }catch{} }
+function readTeamBoard(teamId){
+  // Prefer shared (team-wide) copy; fall back to local cache.
+  const shared = sharedGetCached(teamId, 'teamboard');
+  if (shared && Array.isArray(shared)) return shared;
+  try{ return JSON.parse(localStorage.getItem(teamBoardKey(teamId))||'[]'); }catch{ return []; }
+}
+function writeTeamBoard(teamId,posts){
+  try{ localStorage.setItem(teamBoardKey(teamId),JSON.stringify(posts)); }catch{}
+  sharedSet(teamId, 'teamboard', posts); // mirror to backend → visible to all members
+}
 
 function TeamBoard({ teamId='demo', session, isManager, onClaimTask, onGoto }){
   const c=useC(); const { dark }=useTheme();
@@ -7483,9 +7540,20 @@ function TeamBoard({ teamId='demo', session, isManager, onClaimTask, onGoto }){
   useEffect(()=>{
     const refresh=()=>setPosts(readTeamBoard(teamId));
     const onStorage=(e)=>{ if(e.key===teamBoardKey(teamId)) refresh(); };
+    // Hydrate from the shared backend so the whole team sees the same posts.
+    hydrateShared(teamId, ()=>refresh());
+    // Live updates when any teammate posts/edits.
+    let unsub=()=>{};
+    try {
+      if (SB.IS_LIVE && SB.subscribeToStore) {
+        unsub = SB.subscribeToStore(teamId, (key, value)=>{
+          if (key==='teamboard' && Array.isArray(value)) { _sharedCache[_scKey(teamId,'teamboard')] = value; setPosts(value); }
+        });
+      }
+    } catch {}
     const t=setInterval(refresh,15000);
     window.addEventListener('storage',onStorage);
-    return ()=>{ clearInterval(t); window.removeEventListener('storage',onStorage); };
+    return ()=>{ clearInterval(t); window.removeEventListener('storage',onStorage); try{unsub();}catch{} };
   },[teamId]);
 
   const persist=(next)=>{ setPosts(next); writeTeamBoard(teamId,next); };
@@ -11018,6 +11086,14 @@ export default function App() {
           localStorage.setItem(exKey, JSON.stringify([...already, ...newOnes.map(x => x.id)]));
         } catch (e) {}
         setHistory((past||[]).filter(p=>p.date!==TODAY()));
+        // Hydrate shared team data (board, reports, spaces, etc.) + event history.
+        try { await hydrateShared(team.id); } catch (e) {}
+        try {
+          if (SB.IS_LIVE && SB.getEvents) {
+            const evs = await SB.getEvents(team.id, 80);
+            if (evs && evs.length) { _sharedCache[_scKey(team.id, '__events__')] = evs; }
+          }
+        } catch (e) {}
         setMessages(msgs||[]);
         if(mems&&mems.length>0){
           // Ensure the logged-in user's own uploaded avatar shows even if the
