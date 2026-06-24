@@ -1031,18 +1031,84 @@ function buildSiteContext({ teamId = 'demo', tasks = [], members = [], history =
 // reliable fallback whenever the AI service is unavailable or returns junk, so
 // "Ask AI" always gives a useful, grounded answer instead of an error.
 function answerFromData(question, ctx, reports = []) {
-  const q = (question || '').toLowerCase();
-  const { tasks = [], members = [], performance = [], history = [], teamName = 'Team', schedule = {} } = ctx || {};
+  const q = (question || '').toLowerCase().trim();
+  const { tasks = [], members = [], performance = [], history = [], teamName = 'Team', schedule = {}, attendance = {}, spaces = [], myTasks = [], userName = 'you' } = ctx || {};
   const done = tasks.filter(t => t.status === 'done');
-  const blocked = tasks.filter(t => t.status === 'blocked');
+  const blocked = tasks.filter(t => t.status === 'blocked' || t.blocker);
   const open = tasks.filter(t => t.status !== 'done');
+  const todo = tasks.filter(t => t.status === 'todo');
   const inProg = tasks.filter(t => t.status === 'in-progress');
   const pct = tasks.length ? Math.round(done.length / tasks.length * 100) : 0;
   const ranked = [...performance].filter(p => p.total > 0).sort((a, b) => b.pct - a.pct || b.done - a.done);
-  const fmtList = (arr, n = 6) => arr.slice(0, n).map(t => '• ' + (t.title || t.text) + (t.assignee_name ? ' — ' + t.assignee_name.split(' ')[0] : '')).join('\n');
+  const titleOf = (t) => t.title || t.text || 'task';
+  const first = (n) => (n || '').split(/[\s@]/)[0];
+  const fmtTasks = (arr, n = 8) => arr.length ? arr.slice(0, n).map(t => '• ' + titleOf(t) + (t.assignee_name ? ' — ' + first(t.assignee_name) : '') + (t.status && t.status !== 'todo' ? ' [' + t.status + ']' : '') + (t.priority && t.priority !== 'medium' ? ' (' + t.priority + ')' : '')).join('\n') + (arr.length > n ? '\n…and ' + (arr.length - n) + ' more' : '') : '';
 
-  // ── Performance from submitted reports ──
-  if ((q.includes('report') && (q.includes('performance') || q.includes('how') || q.includes('summary'))) || (q.includes('using the report'))) {
+  // ── Detect a person mentioned in the question ──
+  const findPerson = () => {
+    for (const m of members) {
+      const name = (m.name || m.email || '').toLowerCase();
+      const fn = name.split(/[\s@]/)[0];
+      const handle = (m.email || '').split('@')[0].toLowerCase();
+      if (fn && fn.length > 2 && q.includes(fn)) return m;
+      if (handle && handle.length > 2 && q.includes(handle)) return m;
+    }
+    return null;
+  };
+  const person = findPerson();
+  const tasksFor = (m) => tasks.filter(t => (t.assignee_email || '').toLowerCase() === (m.email || '').toLowerCase());
+
+  // Intent flags
+  const wantsCount = /(how many|count|number of|how much)/.test(q);
+  const wantsBlocked = /(blocker|blocked|stuck)/.test(q);
+  const wantsDone = /(done|completed|finished|complete)/.test(q);
+  const wantsProgress = /(in progress|working on|wip|ongoing)/.test(q);
+  const wantsTodo = /(to ?do|pending|left|remaining|yet to|open task)/.test(q);
+  const wantsOnline = /(online|offline|present|available|here|away|on break|active now|status)/.test(q);
+  const wantsFocus = /(focus|priorit|what should|what to do)/.test(q);
+  const wantsReports = /report/.test(q);
+  const wantsSpaces = /(space|project|workspace)/.test(q);
+  const wantsHistory = /(history|trend|past|over time|this week|last week|streak)/.test(q);
+  const wantsList = /(list|show|what are|which)/.test(q);
+
+  // ── PERSON-SPECIFIC ANSWERS ──
+  if (person) {
+    const pt = tasksFor(person);
+    const pName = person.name || first(person.email);
+    const pDone = pt.filter(t => t.status === 'done');
+    const pBlocked = pt.filter(t => t.status === 'blocked' || t.blocker);
+    const pProg = pt.filter(t => t.status === 'in-progress');
+    const pTodo = pt.filter(t => t.status === 'todo');
+    const pPct = pt.length ? Math.round(pDone.length / pt.length * 100) : 0;
+
+    if (wantsBlocked) {
+      if (!pBlocked.length) return `${pName} has no blocked tasks right now.`;
+      return `${pName} has ${pBlocked.length} blocked task${pBlocked.length !== 1 ? 's' : ''}:\n\n` + fmtTasks(pBlocked);
+    }
+    if (wantsDone) return `${pName} has completed ${pDone.length} of ${pt.length} task${pt.length !== 1 ? 's' : ''} (${pPct}%).` + (pDone.length ? `\n\n${fmtTasks(pDone)}` : '');
+    if (wantsProgress) return pProg.length ? `${pName} is working on ${pProg.length} task${pProg.length !== 1 ? 's' : ''}:\n\n${fmtTasks(pProg)}` : `${pName} has nothing marked in progress right now.`;
+    if (wantsTodo) return pTodo.length ? `${pName} has ${pTodo.length} task${pTodo.length !== 1 ? 's' : ''} to do:\n\n${fmtTasks(pTodo)}` : `${pName} has no pending to-do tasks.`;
+    if (wantsOnline) {
+      const r = attendance[person.email] || {};
+      const onBreak = (r.breaks || []).some(b => !b.end);
+      const online = r.online !== false && r.lastSeen && (Date.now() - r.lastSeen) < 120000;
+      return `${pName} is currently ${onBreak ? 'on a break' : online ? 'online' : 'offline'}.`;
+    }
+    if (wantsCount || /\btasks?\b/.test(q)) {
+      let out = `${pName} has ${pt.length} task${pt.length !== 1 ? 's' : ''} total — ${pDone.length} done, ${pProg.length} in progress, ${pTodo.length} to do${pBlocked.length ? `, ${pBlocked.length} blocked` : ''} (${pPct}% complete).`;
+      if (pt.length) out += `\n\n${fmtTasks(pt)}`;
+      return out;
+    }
+    // default person summary
+    let out = `${pName}: ${pt.length} task${pt.length !== 1 ? 's' : ''}, ${pPct}% complete (${pDone.length} done, ${pProg.length} in progress, ${pTodo.length} to do${pBlocked.length ? `, ${pBlocked.length} blocked` : ''}).`;
+    if (pt.length) out += `\n\n${fmtTasks(pt)}`;
+    return out;
+  }
+
+  // ── TEAM-WIDE INTENTS ──
+
+  // Reports performance
+  if (wantsReports && (/(performance|how|summary|doing|using)/.test(q))) {
     if (!reports.length) return "No reports have been submitted yet. Once your team submits daily reports, I can summarize performance, recurring blockers, and trends from them here.";
     const byPerson = {};
     reports.forEach(r => { const k = r.authorName || r.authorEmail; (byPerson[k] = byPerson[k] || []).push(r); });
@@ -1054,21 +1120,58 @@ function answerFromData(question, ctx, reports = []) {
       const b = rs.reduce((s, r) => s + (r.stats?.blocked || 0), 0);
       return `• ${name}: ${rs.length} report${rs.length !== 1 ? 's' : ''}, ${d} completed${b ? `, ${b} blocked` : ''}`;
     }).join('\n');
-    const mostBlocked = Object.entries(byPerson).map(([n, rs]) => [n, rs.reduce((s, r) => s + (r.stats?.blocked || 0), 0)]).sort((a, b) => b[1] - a[1])[0];
-    if (mostBlocked && mostBlocked[1] > 0) out += `\n\n${mostBlocked[0]} is reporting the most blockers — worth a check-in.`;
     return out;
   }
 
-  // ── Blockers ──
-  if (q.includes('blocker') || q.includes('blocked') || q.includes('stuck')) {
-    if (!blocked.length) return "No blockers right now — nothing is marked blocked. 👍";
-    return `There ${blocked.length === 1 ? 'is' : 'are'} ${blocked.length} blocked task${blocked.length !== 1 ? 's' : ''}:\n\n` +
-      blocked.map(t => `• ${t.title || t.text}${t.assignee_name ? ' (' + t.assignee_name.split(' ')[0] + ')' : ''}${t.blocker ? ' — ' + t.blocker : ''}`).join('\n');
+  // Counts ("how many tasks / done / blocked")
+  if (wantsCount) {
+    if (wantsBlocked) return `There ${blocked.length === 1 ? 'is' : 'are'} ${blocked.length} blocked task${blocked.length !== 1 ? 's' : ''}.` + (blocked.length ? `\n\n${fmtTasks(blocked)}` : '');
+    if (wantsDone) return `${done.length} of ${tasks.length} task${tasks.length !== 1 ? 's' : ''} ${done.length === 1 ? 'is' : 'are'} done (${pct}%).`;
+    if (wantsProgress) return `${inProg.length} task${inProg.length !== 1 ? 's' : ''} in progress.` + (inProg.length ? `\n\n${fmtTasks(inProg)}` : '');
+    if (wantsTodo) return `${todo.length} task${todo.length !== 1 ? 's' : ''} still to do.` + (todo.length ? `\n\n${fmtTasks(todo)}` : '');
+    return `There are ${tasks.length} tasks total: ${done.length} done, ${inProg.length} in progress, ${todo.length} to do, ${blocked.length} blocked.`;
   }
 
-  // ── Who's performing best ──
-  if ((q.includes('performing') || q.includes('best') || q.includes('top') || q.includes('leaderboard')) && !q.includes('report')) {
-    if (!ranked.length) return "No task data yet to rank performance. Once tasks are assigned and worked on, I'll show who's leading.";
+  // Blockers
+  if (wantsBlocked) {
+    if (!blocked.length) return "No blockers right now — nothing is marked blocked. \ud83d\udc4d";
+    return `There ${blocked.length === 1 ? 'is' : 'are'} ${blocked.length} blocked task${blocked.length !== 1 ? 's' : ''}:\n\n` +
+      blocked.map(t => `• ${titleOf(t)}${t.assignee_name ? ' (' + first(t.assignee_name) + ')' : ''}${t.blocker ? ' — ' + t.blocker : ''}`).join('\n');
+  }
+
+  // Status lists
+  if (wantsDone && wantsList) return done.length ? `Completed (${done.length}):\n\n${fmtTasks(done)}` : 'Nothing completed yet.';
+  if (wantsProgress) return inProg.length ? `In progress (${inProg.length}):\n\n${fmtTasks(inProg)}` : 'Nothing in progress right now.';
+  if (wantsTodo) return todo.length ? `To do (${todo.length}):\n\n${fmtTasks(todo)}` : 'No pending to-do tasks.';
+
+  // Who's online / attendance
+  if (wantsOnline) {
+    const lines = members.map(m => {
+      const r = attendance[m.email] || {};
+      const onBreak = (r.breaks || []).some(b => !b.end);
+      const online = r.online !== false && r.lastSeen && (Date.now() - r.lastSeen) < 120000;
+      return `• ${m.name || first(m.email)}: ${onBreak ? 'on break' : online ? 'online' : 'offline'}`;
+    });
+    const onlineCount = members.filter(m => { const r = attendance[m.email] || {}; return r.online !== false && r.lastSeen && (Date.now() - r.lastSeen) < 120000; }).length;
+    return `${onlineCount} of ${members.length} online right now:\n\n${lines.join('\n')}`;
+  }
+
+  // Spaces / projects
+  if (wantsSpaces) {
+    if (!spaces.length) return "No project spaces yet.";
+    return `Project spaces (${spaces.length}):\n\n` + spaces.map(s => `• ${s.name || s.key}: ${(s.items || []).length} items, ${(s.items || []).filter(i => i.status !== 'done').length} open`).join('\n');
+  }
+
+  // History / trends
+  if (wantsHistory) {
+    if (!history.length) return "No past stand-up history on record yet — trends will appear as days accumulate.";
+    const last = history.slice(0, 7).map(h => { const dt = h.tasks || []; const d = dt.filter(t => t.status === 'done').length; return `• ${h.date}: ${d}/${dt.length} done`; });
+    return `Recent stand-ups (${history.length} on record):\n\n${last.join('\n')}`;
+  }
+
+  // Leaderboard / best
+  if ((/(performing|best|top|leaderboard|rank)/.test(q)) && !wantsReports) {
+    if (!ranked.length) return "No task data yet to rank performance.";
     const top = ranked.slice(0, 3);
     let out = 'Top performers by completion rate:\n\n' + top.map((p, i) => `${i + 1}. ${p.name} — ${p.pct}% (${p.done}/${p.total} done${p.blocked ? ', ' + p.blocked + ' blocked' : ''})`).join('\n');
     const low = ranked[ranked.length - 1];
@@ -1076,34 +1179,35 @@ function answerFromData(question, ctx, reports = []) {
     return out;
   }
 
-  // ── Team status / how is the team doing ──
-  if (q.includes('team') && (q.includes('doing') || q.includes('status') || q.includes('how'))) {
+  // Team status
+  if (/(team|overall|everyone|we)/.test(q) && /(doing|status|how|going|progress)/.test(q)) {
     let out = `${teamName} is at ${pct}% completion — ${done.length} of ${tasks.length} tasks done, ${inProg.length} in progress${blocked.length ? `, ${blocked.length} blocked` : ''}.`;
     if (ranked.length) out += `\n\nLeading: ${ranked.slice(0, 2).map(p => p.name + ' (' + p.pct + '%)').join(', ')}.`;
-    if (blocked.length) out += `\n\n⚠️ ${blocked.length} blocker${blocked.length !== 1 ? 's need' : ' needs'} attention.`;
-    else out += `\n\nNo blockers — clear runway.`;
+    out += blocked.length ? `\n\n\u26a0\ufe0f ${blocked.length} blocker${blocked.length !== 1 ? 's need' : ' needs'} attention.` : `\n\nNo blockers — clear runway.`;
     return out;
   }
 
-  // ── What should I focus on today ──
-  if (q.includes('focus') || (q.includes('today') && (q.includes('what') || q.includes('should')))) {
-    const mine = ctx.myTasks && ctx.myTasks.length ? ctx.myTasks : open;
+  // Focus
+  if (wantsFocus) {
+    const mine = myTasks && myTasks.length ? myTasks : open;
     const myOpen = mine.filter(t => t.status !== 'done');
-    if (!myOpen.length) return "You're all caught up — no open tasks. 🎉 Good time to pick up something new or help unblock a teammate.";
+    if (!myOpen.length) return "You're all caught up — no open tasks. \ud83c\udf89";
     const crit = myOpen.filter(t => t.priority === 'critical' || t.priority === 'high');
     const myBlocked = myOpen.filter(t => t.status === 'blocked');
     let out = '';
-    if (crit.length) out += `Start with high-priority work:\n${fmtList(crit)}\n\n`;
-    if (myBlocked.length) out += `Unblock these first:\n${fmtList(myBlocked)}\n\n`;
-    if (!out) out = `Here's what's open:\n${fmtList(myOpen)}\n\n`;
+    if (crit.length) out += `Start with high-priority work:\n${fmtTasks(crit)}\n\n`;
+    if (myBlocked.length) out += `Unblock these first:\n${fmtTasks(myBlocked)}\n\n`;
+    if (!out) out = `Here's what's open:\n${fmtTasks(myOpen)}`;
     return out.trim();
   }
 
-  // ── Today's summary / general default ──
-  let out = `${teamName} — today's snapshot:\n\n• ${done.length} completed (${pct}%)\n• ${inProg.length} in progress\n• ${open.filter(t => t.status === 'todo').length} to do\n• ${blocked.length} blocked`;
-  if (inProg.length) out += `\n\nActively moving:\n${fmtList(inProg, 4)}`;
-  if (blocked.length) out += `\n\n⚠️ Blocked:\n${fmtList(blocked, 3)}`;
-  if (history.length) out += `\n\n(${history.length} past stand-ups on record — ask me about trends or a specific person.)`;
+  // Generic task list request
+  if (wantsList && /\btask/.test(q)) return tasks.length ? `All tasks (${tasks.length}):\n\n${fmtTasks(tasks, 15)}` : 'No tasks yet.';
+
+  // ── Default: helpful snapshot + guidance on what I can answer ──
+  let out = `${teamName} — snapshot:\n\n• ${done.length} completed (${pct}%)\n• ${inProg.length} in progress\n• ${todo.length} to do\n• ${blocked.length} blocked`;
+  if (inProg.length) out += `\n\nActively moving:\n${fmtTasks(inProg, 4)}`;
+  out += `\n\nYou can ask me things like: "how many tasks does [name] have", "what is [name] working on", "any blockers", "who's online", "team performance from reports", "show project spaces", or "this week's trend".`;
   return out;
 }
 
@@ -1147,7 +1251,7 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
     if(!input.trim()||loading)return;
     setMsgs(p=>[...p,{id:'u'+Date.now(),role:'user',text:input.trim()}]);
     setInput(''); setLoading(true);
-    try{ const ctx=buildSiteContext({teamId,tasks,members,history,teamName,userName:name,myTasks}); let reports=[]; try{reports=readSubmittedReports(teamId);}catch(e){} let reply=''; try{ const ai=await askAI(input.trim(),{...ctx,reports}); reply=(typeof ai==='string'?ai:(ai?.text||'')).trim(); if(!reply||/^(sorry|try again|i can'?t|as an ai)/i.test(reply)) reply=answerFromData(input.trim(),ctx,reports); }catch(e){ reply=answerFromData(input.trim(),ctx,reports); } setMsgs(p=>[...p,{id:'a'+Date.now(),role:'assistant',text:reply}]); }
+    try{ const msg=input.trim(); const ctx=buildSiteContext({teamId,tasks,members,history,teamName,userName:name,myTasks}); let reports=[]; try{reports=readSubmittedReports(teamId);}catch(e){} const ql=msg.toLowerCase(); const namedPerson=members.some(m=>{ const fn=(m.name||m.email||'').toLowerCase().split(/[\s@]/)[0]; const h=(m.email||'').split('@')[0].toLowerCase(); return (fn&&fn.length>2&&ql.includes(fn))||(h&&h.length>2&&ql.includes(h)); }); const factual=namedPerson||/(how many|count|number of|blocker|blocked|online|offline|on break|to ?do|in progress|completed today|who is|whose|list|show me|how much)/.test(ql); let reply=''; if(factual){ reply=answerFromData(msg,ctx,reports); } else { try{ const ai=await askAI(msg,{...ctx,reports}); reply=(typeof ai==='string'?ai:(ai?.text||'')).trim(); if(!reply||/^(sorry|try again|i can'?t|as an ai)/i.test(reply)) reply=answerFromData(msg,ctx,reports); }catch(e){ reply=answerFromData(msg,ctx,reports); } } setMsgs(p=>[...p,{id:'a'+Date.now(),role:'assistant',text:reply||answerFromData(msg,ctx,reports)}]); }
     catch(e){ setMsgs(p=>[...p,{id:'e'+Date.now(),role:'assistant',text:'Try again!'}]); }
     setLoading(false);
   };
@@ -1287,13 +1391,23 @@ function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], te
     setInput(''); setLoading(true);
     let reports=[]; try{ reports=readSubmittedReports(teamId); }catch(e){}
     const ctx=buildSiteContext({teamId,tasks,members,history,teamName,userName:name,myTasks});
+    // Factual lookups (a named person, a count, a status/blocker query) are answered
+    // directly from data — accurate and never hallucinated. Open-ended/advisory
+    // questions try the AI first, then fall back to the data engine.
+    const ql=msg.toLowerCase();
+    const namedPerson=members.some(m=>{ const fn=(m.name||m.email||'').toLowerCase().split(/[\s@]/)[0]; const h=(m.email||'').split('@')[0].toLowerCase(); return (fn&&fn.length>2&&ql.includes(fn))||(h&&h.length>2&&ql.includes(h)); });
+    const factual=namedPerson||/(how many|count|number of|blocker|blocked|online|offline|on break|to ?do|in progress|completed today|who is|whose|list|show me|how much)/.test(ql);
     let reply='';
-    try{
-      const ai=await askAI(msg, { ...ctx, reports });
-      reply=(typeof ai==='string'?ai:(ai?.text||'')).trim();
-      if(looksBad(reply)) reply=answerFromData(msg,ctx,reports);
-    }catch(e){
+    if(factual){
       reply=answerFromData(msg,ctx,reports);
+    } else {
+      try{
+        const ai=await askAI(msg, { ...ctx, reports });
+        reply=(typeof ai==='string'?ai:(ai?.text||'')).trim();
+        if(looksBad(reply)) reply=answerFromData(msg,ctx,reports);
+      }catch(e){
+        reply=answerFromData(msg,ctx,reports);
+      }
     }
     setMsgs(p=>[...p,{id:'a'+Date.now(),role:'assistant',text:reply||answerFromData(msg,ctx,reports)}]);
     setLoading(false);
