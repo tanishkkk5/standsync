@@ -1067,183 +1067,169 @@ function buildSiteContext({ teamId = 'demo', tasks = [], members = [], history =
 // reliable fallback whenever the AI service is unavailable or returns junk, so
 // "Ask AI" always gives a useful, grounded answer instead of an error.
 function answerFromData(question, ctx, reports = []) {
-  const q = (question || '').toLowerCase().trim();
-  const { tasks = [], members = [], performance = [], history = [], teamName = 'Team', schedule = {}, attendance = {}, spaces = [], myTasks = [], userName = 'you' } = ctx || {};
-  const done = tasks.filter(t => t.status === 'done');
-  const blocked = tasks.filter(t => t.status === 'blocked' || t.blocker);
-  const open = tasks.filter(t => t.status !== 'done');
-  const todo = tasks.filter(t => t.status === 'todo');
-  const inProg = tasks.filter(t => t.status === 'in-progress');
-  const pct = tasks.length ? Math.round(done.length / tasks.length * 100) : 0;
-  const ranked = [...performance].filter(p => p.total > 0).sort((a, b) => b.pct - a.pct || b.done - a.done);
+  const raw = (question || '').trim();
+  const q = raw.toLowerCase();
+  const { tasks = [], members = [], performance = [], history = [], teamName = 'Team', attendance = {}, spaces = [], myTasks = [], userName = 'you' } = ctx || {};
+
+  // ---- shared helpers ----
   const titleOf = (t) => t.title || t.text || 'task';
   const first = (n) => (n || '').split(/[\s@]/)[0];
-  const fmtTasks = (arr, n = 8) => arr.length ? arr.slice(0, n).map(t => '• ' + titleOf(t) + (t.assignee_name ? ' — ' + first(t.assignee_name) : '') + (t.status && t.status !== 'todo' ? ' [' + t.status + ']' : '') + (t.priority && t.priority !== 'medium' ? ' (' + t.priority + ')' : '')).join('\n') + (arr.length > n ? '\n…and ' + (arr.length - n) + ' more' : '') : '';
-
-  // ── Detect a person mentioned in the question ──
-  const findPerson = () => {
-    for (const m of members) {
-      const name = (m.name || m.email || '').toLowerCase();
-      const fn = name.split(/[\s@]/)[0];
-      const handle = (m.email || '').split('@')[0].toLowerCase();
-      if (fn && fn.length > 2 && q.includes(fn)) return m;
-      if (handle && handle.length > 2 && q.includes(handle)) return m;
-    }
-    return null;
-  };
-  const person = findPerson();
+  const isBlocked = (t) => t.status === 'blocked' || !!t.blocker;
+  const isDone = (t) => t.status === 'done';
+  const isProg = (t) => t.status === 'in-progress';
+  const isTodo = (t) => t.status === 'todo' || (!isDone(t) && !isProg(t) && !isBlocked(t));
+  const fmtTasks = (arr, n = 10) => !arr.length ? '' : arr.slice(0, n).map(t => '\u2022 ' + titleOf(t) + (t.assignee_name ? ' \u2014 ' + first(t.assignee_name) : '') + (t.status && t.status !== 'todo' ? ' [' + t.status + ']' : '') + (t.priority && t.priority !== 'medium' ? ' (' + t.priority + ')' : '')).join('\n') + (arr.length > n ? '\n\u2026and ' + (arr.length - n) + ' more' : '');
   const tasksFor = (m) => tasks.filter(t => (t.assignee_email || '').toLowerCase() === (m.email || '').toLowerCase());
+  const pctOf = (arr) => arr.length ? Math.round(arr.filter(isDone).length / arr.length * 100) : 0;
 
-  // Intent flags
-  const wantsCount = /(how many|count|number of|how much)/.test(q);
-  const wantsBlocked = /(blocker|blocked|stuck)/.test(q);
-  const wantsDone = /(done|completed|finished|complete)/.test(q);
-  const wantsProgress = /(in progress|working on|wip|ongoing)/.test(q);
-  const wantsTodo = /(to ?do|pending|left|remaining|yet to|open task)/.test(q);
-  const wantsOnline = /(online|offline|present|available|here|away|on break|active now|status)/.test(q);
-  const wantsFocus = /(focus|priorit|what should|what to do)/.test(q);
-  const wantsReports = /report/.test(q);
-  const wantsSpaces = /(space|project|workspace)/.test(q);
-  const wantsHistory = /(history|trend|past|over time|this week|last week|streak)/.test(q);
-  const wantsList = /(list|show|what are|which)/.test(q);
+  // ---- entity detection: find ALL people named in the question (supports partial) ----
+  const matchedPeople = members.filter(m => {
+    const fn = (m.name || m.email || '').toLowerCase().split(/[\s@]/)[0];
+    const ln = (m.name || '').toLowerCase().split(/\s+/)[1] || '';
+    const handle = (m.email || '').split('@')[0].toLowerCase();
+    return (fn && fn.length > 2 && q.includes(fn)) ||
+           (ln && ln.length > 2 && q.includes(ln)) ||
+           (handle && handle.length > 2 && q.includes(handle));
+  });
+  const person = matchedPeople[0] || null;
 
-  // ── PERSON-SPECIFIC ANSWERS ──
+  // ---- intent detection (rich synonym sets) ----
+  const has = (re) => re.test(q);
+  const wantsCount    = has(/\b(how many|how much|count|number of|total|tally)/);
+  const wantsBlocked  = has(/\b(blocker|blocked|stuck|blocking|impediment|waiting on)/);
+  const wantsDone     = has(/\b(done|completed|finished|complete|closed|shipped|delivered)/);
+  const wantsProgress = has(/\b(in progress|working on|wip|ongoing|active|currently doing|underway)/);
+  const wantsTodo     = has(/\b(to ?do|pending|left|remaining|yet to|not started|backlog|outstanding|open task)/);
+  const wantsOnline   = has(/\b(online|offline|present|available|here|away|on break|active now|clocked|attendance|who('?s| is) (in|here|working))/);
+  const wantsFocus    = has(/\b(focus|prioriti|what should|what to do|where to start|next up|recommend)/);
+  const wantsReports  = has(/\breport/);
+  const wantsSpaces   = has(/\b(space|project|workspace|board)/) && !has(/team ?board/);
+  const wantsHistory  = has(/\b(history|trend|past|over time|this week|last week|streak|yesterday|recent)/);
+  const wantsList     = has(/\b(list|show|what are|which|give me|display|see)/);
+  const wantsWho      = has(/\b(who|whose|which person|which member|assigned to)/);
+  const wantsMost     = has(/\b(most|highest|top|best|busiest|leader)/);
+  const wantsLeast    = has(/\b(least|fewest|lowest|worst|behind|struggling|lagging)/);
+  const wantsStatus   = has(/\b(status|state|update|how('?s| is)|standing|where('?s| is))/);
+
+  // ===== A) PERSON-SPECIFIC =====
   if (person) {
     const pt = tasksFor(person);
     const pName = person.name || first(person.email);
-    const pDone = pt.filter(t => t.status === 'done');
-    const pBlocked = pt.filter(t => t.status === 'blocked' || t.blocker);
-    const pProg = pt.filter(t => t.status === 'in-progress');
-    const pTodo = pt.filter(t => t.status === 'todo');
-    const pPct = pt.length ? Math.round(pDone.length / pt.length * 100) : 0;
+    const d = pt.filter(isDone), b = pt.filter(isBlocked), pr = pt.filter(isProg), td = pt.filter(isTodo);
+    const p = pctOf(pt);
 
-    if (wantsBlocked) {
-      if (!pBlocked.length) return `${pName} has no blocked tasks right now.`;
-      return `${pName} has ${pBlocked.length} blocked task${pBlocked.length !== 1 ? 's' : ''}:\n\n` + fmtTasks(pBlocked);
+    // comparative across two people ("does madhan have more than tanisk")
+    if (matchedPeople.length >= 2 && has(/\b(more|less|fewer|than|vs|versus|compare)\b/)) {
+      const lines = matchedPeople.map(m => { const mt = tasksFor(m); return `\u2022 ${m.name || first(m.email)}: ${mt.length} tasks, ${pctOf(mt)}% done (${mt.filter(isDone).length}/${mt.length})`; });
+      return `Comparison:\n\n${lines.join('\n')}`;
     }
-    if (wantsDone) return `${pName} has completed ${pDone.length} of ${pt.length} task${pt.length !== 1 ? 's' : ''} (${pPct}%).` + (pDone.length ? `\n\n${fmtTasks(pDone)}` : '');
-    if (wantsProgress) return pProg.length ? `${pName} is working on ${pProg.length} task${pProg.length !== 1 ? 's' : ''}:\n\n${fmtTasks(pProg)}` : `${pName} has nothing marked in progress right now.`;
-    if (wantsTodo) return pTodo.length ? `${pName} has ${pTodo.length} task${pTodo.length !== 1 ? 's' : ''} to do:\n\n${fmtTasks(pTodo)}` : `${pName} has no pending to-do tasks.`;
+
+    if (wantsBlocked) return b.length ? `${pName} has ${b.length} blocked task${b.length !== 1 ? 's' : ''}:\n\n${fmtTasks(b)}` : `${pName} has no blocked tasks right now.`;
+    if (wantsDone)    return `${pName} has completed ${d.length} of ${pt.length} task${pt.length !== 1 ? 's' : ''} (${p}%).` + (d.length ? `\n\n${fmtTasks(d)}` : '');
+    if (wantsProgress)return pr.length ? `${pName} is working on ${pr.length} task${pr.length !== 1 ? 's' : ''}:\n\n${fmtTasks(pr)}` : `${pName} has nothing in progress right now.`;
+    if (wantsTodo)    return td.length ? `${pName} has ${td.length} task${td.length !== 1 ? 's' : ''} to do:\n\n${fmtTasks(td)}` : `${pName} has no pending to-do tasks.`;
     if (wantsOnline) {
       const r = attendance[person.email] || {};
-      const onBreak = (r.breaks || []).some(b => !b.end);
+      const onBreak = (r.breaks || []).some(x => !x.end);
       const online = r.online !== false && r.lastSeen && (Date.now() - r.lastSeen) < 120000;
       return `${pName} is currently ${onBreak ? 'on a break' : online ? 'online' : 'offline'}.`;
     }
-    if (wantsCount || /\btasks?\b/.test(q)) {
-      let out = `${pName} has ${pt.length} task${pt.length !== 1 ? 's' : ''} total — ${pDone.length} done, ${pProg.length} in progress, ${pTodo.length} to do${pBlocked.length ? `, ${pBlocked.length} blocked` : ''} (${pPct}% complete).`;
+    if (wantsList || wantsStatus || wantsCount || has(/\btasks?\b/) || wantsWho) {
+      let out = `${pName} has ${pt.length} task${pt.length !== 1 ? 's' : ''} \u2014 ${d.length} done, ${pr.length} in progress, ${td.length} to do${b.length ? `, ${b.length} blocked` : ''} (${p}% complete).`;
       if (pt.length) out += `\n\n${fmtTasks(pt)}`;
       return out;
     }
     // default person summary
-    let out = `${pName}: ${pt.length} task${pt.length !== 1 ? 's' : ''}, ${pPct}% complete (${pDone.length} done, ${pProg.length} in progress, ${pTodo.length} to do${pBlocked.length ? `, ${pBlocked.length} blocked` : ''}).`;
+    let out = `${pName}: ${pt.length} task${pt.length !== 1 ? 's' : ''}, ${p}% complete (${d.length} done, ${pr.length} in progress, ${td.length} to do${b.length ? `, ${b.length} blocked` : ''}).`;
     if (pt.length) out += `\n\n${fmtTasks(pt)}`;
     return out;
   }
 
-  // ── TEAM-WIDE INTENTS ──
+  // ===== B) SUPERLATIVES ("who has the most tasks / is best / is behind") =====
+  if (!wantsOnline && (wantsMost || wantsLeast) && (has(/task|work|load|done|complet|blocker|progress|perform|behind|ahead/) || wantsStatus || true)) {
+    const rows = members.map(m => { const mt = tasksFor(m); return { m, total: mt.length, done: mt.filter(isDone).length, blocked: mt.filter(isBlocked).length, pct: pctOf(mt) }; }).filter(r => r.total > 0);
+    if (rows.length) {
+      if (wantsBlocked) { const r = [...rows].sort((a,b)=>b.blocked-a.blocked)[0]; return r.blocked ? `${r.m.name || first(r.m.email)} has the most blockers (${r.blocked}).` : 'No one has any blockers right now.'; }
+      if (wantsDone || has(/best|top|highest/)) { const r = [...rows].sort((a,b)=>b.pct-a.pct||b.done-a.done)[0]; return `${r.m.name || first(r.m.email)} is leading \u2014 ${r.pct}% complete (${r.done}/${r.total} done).`; }
+      if (wantsLeast) { const r = [...rows].sort((a,b)=>a.pct-b.pct)[0]; return `${r.m.name || first(r.m.email)} is furthest behind \u2014 ${r.pct}% (${r.done}/${r.total} done).`; }
+      // default: most tasks
+      const r = [...rows].sort((a,b)=>b.total-a.total)[0];
+      return `${r.m.name || first(r.m.email)} has the most tasks (${r.total}).`;
+    }
+  }
 
-  // Reports performance
-  if (wantsReports && (/(performance|how|summary|doing|using)/.test(q))) {
-    if (!reports.length) return "No reports have been submitted yet. Once your team submits daily reports, I can summarize performance, recurring blockers, and trends from them here.";
-    const byPerson = {};
-    reports.forEach(r => { const k = r.authorName || r.authorEmail; (byPerson[k] = byPerson[k] || []).push(r); });
+  // ===== C) TEAM-WIDE METRICS =====
+  const done = tasks.filter(isDone), blocked = tasks.filter(isBlocked), prog = tasks.filter(isProg), todo = tasks.filter(isTodo);
+  const pct = pctOf(tasks);
+  const ranked = members.map(m => { const mt = tasksFor(m); return { name: m.name || first(m.email), total: mt.length, done: mt.filter(isDone).length, open: mt.filter(t=>!isDone(t)).length, blocked: mt.filter(isBlocked).length, pct: pctOf(mt) }; }).filter(r => r.total > 0).sort((a,b)=>b.pct-a.pct||b.done-a.done);
+
+  // reports performance
+  if (wantsReports && (has(/performance|how|summary|doing|using|tell/) || wantsCount)) {
+    if (!reports.length) return "No reports have been submitted yet. Once your team submits daily reports, I can summarize performance, recurring blockers, and trends from them.";
+    const byPerson = {}; reports.forEach(r => { const k = r.authorName || r.authorEmail; (byPerson[k] = byPerson[k] || []).push(r); });
     const totalDone = reports.reduce((s, r) => s + (r.stats?.completed || 0), 0);
-    const totalBlocked = reports.reduce((s, r) => s + (r.stats?.blocked || 0), 0);
-    let out = `Across ${reports.length} submitted report${reports.length !== 1 ? 's' : ''} from ${Object.keys(byPerson).length} ${Object.keys(byPerson).length !== 1 ? 'people' : 'person'}, the team logged ${totalDone} completed task${totalDone !== 1 ? 's' : ''}${totalBlocked ? ` and flagged ${totalBlocked} blocker${totalBlocked !== 1 ? 's' : ''}` : ''}.\n\n`;
-    out += Object.entries(byPerson).map(([name, rs]) => {
-      const d = rs.reduce((s, r) => s + (r.stats?.completed || 0), 0);
-      const b = rs.reduce((s, r) => s + (r.stats?.blocked || 0), 0);
-      return `• ${name}: ${rs.length} report${rs.length !== 1 ? 's' : ''}, ${d} completed${b ? `, ${b} blocked` : ''}`;
-    }).join('\n');
+    const totalBlk = reports.reduce((s, r) => s + (r.stats?.blocked || 0), 0);
+    let out = `Across ${reports.length} report${reports.length !== 1 ? 's' : ''} from ${Object.keys(byPerson).length} ${Object.keys(byPerson).length !== 1 ? 'people' : 'person'}: ${totalDone} completed${totalBlk ? `, ${totalBlk} blocked` : ''}.\n\n`;
+    out += Object.entries(byPerson).map(([n, rs]) => `\u2022 ${n}: ${rs.length} report${rs.length!==1?'s':''}, ${rs.reduce((s,r)=>s+(r.stats?.completed||0),0)} completed`).join('\n');
     return out;
   }
 
-  // Counts ("how many tasks / done / blocked")
+  // counts
   if (wantsCount) {
-    if (wantsBlocked) return `There ${blocked.length === 1 ? 'is' : 'are'} ${blocked.length} blocked task${blocked.length !== 1 ? 's' : ''}.` + (blocked.length ? `\n\n${fmtTasks(blocked)}` : '');
-    if (wantsDone) return `${done.length} of ${tasks.length} task${tasks.length !== 1 ? 's' : ''} ${done.length === 1 ? 'is' : 'are'} done (${pct}%).`;
-    if (wantsProgress) return `${inProg.length} task${inProg.length !== 1 ? 's' : ''} in progress.` + (inProg.length ? `\n\n${fmtTasks(inProg)}` : '');
-    if (wantsTodo) return `${todo.length} task${todo.length !== 1 ? 's' : ''} still to do.` + (todo.length ? `\n\n${fmtTasks(todo)}` : '');
-    return `There are ${tasks.length} tasks total: ${done.length} done, ${inProg.length} in progress, ${todo.length} to do, ${blocked.length} blocked.`;
+    if (wantsBlocked)  return `${blocked.length} blocked task${blocked.length !== 1 ? 's' : ''}.` + (blocked.length ? `\n\n${fmtTasks(blocked)}` : '');
+    if (wantsDone)     return `${done.length} of ${tasks.length} task${tasks.length !== 1 ? 's' : ''} done (${pct}%).`;
+    if (wantsProgress) return `${prog.length} task${prog.length !== 1 ? 's' : ''} in progress.` + (prog.length ? `\n\n${fmtTasks(prog)}` : '');
+    if (wantsTodo)     return `${todo.length} task${todo.length !== 1 ? 's' : ''} to do.` + (todo.length ? `\n\n${fmtTasks(todo)}` : '');
+    if (has(/member|people|team size|how many (are|is)/)) return `${members.length} team member${members.length !== 1 ? 's' : ''}: ${members.map(m=>m.name||first(m.email)).join(', ')}.`;
+    return `${tasks.length} tasks total: ${done.length} done, ${prog.length} in progress, ${todo.length} to do, ${blocked.length} blocked.`;
   }
 
-  // Blockers
-  if (wantsBlocked) {
-    if (!blocked.length) return "No blockers right now — nothing is marked blocked. \ud83d\udc4d";
-    return `There ${blocked.length === 1 ? 'is' : 'are'} ${blocked.length} blocked task${blocked.length !== 1 ? 's' : ''}:\n\n` +
-      blocked.map(t => `• ${titleOf(t)}${t.assignee_name ? ' (' + first(t.assignee_name) + ')' : ''}${t.blocker ? ' — ' + t.blocker : ''}`).join('\n');
-  }
+  if (wantsBlocked) return blocked.length ? `${blocked.length} blocked task${blocked.length !== 1 ? 's' : ''}:\n\n${blocked.map(t => '\u2022 ' + titleOf(t) + (t.assignee_name ? ' (' + first(t.assignee_name) + ')' : '') + (t.blocker ? ' \u2014 ' + t.blocker : '')).join('\n')}` : "No blockers right now \u2014 nothing is marked blocked.";
+  if (wantsProgress && wantsList) return prog.length ? `In progress (${prog.length}):\n\n${fmtTasks(prog)}` : 'Nothing in progress right now.';
+  if (wantsDone && wantsList)     return done.length ? `Completed (${done.length}):\n\n${fmtTasks(done)}` : 'Nothing completed yet.';
+  if (wantsTodo)                  return todo.length ? `To do (${todo.length}):\n\n${fmtTasks(todo)}` : 'No pending to-do tasks.';
 
-  // Status lists
-  if (wantsDone && wantsList) return done.length ? `Completed (${done.length}):\n\n${fmtTasks(done)}` : 'Nothing completed yet.';
-  if (wantsProgress) return inProg.length ? `In progress (${inProg.length}):\n\n${fmtTasks(inProg)}` : 'Nothing in progress right now.';
-  if (wantsTodo) return todo.length ? `To do (${todo.length}):\n\n${fmtTasks(todo)}` : 'No pending to-do tasks.';
-
-  // Who's online / attendance
   if (wantsOnline) {
-    const lines = members.map(m => {
-      const r = attendance[m.email] || {};
-      const onBreak = (r.breaks || []).some(b => !b.end);
-      const online = r.online !== false && r.lastSeen && (Date.now() - r.lastSeen) < 120000;
-      return `• ${m.name || first(m.email)}: ${onBreak ? 'on break' : online ? 'online' : 'offline'}`;
-    });
-    const onlineCount = members.filter(m => { const r = attendance[m.email] || {}; return r.online !== false && r.lastSeen && (Date.now() - r.lastSeen) < 120000; }).length;
-    return `${onlineCount} of ${members.length} online right now:\n\n${lines.join('\n')}`;
+    const lines = members.map(m => { const r = attendance[m.email] || {}; const onBreak = (r.breaks || []).some(x => !x.end); const online = r.online !== false && r.lastSeen && (Date.now() - r.lastSeen) < 120000; return `\u2022 ${m.name || first(m.email)}: ${onBreak ? 'on break' : online ? 'online' : 'offline'}`; });
+    const n = members.filter(m => { const r = attendance[m.email] || {}; return r.online !== false && r.lastSeen && (Date.now() - r.lastSeen) < 120000; }).length;
+    return `${n} of ${members.length} online:\n\n${lines.join('\n')}`;
   }
 
-  // Spaces / projects
-  if (wantsSpaces) {
-    if (!spaces.length) return "No project spaces yet.";
-    return `Project spaces (${spaces.length}):\n\n` + spaces.map(s => `• ${s.name || s.key}: ${(s.items || []).length} items, ${(s.items || []).filter(i => i.status !== 'done').length} open`).join('\n');
-  }
+  if (wantsSpaces) return spaces.length ? `Project spaces (${spaces.length}):\n\n${spaces.map(s => '\u2022 ' + (s.name || s.key) + ': ' + (s.items || []).length + ' items, ' + (s.items || []).filter(i => i.status !== 'done').length + ' open').join('\n')}` : "No project spaces yet.";
 
-  // History / trends
-  if (wantsHistory) {
-    if (!history.length) return "No past stand-up history on record yet — trends will appear as days accumulate.";
-    const last = history.slice(0, 7).map(h => { const dt = h.tasks || []; const d = dt.filter(t => t.status === 'done').length; return `• ${h.date}: ${d}/${dt.length} done`; });
-    return `Recent stand-ups (${history.length} on record):\n\n${last.join('\n')}`;
-  }
+  if (wantsHistory) return history.length ? `Recent stand-ups (${history.length} on record):\n\n${history.slice(0,7).map(h => { const dt = h.tasks || []; return '\u2022 ' + h.date + ': ' + dt.filter(t=>t.status==='done').length + '/' + dt.length + ' done'; }).join('\n')}` : "No stand-up history yet \u2014 trends appear as days accumulate.";
 
-  // Leaderboard / best
-  if ((/(performing|best|top|leaderboard|rank)/.test(q)) && !wantsReports) {
+  if (has(/performing|leaderboard|rank/) || (wantsMost && has(/perform/))) {
     if (!ranked.length) return "No task data yet to rank performance.";
-    const top = ranked.slice(0, 3);
-    let out = 'Top performers by completion rate:\n\n' + top.map((p, i) => `${i + 1}. ${p.name} — ${p.pct}% (${p.done}/${p.total} done${p.blocked ? ', ' + p.blocked + ' blocked' : ''})`).join('\n');
-    const low = ranked[ranked.length - 1];
-    if (ranked.length > 3 && low.pct < 50) out += `\n\n${low.name} may need support — ${low.pct}% with ${low.open} open.`;
-    return out;
+    return 'Top performers:\n\n' + ranked.slice(0,5).map((p,i)=>`${i+1}. ${p.name} \u2014 ${p.pct}% (${p.done}/${p.total})`).join('\n');
   }
 
-  // Team status
-  if (/(team|overall|everyone|we)/.test(q) && /(doing|status|how|going|progress)/.test(q)) {
-    let out = `${teamName} is at ${pct}% completion — ${done.length} of ${tasks.length} tasks done, ${inProg.length} in progress${blocked.length ? `, ${blocked.length} blocked` : ''}.`;
+  if ((has(/team|overall|everyone|we|us/) && (wantsStatus || has(/doing|going|progress/))) || (wantsStatus && !person)) {
+    let out = `${teamName} is at ${pct}% completion \u2014 ${done.length}/${tasks.length} done, ${prog.length} in progress${blocked.length ? `, ${blocked.length} blocked` : ''}.`;
     if (ranked.length) out += `\n\nLeading: ${ranked.slice(0, 2).map(p => p.name + ' (' + p.pct + '%)').join(', ')}.`;
-    out += blocked.length ? `\n\n\u26a0\ufe0f ${blocked.length} blocker${blocked.length !== 1 ? 's need' : ' needs'} attention.` : `\n\nNo blockers — clear runway.`;
+    out += blocked.length ? `\n\n\u26a0\ufe0f ${blocked.length} blocker${blocked.length !== 1 ? 's need' : ' needs'} attention.` : `\n\nNo blockers \u2014 clear runway.`;
     return out;
   }
 
-  // Focus
   if (wantsFocus) {
-    const mine = myTasks && myTasks.length ? myTasks : open;
-    const myOpen = mine.filter(t => t.status !== 'done');
-    if (!myOpen.length) return "You're all caught up — no open tasks. \ud83c\udf89";
-    const crit = myOpen.filter(t => t.priority === 'critical' || t.priority === 'high');
-    const myBlocked = myOpen.filter(t => t.status === 'blocked');
+    const mine = (myTasks && myTasks.length ? myTasks : tasks).filter(t => !isDone(t));
+    if (!mine.length) return "You're all caught up \u2014 no open tasks.";
+    const crit = mine.filter(t => t.priority === 'critical' || t.priority === 'high');
+    const mb = mine.filter(isBlocked);
     let out = '';
     if (crit.length) out += `Start with high-priority work:\n${fmtTasks(crit)}\n\n`;
-    if (myBlocked.length) out += `Unblock these first:\n${fmtTasks(myBlocked)}\n\n`;
-    if (!out) out = `Here's what's open:\n${fmtTasks(myOpen)}`;
+    if (mb.length) out += `Unblock these:\n${fmtTasks(mb)}\n\n`;
+    if (!out) out = `Here's what's open:\n${fmtTasks(mine)}`;
     return out.trim();
   }
 
-  // Generic task list request
-  if (wantsList && /\btask/.test(q)) return tasks.length ? `All tasks (${tasks.length}):\n\n${fmtTasks(tasks, 15)}` : 'No tasks yet.';
+  if (wantsList && has(/task/)) return tasks.length ? `All tasks (${tasks.length}):\n\n${fmtTasks(tasks, 20)}` : 'No tasks yet.';
+  if (has(/member|who('?s| is) (on|in) (the )?team|team list/)) return members.length ? `Team (${members.length}):\n\n${members.map(m => '\u2022 ' + (m.name || first(m.email)) + (m.role ? ' \u2014 ' + m.role : '')).join('\n')}` : 'No members yet.';
 
-  // ── Default: helpful snapshot + guidance on what I can answer ──
-  let out = `${teamName} — snapshot:\n\n• ${done.length} completed (${pct}%)\n• ${inProg.length} in progress\n• ${todo.length} to do\n• ${blocked.length} blocked`;
-  if (inProg.length) out += `\n\nActively moving:\n${fmtTasks(inProg, 4)}`;
-  out += `\n\nYou can ask me things like: "how many tasks does [name] have", "what is [name] working on", "any blockers", "who's online", "team performance from reports", "show project spaces", or "this week's trend".`;
+  // ===== D) DEFAULT \u2014 snapshot + capability hint =====
+  let out = `${teamName} \u2014 snapshot:\n\n\u2022 ${done.length} completed (${pct}%)\n\u2022 ${prog.length} in progress\n\u2022 ${todo.length} to do\n\u2022 ${blocked.length} blocked`;
+  if (prog.length) out += `\n\nActively moving:\n${fmtTasks(prog, 4)}`;
+  out += `\n\nTry asking: "how many tasks does [name] have", "what is [name] working on", "who has the most tasks", "any blockers", "who's online", "team status", or "this week's trend".`;
   return out;
 }
 
@@ -1287,7 +1273,7 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
     if(!input.trim()||loading)return;
     setMsgs(p=>[...p,{id:'u'+Date.now(),role:'user',text:input.trim()}]);
     setInput(''); setLoading(true);
-    try{ const msg=input.trim(); const ctx=buildSiteContext({teamId,tasks,members,history,teamName,userName:name,myTasks}); let reports=[]; try{reports=readSubmittedReports(teamId);}catch(e){} const ql=msg.toLowerCase(); const namedPerson=members.some(m=>{ const fn=(m.name||m.email||'').toLowerCase().split(/[\s@]/)[0]; const h=(m.email||'').split('@')[0].toLowerCase(); return (fn&&fn.length>2&&ql.includes(fn))||(h&&h.length>2&&ql.includes(h)); }); const factual=namedPerson||/(how many|count|number of|blocker|blocked|online|offline|on break|to ?do|in progress|completed today|who is|whose|list|show me|how much)/.test(ql); let reply=''; if(factual){ reply=answerFromData(msg,ctx,reports); } else { try{ const ai=await askAI(msg,{...ctx,reports}); reply=(typeof ai==='string'?ai:(ai?.text||'')).trim(); if(!reply||/^(sorry|try again|i can'?t|as an ai)/i.test(reply)) reply=answerFromData(msg,ctx,reports); }catch(e){ reply=answerFromData(msg,ctx,reports); } } setMsgs(p=>[...p,{id:'a'+Date.now(),role:'assistant',text:reply||answerFromData(msg,ctx,reports)}]); }
+    try{ const msg=input.trim(); const ctx=buildSiteContext({teamId,tasks,members,history,teamName,userName:name,myTasks}); let reports=[]; try{reports=readSubmittedReports(teamId);}catch(e){} const ql=msg.toLowerCase(); const namedPerson=members.some(m=>{ const fn=(m.name||m.email||'').toLowerCase().split(/[\s@]/)[0]; const h=(m.email||'').split('@')[0].toLowerCase(); return (fn&&fn.length>2&&ql.includes(fn))||(h&&h.length>2&&ql.includes(h)); }); const factual=namedPerson||/(how many|how much|count|number of|total|task|blocker|blocked|stuck|online|offline|on break|present|available|to ?do|pending|in progress|working on|done|completed|finished|who|whose|which|list|show|most|least|highest|lowest|best|behind|status|update|trend|spaces?|projects?|members?|performance)/.test(ql); let reply=''; if(factual){ reply=answerFromData(msg,ctx,reports); } else { try{ const ai=await askAI(msg,{...ctx,reports}); reply=(typeof ai==='string'?ai:(ai?.text||'')).trim(); if(!reply||/^(sorry|try again|i can'?t|as an ai)/i.test(reply)) reply=answerFromData(msg,ctx,reports); }catch(e){ reply=answerFromData(msg,ctx,reports); } } setMsgs(p=>[...p,{id:'a'+Date.now(),role:'assistant',text:reply||answerFromData(msg,ctx,reports)}]); }
     catch(e){ setMsgs(p=>[...p,{id:'e'+Date.now(),role:'assistant',text:'Try again!'}]); }
     setLoading(false);
   };
@@ -1432,7 +1418,7 @@ function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], te
     // questions try the AI first, then fall back to the data engine.
     const ql=msg.toLowerCase();
     const namedPerson=members.some(m=>{ const fn=(m.name||m.email||'').toLowerCase().split(/[\s@]/)[0]; const h=(m.email||'').split('@')[0].toLowerCase(); return (fn&&fn.length>2&&ql.includes(fn))||(h&&h.length>2&&ql.includes(h)); });
-    const factual=namedPerson||/(how many|count|number of|blocker|blocked|online|offline|on break|to ?do|in progress|completed today|who is|whose|list|show me|how much)/.test(ql);
+    const factual=namedPerson||/(how many|how much|count|number of|total|task|blocker|blocked|stuck|online|offline|on break|present|available|to ?do|pending|in progress|working on|done|completed|finished|who|whose|which|list|show|most|least|highest|lowest|best|behind|status|update|trend|spaces?|projects?|members?|performance)/.test(ql);
     let reply='';
     if(factual){
       reply=answerFromData(msg,ctx,reports);
