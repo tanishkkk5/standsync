@@ -126,7 +126,7 @@ function pushEvent(teamId, ev){
     const next = [entry, ...list].filter(e => e.at >= cutoff).slice(0, 80);
     localStorage.setItem(eventsKey(teamId), JSON.stringify(next));
     // Mirror to the shared backend (append-only history) so teammates see it too.
-    try { if (SB.IS_LIVE && SB.logEvent && teamId) SB.logEvent(teamId, ev); } catch {}
+    try { if (SB.logEvent && teamId) SB.logEvent(teamId, ev); } catch {}
     return entry;
   } catch { return null; }
 }
@@ -144,7 +144,7 @@ function _scKey(teamId, k){ return (teamId||'demo') + '::' + k; }
 // We keep the human-readable suffix (e.g. 'teamboard', 'reports', 'attendance-2026-06-24').
 function sharedSet(teamId, storeKey, value){
   _sharedCache[_scKey(teamId, storeKey)] = value;
-  try { if (SB.IS_LIVE && SB.setShared && teamId) SB.setShared(teamId, storeKey, value); } catch {}
+  try { if (SB.setShared && teamId) SB.setShared(teamId, storeKey, value); } catch {}
 }
 function sharedGetCached(teamId, storeKey){
   const v = _sharedCache[_scKey(teamId, storeKey)];
@@ -152,7 +152,7 @@ function sharedGetCached(teamId, storeKey){
 }
 // Hydrate the cache for a team from the backend; calls onReady when done so UI can refresh.
 async function hydrateShared(teamId, onReady){
-  if (!SB.IS_LIVE || !SB.getSharedByPrefix || !teamId) { onReady && onReady(false); return; }
+  if (!SB.getSharedByPrefix || !teamId) { onReady && onReady(false); return; }
   try {
     const all = await SB.getSharedByPrefix(teamId, ''); // all keys for this team
     Object.entries(all || {}).forEach(([k, v]) => { _sharedCache[_scKey(teamId, k)] = v; });
@@ -4284,7 +4284,7 @@ function ReportsTab({ team, members = [], session }) {
   useEffect(() => {
     hydrateShared(teamId, () => refresh());
     let unsub = () => {};
-    try { if (SB.IS_LIVE && SB.subscribeToStore) unsub = SB.subscribeToStore(teamId, (key, value) => { if (key === 'reports' && Array.isArray(value)) { _sharedCache[_scKey(teamId, 'reports')] = value; setReports(value); } }); } catch {}
+    try { if (SB.subscribeToStore) unsub = SB.subscribeToStore(teamId, (key, value) => { if (key === 'reports' && Array.isArray(value)) { _sharedCache[_scKey(teamId, 'reports')] = value; setReports(value); } }); } catch {}
     const t = setInterval(refresh, 8000);
     return () => { clearInterval(t); try { unsub(); } catch {} }; /* eslint-disable-next-line */
   }, [teamId]);
@@ -7545,7 +7545,7 @@ function TeamBoard({ teamId='demo', session, isManager, onClaimTask, onGoto }){
     // Live updates when any teammate posts/edits.
     let unsub=()=>{};
     try {
-      if (SB.IS_LIVE && SB.subscribeToStore) {
+      if (SB.subscribeToStore) {
         unsub = SB.subscribeToStore(teamId, (key, value)=>{
           if (key==='teamboard' && Array.isArray(value)) { _sharedCache[_scKey(teamId,'teamboard')] = value; setPosts(value); }
         });
@@ -11089,7 +11089,7 @@ export default function App() {
         // Hydrate shared team data (board, reports, spaces, etc.) + event history.
         try { await hydrateShared(team.id); } catch (e) {}
         try {
-          if (SB.IS_LIVE && SB.getEvents) {
+          if (SB.getEvents) {
             const evs = await SB.getEvents(team.id, 80);
             if (evs && evs.length) { _sharedCache[_scKey(team.id, '__events__')] = evs; }
           }
