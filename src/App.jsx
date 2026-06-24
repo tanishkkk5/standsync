@@ -8813,13 +8813,28 @@ function parseCSV(text) {
 }
 
 const norm = (s) => (s || '').toString().trim().toLowerCase();
+// Find the header row: scan up to 15 rows for any recognizable report column.
+function findHeaderRow(rows) {
+  for (let i = 0; i < Math.min(rows.length, 15); i++) {
+    const cells = (rows[i] || []).map(norm);
+    if (cells.some(c => ['item','deliverable','task','session','feature','work item','name'].includes(c)) ||
+        (cells.includes('owner') && cells.includes('status')) ||
+        cells.includes('approval') || cells.includes('pipeline stage')) {
+      return i;
+    }
+  }
+  return -1; // none found
+}
 function rowsToItems(rows) {
   if (!rows || rows.length < 2) return [];
-  let h = 0;
-  for (let i = 0; i < Math.min(rows.length, 6); i++) { if (rows[i].some(c => norm(c) === 'item')) { h = i; break; } }
+  let h = findHeaderRow(rows);
+  if (h < 0) h = 0; // assume first row is the header if nothing recognizable
   const head = rows[h].map(norm);
   const idx = (names) => head.findIndex(c => names.some(n => c.includes(n)));
-  const ci = { item: idx(['item','deliverable','task']), owner: idx(['owner','assignee']), status: idx(['status']), approval: idx(['approval']), pipeline: idx(['pipeline','stage']), target: idx(['target','due','date']), pct: idx(['% done','percent','progress','%']), priority: idx(['priority']), notes: idx(['notes','comment']) };
+  // The "item" column accepts many synonyms; if none match, use the first column.
+  let itemIdx = idx(['item','deliverable','task','session','feature','work item','name']);
+  if (itemIdx < 0) itemIdx = 0;
+  const ci = { item: itemIdx, owner: idx(['owner','assignee','speaker']), status: idx(['status']), approval: idx(['approval','verdict','qc']), pipeline: idx(['pipeline','stage']), target: idx(['target','due','date']), pct: idx(['% done','percent','progress','%']), priority: idx(['priority']), notes: idx(['notes','comment','remark','issue']) };
   const out = [];
   for (let r = h + 1; r < rows.length; r++) {
     const row = rows[r]; if (!row || !row.length) continue;
@@ -8837,11 +8852,13 @@ function rowsToItems(rows) {
 // to group, and otherwise classifies by approval/status. Capped output.
 function summarizeReport(rows) {
   if (!rows || rows.length < 2) return null;
-  let h = 0;
-  for (let i = 0; i < Math.min(rows.length, 6); i++) { if (rows[i].some(c => norm(c) === 'item')) { h = i; break; } }
+  let h = findHeaderRow(rows);
+  if (h < 0) h = 0;
   const head = rows[h].map(norm);
   const idx = (names) => head.findIndex(c => names.some(n => c.includes(n)));
-  const ci = { item: idx(['item','deliverable','task']), owner: idx(['owner','assignee']), status: idx(['status']), approval: idx(['approval']), pipeline: idx(['pipeline','stage']), target: idx(['target','due','date']), pct: idx(['% done','percent','progress','%']) };
+  let itemIdx = idx(['item','deliverable','task','session','feature','work item','name']);
+  if (itemIdx < 0) itemIdx = 0;
+  const ci = { item: itemIdx, owner: idx(['owner','assignee','speaker']), status: idx(['status']), approval: idx(['approval','verdict','qc']), pipeline: idx(['pipeline','stage']), target: idx(['target','due','date']), pct: idx(['% done','percent','progress','%']) };
   const get = (row, k) => ci[k] >= 0 ? (row[ci[k]] || '').toString().trim() : '';
 
   let section = 'General';
@@ -9123,12 +9140,29 @@ function SpaceClientReport({ space, onUpdate }) {
         if (!XLSX) { setErr('Could not load the Excel reader. Please re-save your file as CSV and upload that.'); setBusy(false); return; }
         const buf = await f.arrayBuffer();
         const wb = XLSX.read(buf, { type: 'array' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
+        // Scan ALL sheets and pick the one whose rows best match a report (has a
+        // recognizable header) — falls back to the sheet with the most rows.
+        let best = null, bestScore = -1;
+        for (const name of wb.SheetNames) {
+          const ws = wb.Sheets[name];
+          const r = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false, defval: '' });
+          if (!r || !r.length) continue;
+          // score: + big bonus if a header row exists, + row count
+          let hasHeader = 0;
+          for (let i = 0; i < Math.min(r.length, 12); i++) {
+            const cells = (r[i] || []).map(c => (c || '').toString().trim().toLowerCase());
+            if (cells.some(x => ['item','deliverable','task','session'].includes(x)) ||
+                (cells.includes('owner') && cells.includes('status')) ||
+                cells.includes('approval')) { hasHeader = 1; break; }
+          }
+          const score = hasHeader * 10000 + r.length;
+          if (score > bestScore) { bestScore = score; best = r; }
+        }
+        rows = best || [];
       } else { setErr('Please upload a .xlsx or .csv file.'); setBusy(false); return; }
       const items = rowsToItems(rows);
       const summary = summarizeReport(rows);
-      if ((!summary || summary.totalRows === 0) && items.length === 0) { setErr('No rows found. Make sure the sheet has an "Item" header and at least one row.'); setBusy(false); return; }
+      if ((!summary || summary.totalRows === 0) && items.length === 0) { setErr('No rows found. The sheet needs a header row with an "Item" column (or Deliverable/Task/Session) plus at least one data row. Tip: download the template to see the expected columns, or re-save as CSV.'); setBusy(false); return; }
       onUpdate({ report: { items, summary, uploadedAt: Date.now(), filename: f.name } });
     } catch (e2) {
       setErr('Could not read that file: ' + (e2.message || 'unknown error') + '. Try uploading as CSV.');
@@ -10142,19 +10176,22 @@ function ManagerView({
   // ── Global search ──
   const NAV_TARGETS = [
     { label: 'Home', area: 'home', kw: 'home dashboard' },
-    { label: 'Tasks', area: 'tasks', kw: 'tasks work' },
-    { label: 'Spaces', area: 'spaces', kw: 'spaces projects' },
+    { label: 'Tasks', area: 'tasks', kw: 'tasks work board' },
+    { label: 'Spaces', area: 'spaces', kw: 'spaces projects workspace' },
+    { label: 'Client Report', area: 'spaces', kw: 'client report upload xlsx excel deliverables project report' },
     { label: 'Team', area: 'team', kw: 'team members people attendance' },
-    { label: 'Communication', area: 'communication', kw: 'chat messages communication' },
-    { label: 'Knowledge', area: 'knowledge', kw: 'docs knowledge wiki brainstorm' },
+    { label: 'Communication', area: 'communication', kw: 'chat messages communication dm' },
+    { label: 'Knowledge', area: 'knowledge', kw: 'docs knowledge wiki brainstorm notes sop' },
     { label: 'Calendar', area: 'calendar', kw: 'calendar schedule meetings' },
-    ...(canPerf ? [{ label: 'Insights & Performance', area: 'tasks', kw: 'insights analytics performance' }] : []),
+    { label: 'Daily Report', area: 'tasks', kw: 'daily report standup summary' },
+    { label: 'Reliability Engine', area: 'tasks', kw: 'reliability commitment execution trust accountability' },
+    ...(canPerf ? [{ label: 'Insights & Performance', area: 'tasks', kw: 'insights analytics performance reports leaderboard' }] : []),
   ];
   const searchResults = (() => {
     const q = search.trim().toLowerCase();
     if (!q) return [];
     const out = [];
-    NAV_TARGETS.filter(n => n.label.toLowerCase().includes(q) || n.kw.includes(q)).forEach(n =>
+    NAV_TARGETS.filter(n => n.label.toLowerCase().includes(q) || n.kw.split(/\s+/).some(w => w.includes(q) && q.length >= 3)).forEach(n =>
       out.push({ type: 'Page', icon: '◧', label: n.label, sub: 'Go to ' + n.label, act: () => goArea(n.area) }));
     tasks.filter(t => (t.title || t.text || '').toLowerCase().includes(q)).slice(0, 6).forEach(t =>
       out.push({ type: 'Task', icon: '◎', label: t.title || t.text, sub: (t.status || 'todo') + (t.assignee_name ? ' · ' + t.assignee_name : ''), act: () => goArea('tasks') }));
