@@ -108,6 +108,22 @@ function Logo({ size=32, onClick, iconOnly=false }) {
 }
 // Short notification chime via WebAudio (no asset file needed). Respects ss-sound.
 let _ssAudioCtx = null;
+// ── Activity event log — real, time-stamped events (not daily-recomputed state) ──
+// Stored per team; auto-pruned to recent items. Each event powers a notification.
+function eventsKey(teamId){ return 'ss-events-' + (teamId || 'demo'); }
+function readEvents(teamId){ try { return JSON.parse(localStorage.getItem(eventsKey(teamId)) || '[]'); } catch { return []; } }
+function pushEvent(teamId, ev){
+  try {
+    const list = readEvents(teamId);
+    const entry = { id: 'ev_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), at: Date.now(), ...ev };
+    // keep last 80 events and only the last 3 days
+    const cutoff = Date.now() - 3 * 864e5;
+    const next = [entry, ...list].filter(e => e.at >= cutoff).slice(0, 80);
+    localStorage.setItem(eventsKey(teamId), JSON.stringify(next));
+    return entry;
+  } catch { return null; }
+}
+
 function playChime() {
   try {
     if (localStorage.getItem('ss-sound') !== '1') return;
@@ -1011,6 +1027,86 @@ function buildSiteContext({ teamId = 'demo', tasks = [], members = [], history =
   return { tasks, members, history, teamName, userName, myTasks, attendance, spaces, schedule, performance: perf, siteData };
 }
 
+// Local answer engine — answers questions directly from real data. Used as the
+// reliable fallback whenever the AI service is unavailable or returns junk, so
+// "Ask AI" always gives a useful, grounded answer instead of an error.
+function answerFromData(question, ctx, reports = []) {
+  const q = (question || '').toLowerCase();
+  const { tasks = [], members = [], performance = [], history = [], teamName = 'Team', schedule = {} } = ctx || {};
+  const done = tasks.filter(t => t.status === 'done');
+  const blocked = tasks.filter(t => t.status === 'blocked');
+  const open = tasks.filter(t => t.status !== 'done');
+  const inProg = tasks.filter(t => t.status === 'in-progress');
+  const pct = tasks.length ? Math.round(done.length / tasks.length * 100) : 0;
+  const ranked = [...performance].filter(p => p.total > 0).sort((a, b) => b.pct - a.pct || b.done - a.done);
+  const fmtList = (arr, n = 6) => arr.slice(0, n).map(t => '• ' + (t.title || t.text) + (t.assignee_name ? ' — ' + t.assignee_name.split(' ')[0] : '')).join('\n');
+
+  // ── Performance from submitted reports ──
+  if ((q.includes('report') && (q.includes('performance') || q.includes('how') || q.includes('summary'))) || (q.includes('using the report'))) {
+    if (!reports.length) return "No reports have been submitted yet. Once your team submits daily reports, I can summarize performance, recurring blockers, and trends from them here.";
+    const byPerson = {};
+    reports.forEach(r => { const k = r.authorName || r.authorEmail; (byPerson[k] = byPerson[k] || []).push(r); });
+    const totalDone = reports.reduce((s, r) => s + (r.stats?.completed || 0), 0);
+    const totalBlocked = reports.reduce((s, r) => s + (r.stats?.blocked || 0), 0);
+    let out = `Across ${reports.length} submitted report${reports.length !== 1 ? 's' : ''} from ${Object.keys(byPerson).length} ${Object.keys(byPerson).length !== 1 ? 'people' : 'person'}, the team logged ${totalDone} completed task${totalDone !== 1 ? 's' : ''}${totalBlocked ? ` and flagged ${totalBlocked} blocker${totalBlocked !== 1 ? 's' : ''}` : ''}.\n\n`;
+    out += Object.entries(byPerson).map(([name, rs]) => {
+      const d = rs.reduce((s, r) => s + (r.stats?.completed || 0), 0);
+      const b = rs.reduce((s, r) => s + (r.stats?.blocked || 0), 0);
+      return `• ${name}: ${rs.length} report${rs.length !== 1 ? 's' : ''}, ${d} completed${b ? `, ${b} blocked` : ''}`;
+    }).join('\n');
+    const mostBlocked = Object.entries(byPerson).map(([n, rs]) => [n, rs.reduce((s, r) => s + (r.stats?.blocked || 0), 0)]).sort((a, b) => b[1] - a[1])[0];
+    if (mostBlocked && mostBlocked[1] > 0) out += `\n\n${mostBlocked[0]} is reporting the most blockers — worth a check-in.`;
+    return out;
+  }
+
+  // ── Blockers ──
+  if (q.includes('blocker') || q.includes('blocked') || q.includes('stuck')) {
+    if (!blocked.length) return "No blockers right now — nothing is marked blocked. 👍";
+    return `There ${blocked.length === 1 ? 'is' : 'are'} ${blocked.length} blocked task${blocked.length !== 1 ? 's' : ''}:\n\n` +
+      blocked.map(t => `• ${t.title || t.text}${t.assignee_name ? ' (' + t.assignee_name.split(' ')[0] + ')' : ''}${t.blocker ? ' — ' + t.blocker : ''}`).join('\n');
+  }
+
+  // ── Who's performing best ──
+  if ((q.includes('performing') || q.includes('best') || q.includes('top') || q.includes('leaderboard')) && !q.includes('report')) {
+    if (!ranked.length) return "No task data yet to rank performance. Once tasks are assigned and worked on, I'll show who's leading.";
+    const top = ranked.slice(0, 3);
+    let out = 'Top performers by completion rate:\n\n' + top.map((p, i) => `${i + 1}. ${p.name} — ${p.pct}% (${p.done}/${p.total} done${p.blocked ? ', ' + p.blocked + ' blocked' : ''})`).join('\n');
+    const low = ranked[ranked.length - 1];
+    if (ranked.length > 3 && low.pct < 50) out += `\n\n${low.name} may need support — ${low.pct}% with ${low.open} open.`;
+    return out;
+  }
+
+  // ── Team status / how is the team doing ──
+  if (q.includes('team') && (q.includes('doing') || q.includes('status') || q.includes('how'))) {
+    let out = `${teamName} is at ${pct}% completion — ${done.length} of ${tasks.length} tasks done, ${inProg.length} in progress${blocked.length ? `, ${blocked.length} blocked` : ''}.`;
+    if (ranked.length) out += `\n\nLeading: ${ranked.slice(0, 2).map(p => p.name + ' (' + p.pct + '%)').join(', ')}.`;
+    if (blocked.length) out += `\n\n⚠️ ${blocked.length} blocker${blocked.length !== 1 ? 's need' : ' needs'} attention.`;
+    else out += `\n\nNo blockers — clear runway.`;
+    return out;
+  }
+
+  // ── What should I focus on today ──
+  if (q.includes('focus') || (q.includes('today') && (q.includes('what') || q.includes('should')))) {
+    const mine = ctx.myTasks && ctx.myTasks.length ? ctx.myTasks : open;
+    const myOpen = mine.filter(t => t.status !== 'done');
+    if (!myOpen.length) return "You're all caught up — no open tasks. 🎉 Good time to pick up something new or help unblock a teammate.";
+    const crit = myOpen.filter(t => t.priority === 'critical' || t.priority === 'high');
+    const myBlocked = myOpen.filter(t => t.status === 'blocked');
+    let out = '';
+    if (crit.length) out += `Start with high-priority work:\n${fmtList(crit)}\n\n`;
+    if (myBlocked.length) out += `Unblock these first:\n${fmtList(myBlocked)}\n\n`;
+    if (!out) out = `Here's what's open:\n${fmtList(myOpen)}\n\n`;
+    return out.trim();
+  }
+
+  // ── Today's summary / general default ──
+  let out = `${teamName} — today's snapshot:\n\n• ${done.length} completed (${pct}%)\n• ${inProg.length} in progress\n• ${open.filter(t => t.status === 'todo').length} to do\n• ${blocked.length} blocked`;
+  if (inProg.length) out += `\n\nActively moving:\n${fmtList(inProg, 4)}`;
+  if (blocked.length) out += `\n\n⚠️ Blocked:\n${fmtList(blocked, 3)}`;
+  if (history.length) out += `\n\n(${history.length} past stand-ups on record — ask me about trends or a specific person.)`;
+  return out;
+}
+
 function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamName='Team', teamId='demo' }) {
   const c=useC(); const { dark }=useTheme();
   const [open,setOpen]=useState(false);
@@ -1051,7 +1147,7 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
     if(!input.trim()||loading)return;
     setMsgs(p=>[...p,{id:'u'+Date.now(),role:'user',text:input.trim()}]);
     setInput(''); setLoading(true);
-    try{ const reply=await askAI(input.trim(),buildSiteContext({teamId,tasks,members,history,teamName,userName:name,myTasks})); setMsgs(p=>[...p,{id:'a'+Date.now(),role:'assistant',text:reply}]); }
+    try{ const ctx=buildSiteContext({teamId,tasks,members,history,teamName,userName:name,myTasks}); let reports=[]; try{reports=readSubmittedReports(teamId);}catch(e){} let reply=''; try{ const ai=await askAI(input.trim(),{...ctx,reports}); reply=(typeof ai==='string'?ai:(ai?.text||'')).trim(); if(!reply||/^(sorry|try again|i can'?t|as an ai)/i.test(reply)) reply=answerFromData(input.trim(),ctx,reports); }catch(e){ reply=answerFromData(input.trim(),ctx,reports); } setMsgs(p=>[...p,{id:'a'+Date.now(),role:'assistant',text:reply}]); }
     catch(e){ setMsgs(p=>[...p,{id:'e'+Date.now(),role:'assistant',text:'Try again!'}]); }
     setLoading(false);
   };
@@ -1159,9 +1255,22 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
 }
 
 // ─── AI ASSISTANT PAGE ────────────────────────────────────────────────────────
-function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], teamName='Team' }) {
+// Modern AI mark — a clean four-point spark in a gradient disc (replaces the robot emoji)
+function AIMark({ size=32 }) {
+  return (
+    <div style={{ width:size,height:size,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,boxShadow:'0 2px 8px rgba(99,102,241,.35)' }}>
+      <svg width={size*0.56} height={size*0.56} viewBox="0 0 24 24" fill="#fff">
+        <path d="M12 2c.4 3.4 2.2 5.2 5.6 5.6C14.2 8 12.4 9.8 12 13.2 11.6 9.8 9.8 8 6.4 7.6 9.8 7.2 11.6 5.4 12 2z"/>
+        <path d="M18.5 13c.2 1.7 1.1 2.6 2.8 2.8-1.7.2-2.6 1.1-2.8 2.8-.2-1.7-1.1-2.6-2.8-2.8 1.7-.2 2.6-1.1 2.8-2.8z" opacity=".9"/>
+      </svg>
+    </div>
+  );
+}
+
+function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], teamName='Team', team=null }) {
   const c=useC();
-  const [msgs,setMsgs]=useState([{id:'w',role:'assistant',text:'Hi! I am your StandSync AI assistant. Ask me anything about your tasks, team progress, blockers, or what to focus on today.'}]);
+  const teamId=team?.id||'demo';
+  const [msgs,setMsgs]=useState([{id:'w',role:'assistant',text:'Hi! I am your StandSync AI assistant. Ask me anything about your tasks, team progress, blockers, performance, reports, or what to focus on today.'}]);
   const [input,setInput]=useState(''); const [loading,setLoading]=useState(false);
   const bottomRef=useRef(); const name=session?.user?.user_metadata?.name||'User';
   const done=tasks.filter(t=>t.status==='done').length;
@@ -1169,30 +1278,37 @@ function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], te
 
   useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:'smooth'}); },[msgs]);
 
+  const looksBad=(r)=>{ if(!r||typeof r!=='string')return true; const t=r.trim().toLowerCase(); if(t.length<2)return true; return /^(sorry|i (can'?t|cannot|am unable)|as an ai|i don'?t have access|try again)/.test(t); };
+
   const send=async(text)=>{
     const msg=text||input.trim();
     if(!msg||loading)return;
     setMsgs(p=>[...p,{id:'u'+Date.now(),role:'user',text:msg}]);
     setInput(''); setLoading(true);
+    let reports=[]; try{ reports=readSubmittedReports(teamId); }catch(e){}
+    const ctx=buildSiteContext({teamId,tasks,members,history,teamName,userName:name,myTasks});
+    let reply='';
     try{
-      const reply=await askAI(msg,buildSiteContext({teamId,tasks,members,history,teamName,userName:name,myTasks}));
-      setMsgs(p=>[...p,{id:'a'+Date.now(),role:'assistant',text:reply}]);
+      const ai=await askAI(msg, { ...ctx, reports });
+      reply=(typeof ai==='string'?ai:(ai?.text||'')).trim();
+      if(looksBad(reply)) reply=answerFromData(msg,ctx,reports);
     }catch(e){
-      setMsgs(p=>[...p,{id:'e'+Date.now(),role:'assistant',text:'Sorry, had trouble with that. Try again!'}]);
+      reply=answerFromData(msg,ctx,reports);
     }
+    setMsgs(p=>[...p,{id:'a'+Date.now(),role:'assistant',text:reply||answerFromData(msg,ctx,reports)}]);
     setLoading(false);
   };
 
-  const QUICK=['What should I focus on today?','How is the team doing?','Any blockers?',"Today's summary",'Who is performing best?'];
+  const QUICK=['What should I focus on today?','How is the team doing?','Any blockers?',"Today's summary",'Who is performing best?','Team performance from reports'];
 
   return(
     <div style={{ display:'flex',flexDirection:'column',height:'calc(100vh - 160px)',minHeight:500,borderRadius:16,overflow:'hidden',border:`1px solid ${c.bord}` }}>
       {/* Header */}
       <div style={{ padding:'16px 20px',background:c.surf,borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',gap:12,flexShrink:0 }}>
-        <div style={{ width:42,height:42,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0 }}>🤖</div>
+        <AIMark size={42}/>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:15,fontWeight:700,color:c.text }}>StandSync AI</div>
-          <div style={{ fontSize:12,color:'#34D399' }}>● Online · {process.env.REACT_APP_GEMINI_KEY?'Google Gemini':'Smart fallback mode'}</div>
+          <div style={{ fontSize:12,color:'#34D399' }}>● Online · grounded in your live data</div>
         </div>
         <div style={{ textAlign:'right' }}>
           <div style={{ fontSize:12,color:c.mut }}>Team completion</div>
@@ -1207,7 +1323,7 @@ function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], te
       <div style={{ flex:1,overflowY:'auto',padding:'16px',display:'flex',flexDirection:'column',gap:10,background:c.bg }}>
         {msgs.map(m=>(
           <div key={m.id} style={{ display:'flex',gap:10,alignItems:'flex-start',flexDirection:m.role==='user'?'row-reverse':'row' }}>
-            {m.role==='assistant'&&<div style={{ width:32,height:32,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>🤖</div>}
+            {m.role==='assistant'&&<AIMark size={32}/>}
             <div style={{ maxWidth:'78%',background:m.role==='user'?'linear-gradient(135deg,#6366F1,#818CF8)':c.surf,color:m.role==='user'?'#fff':c.text,padding:'11px 15px',borderRadius:m.role==='user'?'16px 16px 4px 16px':'16px 16px 16px 4px',fontSize:13,lineHeight:1.6,border:m.role==='user'?'none':`1px solid ${c.bord}`,boxShadow:m.role==='assistant'?'0 1px 4px rgba(0,0,0,.06)':'none' }}>
               {m.text.split('\n').map((line,i)=><div key={i} style={{ marginBottom:line?2:6 }}>{line||<br/>}</div>)}
             </div>
@@ -1215,7 +1331,7 @@ function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], te
         ))}
         {loading&&(
           <div style={{ display:'flex',gap:8,alignItems:'flex-start' }}>
-            <div style={{ width:32,height:32,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>🤖</div>
+            <AIMark size={32}/>
             <div style={{ padding:'11px 16px',background:c.surf,borderRadius:'16px 16px 16px 4px',border:`1px solid ${c.bord}`,display:'flex',gap:5,alignItems:'center' }}>
               {[0,1,2].map(i=><div key={i} style={{ width:7,height:7,borderRadius:'50%',background:'#818CF8',animation:`bounce .8s ease ${i*.15}s infinite` }}/>)}
             </div>
@@ -3419,9 +3535,16 @@ function MgrRow({ task, members, onStatus, onPriority, onNote, onDelete, session
         <div style={{ width:7,height:7,borderRadius:'50%',background:p.color,flexShrink:0 }}/>
         <span style={{ flex:1,fontSize:13,color:task.status==='done'?c.mut:c.text,textDecoration:task.status==='done'?'line-through':'none',lineHeight:1.4 }}>{task.title}</span>
         {task.label&&<span style={{ fontSize:10,fontWeight:700,color:task.label_color||'#6366F1',background:(task.label_color||'#6366F1')+'1f',border:`1px solid ${(task.label_color||'#6366F1')}44`,padding:'2px 8px',borderRadius:6,whiteSpace:'nowrap' }}>{task.label}</span>}
+        {task._carriedOver&&<span className="ss-tip" data-tip={'Carried over from '+(task._standupDate||'a previous day')+' — still unfinished'} style={{ fontSize:10,fontWeight:700,color:'#DC2626',background:'rgba(220,38,38,.12)',border:'1px solid rgba(220,38,38,.3)',padding:'2px 7px',borderRadius:6,whiteSpace:'nowrap',display:'inline-flex',alignItems:'center',gap:3 }}>⚠️ Backlog</span>}
         {task.blocker&&<span style={{ fontSize:10,color:'#F87171',background:'rgba(239,68,68,.12)',border:'1px solid rgba(239,68,68,.25)',padding:'2px 7px',borderRadius:6,whiteSpace:'nowrap' }}>⚠️ Blocked</span>}
         {task.timeline&&<span style={{ fontSize:11,color:c.mut,whiteSpace:'nowrap' }}>🕐 {task.timeline}</span>}
-        {member&&<Av member={member} size={24} url={member.avatar_url}/>}
+        {member&&(
+          <span className="ss-tip" data-tip={(member.name||member.email)+(member.email?` · ${member.email}`:'')}
+            style={{ display:'inline-flex',alignItems:'center',gap:6,background:c.row,border:`1px solid ${c.bord}`,borderRadius:20,padding:'2px 9px 2px 2px',flexShrink:0,position:'relative',cursor:'default' }}>
+            <Av member={member} size={26} url={member.avatar_url}/>
+            <span style={{ fontSize:12,fontWeight:600,color:c.sub,whiteSpace:'nowrap',maxWidth:90,overflow:'hidden',textOverflow:'ellipsis' }}>{(member.name||member.email.split('@')[0]).split(' ')[0]}</span>
+          </span>
+        )}
         {/* Status dropdown — explicit control for every status */}
         <select value={task.status} onChange={e=>setStatusTo(e.target.value)} style={{ background:'transparent',border:`1px solid ${c.bord}`,borderRadius:6,color:c.sub,fontSize:10.5,cursor:'pointer',outline:'none',fontWeight:600,padding:'3px 5px' }}>
           {['todo','in-progress','done','blocked'].map(s=><option key={s} value={s} style={{ background:c.dark?'#0D0B24':'#fff',color:c.text }}>{s==='todo'?'To do':s==='in-progress'?'In progress':s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
@@ -3705,7 +3828,7 @@ function submittedReportsKey(teamId) { return `ss-reports-${teamId}`; }
 function readSubmittedReports(teamId) { try { return JSON.parse(localStorage.getItem(submittedReportsKey(teamId)) || '[]'); } catch { return []; } }
 function writeSubmittedReports(teamId, list) { try { localStorage.setItem(submittedReportsKey(teamId), JSON.stringify(list)); } catch {} }
 
-function DailyReportTab({ tasks = [], session, team, members = [] }) {
+function DailyReportTab({ tasks = [], session, team, members = [], isManager = false }) {
   const c = useC();
   const { dark } = useTheme();
   const myEmail = session?.user?.email || 'me@demo';
@@ -3807,14 +3930,16 @@ function DailyReportTab({ tasks = [], session, team, members = [] }) {
       const doneList = completed.map(t => `- ${t.title || t.text}${t.priority ? ` [${t.priority}]` : ''}${t.label ? ` {${t.label}}` : ''}`).join('\n') || '(none)';
       const progList = open.filter(t => t.status === 'in-progress').map(t => `- ${t.title || t.text}`).join('\n') || '(none)';
       const blockList = blocked.map(t => `- ${t.title || t.text}${t.blocker ? `: ${t.blocker}` : ''}`).join('\n') || '(none)';
-      const nextList = open.filter(t => t.status === 'todo').map(t => `- ${t.title || t.text}`).join('\n') || '(none)';
-      const prompt = `Write a concise, insightful first-person end-of-day work report for a manager (4-6 sentences). Cover: what I accomplished and its impact, what's still moving, any blockers and why they matter, and what I'll tackle next. Be specific and professional. No greeting, no questions, no bullet headers — flowing prose.\n\nCOMPLETED:\n${doneList}\n\nIN PROGRESS:\n${progList}\n\nBLOCKED:\n${blockList}\n\nUP NEXT:\n${nextList}`;
+      const nextList = open.filter(t => t.status === 'todo' && !t._carriedOver).map(t => `- ${t.title || t.text}`).join('\n') || '(none)';
+      const backlogList = open.filter(t => t._carriedOver).map(t => `- ${t.title || t.text} (open since ${t._standupDate || 'earlier'})`).join('\n') || '(none)';
+      const rateNow = myTasks.length ? Math.round(completed.length / myTasks.length * 100) : 0;
+      const prompt = `You are writing my end-of-day work report for my manager. Make it genuinely insightful, not a list restated as prose. In 4-6 first-person sentences: (1) what I accomplished today and why it matters, (2) honest momentum - am I ahead, on track, or slipping, citing the ${rateNow}% completion, (3) any carried-over backlog and a realistic plan to clear it, (4) blockers and the specific help or decision I need, (5) my focus for tomorrow. Professional, specific, candid. No greeting, no questions, no bullet headers - flowing prose.\n\nCOMPLETED TODAY:\n${doneList}\n\nIN PROGRESS:\n${progList}\n\nCARRIED-OVER BACKLOG (unfinished from previous days - call this out honestly):\n${backlogList}\n\nBLOCKED:\n${blockList}\n\nPLANNED NEXT:\n${nextList}`;
       const res = await askAI(prompt, { tasks: myTasks, members, teamName: team?.name || 'Team', userName: myName });
       const text = (typeof res === 'string' ? res : (res?.text || '')).trim();
       if (text && !looksLikeJunk(text)) {
         const rate = myTasks.length ? Math.round(completed.length / myTasks.length * 100) : 0;
-        const polished = `Daily Report — ${myName}\n${todayLabel}\n\n${text}\n\n— ${completed.length} done · ${open.filter(t=>t.status==='in-progress').length} in progress · ${blocked.length} blocked · ${rate}% of today's load complete.`;
-        setReport(polished); save(polished); flash('✨ AI report generated');
+        const polished = `Daily Report \u2014 ${myName}\n${todayLabel}\n\n${text}\n\n\u2014 ${completed.length} done \u00b7 ${open.filter(t=>t.status==='in-progress').length} in progress \u00b7 ${blocked.length} blocked \u00b7 ${rate}% of today's load complete.`;
+        setReport(polished); save(polished); flash('\u2728 AI report generated');
       } else {
         save(plain); flash('Generated from your tasks. (AI summary unavailable.)');
       }
@@ -3892,7 +4017,7 @@ function DailyReportTab({ tasks = [], session, team, members = [] }) {
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
         <Btn onClick={generateAI} loading={busy}>✨ Generate today's report</Btn>
         <Btn v="ghost" onClick={() => setMode(mode === 'edit' ? 'view' : 'edit')}>{mode === 'edit' ? '✓ Done editing' : '✏️ Write / edit manually'}</Btn>
-        <Btn onClick={submitReport}>📤 Submit to manager</Btn>
+        {!isManager && <Btn onClick={submitReport}>📤 Submit to manager</Btn>}
         <Btn v="ghost" onClick={emailReport} loading={emailBusy}>📧 Email to me</Btn>
         <Btn v="ghost" onClick={copyReport}>📋 Copy report</Btn>
         {toast && <span style={{ alignSelf: 'center', fontSize: 12.5, color: c.sub }}>{toast}</span>}
@@ -3997,11 +4122,25 @@ function ReportsTab({ team, members = [], session }) {
   const [openId, setOpenId] = useState(null);
   const [qText, setQText] = useState('');
   const [dayFilter, setDayFilter] = useState('all');
+  const [period, setPeriod] = useState('week'); // week | month | year | all
   const refresh = () => setReports(readSubmittedReports(teamId));
   useEffect(() => { const t = setInterval(refresh, 8000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [teamId]);
 
-  const days = Array.from(new Set(reports.map(r => r.date)));
-  const shown = reports.filter(r => dayFilter === 'all' || r.date === dayFilter).sort((a, b) => b.submittedAt - a.submittedAt);
+  // Period window: keep reports within the selected look-back range.
+  const now = Date.now();
+  const periodMs = { week: 7 * 864e5, month: 30 * 864e5, year: 365 * 864e5, all: Infinity }[period];
+  const inPeriod = reports.filter(r => period === 'all' || (now - (r.submittedAt || 0)) <= periodMs);
+  // Rollup for the selected period
+  const rollup = (() => {
+    const people = new Set(inPeriod.map(r => r.authorEmail || r.authorName));
+    const completed = inPeriod.reduce((s, r) => s + (r.stats?.completed || 0), 0);
+    const blocked = inPeriod.reduce((s, r) => s + (r.stats?.blocked || 0), 0);
+    return { reports: inPeriod.length, people: people.size, completed, blocked };
+  })();
+  const periodLabel = { week: 'Past 7 days', month: 'Past 30 days', year: 'Past year', all: 'All time' }[period];
+
+  const days = Array.from(new Set(inPeriod.map(r => r.date)));
+  const shown = inPeriod.filter(r => dayFilter === 'all' || r.date === dayFilter).sort((a, b) => b.submittedAt - a.submittedAt);
 
   const askQuestion = (rid) => {
     if (!qText.trim()) return;
@@ -4027,6 +4166,28 @@ function ReportsTab({ team, members = [], session }) {
         </Card>
       ) : (
         <>
+          {/* Period selector */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+            {[['week', 'Weekly'], ['month', 'Monthly'], ['year', 'Yearly'], ['all', 'All time']].map(([k, label]) => (
+              <button key={k} onClick={() => { setPeriod(k); setDayFilter('all'); }} style={{ fontSize: 12.5, padding: '6px 14px', borderRadius: 9, border: `1px solid ${period === k ? c.accent : c.bord}`, background: period === k ? c.accentSoft : 'transparent', color: period === k ? c.accent : c.sub, cursor: 'pointer', fontWeight: period === k ? 700 : 500 }}>{label}</button>
+            ))}
+          </div>
+
+          {/* Period rollup */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 16 }}>
+            {[
+              { label: periodLabel, value: rollup.reports, sub: 'reports' },
+              { label: 'Team members', value: rollup.people, sub: 'reporting' },
+              { label: 'Tasks completed', value: rollup.completed, sub: 'logged', color: '#16A34A' },
+              { label: 'Blockers flagged', value: rollup.blocked, sub: 'raised', color: rollup.blocked ? '#DC2626' : undefined },
+            ].map((s, i) => (
+              <div key={i} style={{ padding: '14px 16px', borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}` }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: s.color || c.text }}>{s.value}</div>
+                <div style={{ fontSize: 11, color: c.mut, marginTop: 3 }}>{s.label} · {s.sub}</div>
+              </div>
+            ))}
+          </div>
+
           {/* Day filter */}
           <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
             <button onClick={() => setDayFilter('all')} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 20, border: `1px solid ${c.bord}`, background: dayFilter === 'all' ? 'rgba(99,102,241,.15)' : 'transparent', color: dayFilter === 'all' ? '#818CF8' : c.mut, cursor: 'pointer', fontWeight: dayFilter === 'all' ? 700 : 400 }}>All</button>
@@ -4036,6 +4197,7 @@ function ReportsTab({ team, members = [], session }) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {shown.length === 0 && <div style={{ padding: '28px', textAlign: 'center', color: c.mut, fontSize: 13 }}>No reports in this period. Try a wider range.</div>}
             {shown.map(r => {
               const m = members.find(x => (x.email || '').toLowerCase() === (r.authorEmail || '').toLowerCase());
               const isOpen = openId === r.id;
@@ -4100,23 +4262,28 @@ function PerfTab({ tasks, history, members }) {
 // passes, the outcome is Kept (done), Missed (still open/blocked past due), or
 // Delayed (done, but after an extension). Reliability = kept / resolved commitments.
 function buildCommitments(tasks, history) {
-  // Live tasks that represent commitments (have an owner + a timeline)
+  // Commitments = any owned task with a timeline, across ALL data we have:
+  // today's + carried-over live tasks AND every past standup in history.
   const out = [];
   const seen = new Set();
-  (tasks || []).forEach(t => {
-    if (!t.assignee_email || !t.timeline) return;
-    const id = t.id || (t.assignee_email + '|' + (t.title || t.text));
+  const consider = (t, dateHint) => {
+    if (!t || !t.assignee_email || !t.timeline) return;
+    const id = t.id || (t.assignee_email + '|' + (t.title || t.text) + '|' + (dateHint || ''));
+    if (seen.has(id)) return;
     seen.add(id);
-    const overdue = isCommitmentOverdue(t.timeline, t.created_at);
+    const overdue = isCommitmentOverdue(t.timeline, t.created_at || dateHint);
     let outcome;
     if (t.status === 'done') outcome = 'kept';
-    else if (t.status === 'blocked') outcome = overdue ? 'missed' : 'pending';
     else outcome = overdue ? 'missed' : 'pending';
     out.push({
       who: t.assignee_email, whoName: t.assignee_name || t.assignee_email,
       text: t.title || t.text, timeline: t.timeline, outcome, status: t.status,
+      date: dateHint || t._standupDate || null,
     });
-  });
+  };
+  (tasks || []).forEach(t => consider(t, t._standupDate));
+  // Past standups: each history entry may carry its own tasks array
+  (history || []).forEach(h => (h.tasks || []).forEach(t => consider(t, h.date)));
   return out;
 }
 // Rough deadline interpreter for the fuzzy timeline labels the app uses.
@@ -4455,14 +4622,21 @@ function WeeklyExecSummary({ tasks, members, history, team }) {
   const [aiText, setAiText] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // This week's window
+  // This week's window — aggregate across today's tasks AND past stand-ups in history
   const weekAgo = Date.now() - 7 * 864e5;
   const ts = (t) => t.created_at ? new Date(t.created_at).getTime() : (parseInt(String(t.id).replace(/\D/g, '')) || 0);
-  const thisWeek = (tasks || []).filter(t => ts(t) >= weekAgo);
+  const dayInWeek = (dateStr) => { try { return (Date.now() - new Date(dateStr + 'T12:00').getTime()) <= 7 * 864e5; } catch { return false; } };
+  // All tasks across the last 7 days: live tasks created this week + tasks from history days within the week
+  const histThisWeek = (history || []).filter(h => dayInWeek(h.date)).flatMap(h => h.tasks || []);
+  const liveThisWeek = (tasks || []).filter(t => ts(t) >= weekAgo);
+  // de-dupe by id
+  const weekMap = {}; [...histThisWeek, ...liveThisWeek].forEach(t => { weekMap[t.id || (t.title || t.text)] = t; });
+  const weekTasks = Object.values(weekMap);
   const completed = (tasks || []).filter(t => t.status === 'done').length;
-  const completedWeek = thisWeek.filter(t => t.status === 'done').length;
-  const delayed = (tasks || []).filter(t => t.status !== 'done' && isCommitmentOverdue(t.timeline, t.created_at)).length;
+  const completedWeek = weekTasks.filter(t => t.status === 'done').length || completed;
+  const delayed = weekTasks.filter(t => t.status !== 'done' && isCommitmentOverdue(t.timeline, t.created_at)).length;
   const criticalBlockers = (tasks || []).filter(t => (t.status === 'blocked' || t.blocker) && (t.priority === 'critical' || t.priority === 'high')).length;
+  const daysCovered = new Set((history || []).filter(h => dayInWeek(h.date)).map(h => h.date)).size + 1;
 
   // Productivity trend vs previous standup average
   const recent = (history || []).slice(0, 5);
@@ -4549,7 +4723,7 @@ function WeeklyExecSummary({ tasks, members, history, team }) {
         <Btn v="ghost" onClick={generate} loading={busy}>Regenerate</Btn>
         <Btn v="ghost" onClick={copy}>Copy report</Btn>
       </div>
-      <p style={{ fontSize: 11, color: c.mut, marginTop: 14, lineHeight: 1.5 }}>Automatic Friday delivery to inboxes requires the email backend (a scheduled send). Until then, generate and copy/share it here. Numbers are live from your tasks, stand-ups, and project health.</p>
+      <p style={{ fontSize: 11, color: c.mut, marginTop: 14, lineHeight: 1.5 }}>Aggregated across the last 7 days ({daysCovered} day{daysCovered !== 1 ? 's' : ''} of data on record). Automatic Friday delivery to inboxes requires the email backend (a scheduled send). Until then, generate and copy/share it here. Numbers are live from your tasks, stand-ups, and project health.</p>
     </div>
   );
 }
@@ -7207,6 +7381,7 @@ function TeamBoard({ teamId='demo', session, isManager, onClaimTask, onGoto }){
     const p={ id:'tb'+Date.now(), kind, text:text.trim(), priority:kind==='task'?priority:undefined,
       author:myName, authorEmail:myEmail, at:Date.now(), claimedBy:null, claimedByEmail:null, replies:[] };
     persist([p,...posts]);
+    try { pushEvent(teamId, { type:'teamboard', actor:myName, actorEmail:myEmail, title:(kind==='task'?'Task: ':kind==='reminder'?'Reminder: ':'')+text.trim().slice(0,60) }); } catch {}
     setText(''); setComposing(false); setKind('task');
   };
 
@@ -9628,66 +9803,67 @@ function ManagerView({
 
   const notifs = useMemo(() => {
     const out = [];
-    const now = new Date();
-    const hour = now.getHours();
-    tasks.filter(t => t.status === 'blocked').forEach(t => out.push({
-      id: 'blk-' + todayKey + '-' + t.id, kind: 'blocker', icon: '🚧', accent: '#F87171',
-      title: 'Blocker needs attention', body: (t.title || t.text || 'A task') + ' is blocked' + (t.assignee_email ? ' · ' + t.assignee_email.split('@')[0] : ''),
-      action: { label: 'View task', go: 'tasks' },
-    }));
-    tasks.filter(t => t.status !== 'done' && (/today|eod|6 ?pm|noon/i.test(t.timeline || '') || (t.due_date && new Date(t.due_date).toDateString() === now.toDateString()))).forEach(t => out.push({
-      id: 'due-' + todayKey + '-' + t.id, kind: 'eod', icon: '⏰', accent: '#FBBF24',
-      title: 'Due before EOD', body: (t.title || t.text || 'A task') + ' is still pending' + (hour >= 16 ? ' — finish it soon' : ''),
-      action: { label: 'Open tasks', go: 'tasks' },
-    }));
+    const myEmail = (session?.user?.email || '').toLowerCase();
+    const ago = (ts) => { const m = Math.round((Date.now() - ts) / 60000); if (m < 1) return 'just now'; if (m < 60) return m + 'm ago'; const h = Math.floor(m / 60); if (h < 24) return h + 'h ago'; return Math.floor(h / 24) + 'd ago'; };
+
+    // 1. Real activity events (assigned / created / started / completed / team board / space)
+    readEvents(team?.id).forEach(e => {
+      const mine = (e.targetEmail || '').toLowerCase() === myEmail;
+      const byMe = (e.actorEmail || '').toLowerCase() === myEmail;
+      let n = null;
+      if (e.type === 'task_assigned' && mine && !byMe) n = { icon: '\uD83D\uDCCC', accent: '#6366F1', title: 'New task assigned to you', body: e.actor + ' assigned "' + e.title + '"', go: 'tasks' };
+      else if (e.type === 'task_assigned' && !mine && isManager) n = { icon: '\uD83D\uDCCC', accent: '#818CF8', title: 'Task assigned', body: e.actor + ' \u2192 ' + e.target + ': "' + e.title + '"', go: 'tasks' };
+      else if (e.type === 'task_created' && !byMe) n = { icon: '\uD83D\uDCDD', accent: '#38BDF8', title: e.actor + ' added a task', body: '"' + e.title + '"', go: 'tasks' };
+      else if (e.type === 'task_started' && !byMe) n = { icon: '\u26A1', accent: '#38BDF8', title: e.actor + ' started a task', body: '"' + e.title + '"', go: 'tasks' };
+      else if (e.type === 'task_completed' && !byMe) n = { icon: '\u2705', accent: '#34D399', title: e.actor + ' completed a task', body: '"' + e.title + '"', go: 'tasks' };
+      else if (e.type === 'teamboard' && !byMe) n = { icon: '\uD83D\uDCCB', accent: '#6366F1', title: 'New on the team board', body: e.actor + ': ' + e.title, go: 'home' };
+      else if (e.type === 'space_update' && !byMe) n = { icon: '\u25A6', accent: '#8B5CF6', title: 'Update in ' + (e.spaceName || 'a project space'), body: e.actor + ': ' + e.title, go: 'spaces' };
+      else if (e.type === 'backlog' && (mine || isManager)) n = { icon: '\u26A0\uFE0F', accent: '#DC2626', title: mine ? 'Unfinished from ' + (e.fromDate || 'a previous day') : 'Carried-over backlog', body: '"' + e.title + '"' + (mine ? ' is still open' : ' \u2014 ' + (e.actor || 'someone')), go: 'tasks' };
+      if (n) out.push({ id: e.id, at: e.at, kind: e.type, icon: n.icon, accent: n.accent, title: n.title, body: n.body + ' \u00b7 ' + ago(e.at), action: { label: 'View', go: n.go } });
+    });
+
+    // 2. New chat messages from others (live)
     try {
-      const cal = JSON.parse(sessionStorage.getItem('ss-cal-events') || '[]');
-      cal.map(ev => ({ ...ev, _s: new Date(ev.start?.dateTime || ev.start?.date || 0) }))
-        .filter(ev => ev._s > now && ev._s < new Date(now.getTime() + 30 * 60000))
-        .slice(0, 3)
-        .forEach(ev => out.push({
-          id: 'meet-' + todayKey + '-' + ev.id, kind: 'meeting', icon: '🎥', accent: '#34D399',
-          title: 'Meeting starting soon', body: (ev.summary || 'A meeting') + ' at ' + ev._s.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-          action: { label: 'Join standup', go: 'standup' },
-        }));
-    } catch {}
-    tasks.filter(t => t.status !== 'done' && t.created_at && (now - new Date(t.created_at)) > 2 * 864e5).forEach(t => out.push({
-      id: 'bkl-' + todayKey + '-' + t.id, kind: 'backlog', icon: '📋', accent: '#818CF8',
-      title: 'Backlog item', body: (t.title || t.text || 'A task') + ' has been open a while',
-      action: { label: 'Review', go: 'tasks' },
-    }));
-    tasks.filter(t => t.status === 'done' && t.assignee_email !== session?.user?.email).slice(0,10).forEach(t => out.push({
-      id: 'done-' + todayKey + '-' + t.id, kind: 'done', icon: '✅', accent: '#34D399',
-      title: 'Task completed', body: (t.assignee_name || (t.assignee_email||'Someone').split('@')[0]) + ' completed "' + (t.title || t.text || 'a task') + '"',
-      action: { label: 'View tasks', go: 'tasks' },
-    }));
-    // Digest / EOD mails delivered to ME (members see the manager's digest as a notification)
-    try {
-      const myEmail = session?.user?.email;
-      const digs = JSON.parse(localStorage.getItem('ss-digests-' + (team?.id || 'demo')) || '[]');
-      digs.filter(d => d.email === myEmail && d.day === todayKey).forEach(d => out.unshift({
-        id: 'mail-' + d.id, kind: 'mail', icon: '📧', accent: '#6366F1',
-        title: d.kind === 'eod' ? 'EOD summary from ' + d.from : 'Standup digest from ' + d.from,
-        body: d.subject,
-        mail: { subject: d.subject, body: d.body, to: d.to },
-        action: { label: 'Open email', mail: true },
-      }));
-    } catch {}
-    // New chat messages from others (today), newest first
-    try {
-      const myEmail = session?.user?.email;
-      (messages || []).filter(m => m.sender_email && m.sender_email !== myEmail && m.type === 'text').slice(-8).forEach(m => out.unshift({
-        id: 'msg-' + m.id, kind: 'chat', icon: '💬', accent: '#38BDF8',
+      (messages || []).filter(m => m.sender_email && m.sender_email.toLowerCase() !== myEmail && m.type === 'text').slice(-6).forEach(m => out.push({
+        id: 'msg-' + m.id, at: m.created_at ? new Date(m.created_at).getTime() : Date.now(),
+        kind: 'chat', icon: '\uD83D\uDCAC', accent: '#38BDF8',
         title: 'New message from ' + (m.sender_name || m.sender_email.split('@')[0]),
-        body: (m.text || '').slice(0, 80),
-        action: { label: 'Open chat', go: 'communication' },
+        body: (m.text || '').slice(0, 80), action: { label: 'Open chat', go: 'communication' },
       }));
     } catch {}
-    return out.slice(0, 20).filter(n => !dismissedIds.has(n.id)).map(n => ({ ...n, read: readIds.has(n.id) }));
-  }, [tasks, messages, readIds, dismissedIds, session, todayKey, team]);
+
+    // 3. One concise live "blockers need attention" summary (managers/leads)
+    if (canPerf) {
+      const blk = tasks.filter(t => t.status === 'blocked');
+      if (blk.length) out.push({
+        id: 'blk-summary-' + todayKey, at: Date.now(), kind: 'blocker', icon: '\uD83D\uDEA7', accent: '#F87171',
+        title: blk.length + ' blocker' + (blk.length > 1 ? 's' : '') + ' need attention',
+        body: blk.slice(0, 2).map(t => t.title || t.text).join(', ') + (blk.length > 2 ? '\u2026' : ''),
+        action: { label: 'View', go: 'tasks' },
+      });
+    }
+
+    // 4. Digest/EOD mail delivered to me
+    try {
+      const digs = JSON.parse(localStorage.getItem('ss-digests-' + (team?.id || 'demo')) || '[]');
+      digs.filter(d => (d.email || '').toLowerCase() === myEmail && d.day === todayKey).forEach(d => out.push({
+        id: 'mail-' + d.id, at: d.at || Date.now(), kind: 'mail', icon: '\uD83D\uDCE7', accent: '#6366F1',
+        title: d.kind === 'eod' ? 'EOD summary from ' + d.from : 'Standup digest from ' + d.from,
+        body: d.subject, mail: { subject: d.subject, body: d.body, to: d.to }, action: { label: 'Open email', mail: true },
+      }));
+    } catch {}
+
+    return out
+      .sort((a, b) => (b.at || 0) - (a.at || 0))
+      .slice(0, 25)
+      .filter(n => !dismissedIds.has(n.id))
+      .map(n => ({ ...n, read: readIds.has(n.id) }));
+  }, [tasks, messages, readIds, dismissedIds, session, todayKey, team, isManager, canPerf]);
 
   const unreadNotifs = notifs.filter(n => !n.read).length;
   const [presenceOpen, setPresenceOpen] = useState(false);
+  const [banner, setBanner] = useState(null); // transient top banner for fresh notifs
+  const bannerTimer = useRef(null);
 
   // Fire a desktop notification for genuinely-new items (once each), if allowed.
   const seenNotifRef = useRef(null);
@@ -9697,6 +9873,10 @@ function ManagerView({
     const fresh = notifs.filter(n => !n.read && !seenNotifRef.current.has(n.id));
     if (fresh.length) {
       try { playChime(); } catch (e) {} // sound (respects ss-sound) — independent of desktop permission
+      // In-app banner for the newest fresh item
+      setBanner(fresh[0]);
+      clearTimeout(bannerTimer.current);
+      bannerTimer.current = setTimeout(() => setBanner(null), 6000);
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         fresh.slice(0, 3).forEach(n => {
           try { const d = new Notification(n.title, { body: n.body, tag: n.id, icon: '/favicon.ico' }); setTimeout(() => d.close(), 6000); } catch (e) {}
@@ -10029,6 +10209,21 @@ function ManagerView({
           </div>
         )}
 
+        {/* Transient notification banner */}
+        {banner && (
+          <div
+            onClick={() => { handleNotifAction(banner); setBanner(null); }}
+            style={{ position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 900, width: 'min(440px, calc(100vw - 32px))', cursor: 'pointer', background: c.surf, border: `1px solid ${c.bord}`, borderLeft: `4px solid ${banner.accent || c.accent}`, borderRadius: 12, boxShadow: '0 12px 40px rgba(0,0,0,.25)', padding: '12px 14px', display: 'flex', alignItems: 'flex-start', gap: 11, animation: 'slideDown .25s ease both' }}
+          >
+            <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>{banner.icon}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: c.text }}>{banner.title}</div>
+              <div style={{ fontSize: 12, color: c.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{banner.body}</div>
+            </div>
+            <button onClick={e => { e.stopPropagation(); setBanner(null); }} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 16, lineHeight: 1, flexShrink: 0 }}>×</button>
+          </div>
+        )}
+
         {/* Content */}
         <div key={area} className="ss-area-enter" style={{ flex: 1, padding: '34px 32px 64px', maxWidth: 1280, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
 
@@ -10047,9 +10242,9 @@ function ManagerView({
                 {tasksSub === 'board' && <LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} onDelete={onDeleteTask} session={session} isManager={isManager}/>}
                 {tasksSub === 'overview' && <TeamAnalysisTab tasks={tasks} members={members} history={history}/>}
                 {tasksSub === 'reliability' && <ReliabilityTab tasks={tasks} members={members} history={history} team={team}/>}
-                {tasksSub === 'report' && <DailyReportTab tasks={tasks} session={session} team={team} members={members}/>}
+                {tasksSub === 'report' && <DailyReportTab tasks={tasks} session={session} team={team} members={members} isManager={isManager}/>}
                 {tasksSub === 'reports' && isManager && <ReportsTab team={team} members={members} session={session}/>}
-                {tasksSub === 'ai' && <AIAssistant tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name || 'Team'}/>}
+                {tasksSub === 'ai' && <AIAssistant tasks={tasks} members={members} history={history} session={session} myTasks={myTasks} teamName={team?.name || 'Team'} team={team}/>}
                 {tasksSub === 'history' && <HistTab history={history} members={members}/>}
                 {tasksSub === 'weekly' && isManager && <WeeklyExecSummary tasks={tasks} members={members} history={history} team={team}/>}
                 {tasksSub === 'elevate' && isManager && <ElevateTab tasks={tasks} members={members} history={history} team={team}/>}
@@ -10062,7 +10257,7 @@ function ManagerView({
                 {tasksSub === 'overview'
                   ? <TeamAnalysisTab tasks={tasks} members={members} history={history} memberView={true}/>
                   : tasksSub === 'report'
-                  ? <DailyReportTab tasks={tasks} session={session} team={team} members={members}/>
+                  ? <DailyReportTab tasks={tasks} session={session} team={team} members={members} isManager={isManager}/>
                   : <LiveTab tasks={tasks} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onAddTask={onAddTask} onDelete={onDeleteTask} session={session} isManager={isManager}/>}
               </>
             )
@@ -10679,7 +10874,35 @@ export default function App() {
           SB.getTeamMembers(team.id),
           SB.getChatMessages(team.id,100),
         ]);
-        setTasks(t||[]);
+        const todayTasks = t || [];
+        // ── Carry-over: pull unfinished tasks from recent past standups so they
+        // don't vanish day-to-day. They surface today as backlog with a warning.
+        let carried = [];
+        try {
+          const pastStandups = (past || []).filter(p => p.id && p.id !== sd?.id).slice(0, 14);
+          const pastTaskArrays = await Promise.all(pastStandups.map(p =>
+            SB.getTasks(p.id).then(arr => (arr || []).map(x => ({ ...x, _standupDate: p.date }))).catch(() => [])
+          ));
+          const seen = new Set(todayTasks.map(x => x.id));
+          carried = pastTaskArrays.flat()
+            .filter(x => x.status !== 'done' && !seen.has(x.id))
+            .map(x => ({ ...x, _carriedOver: true }));
+          // de-dupe by id (keep the most recent occurrence)
+          const byId = {};
+          carried.forEach(x => { byId[x.id] = x; });
+          carried = Object.values(byId);
+        } catch (e) {}
+        setTasks([...todayTasks, ...carried]);
+        // Notify each assignee about their carried-over backlog (once per task per day)
+        try {
+          const exKey = 'ss-backlog-notified-' + team.id + '-' + TODAY();
+          const already = JSON.parse(localStorage.getItem(exKey) || '[]');
+          const newOnes = carried.filter(x => !already.includes(x.id));
+          newOnes.forEach(x => {
+            pushEvent(team.id, { type: 'backlog', actor: x.assignee_name || (x.assignee_email||'').split('@')[0], actorEmail: x.assignee_email, targetEmail: x.assignee_email, title: x.title || x.text, taskId: x.id, fromDate: x._standupDate });
+          });
+          localStorage.setItem(exKey, JSON.stringify([...already, ...newOnes.map(x => x.id)]));
+        } catch (e) {}
         setHistory((past||[]).filter(p=>p.date!==TODAY()));
         setMessages(msgs||[]);
         if(mems&&mems.length>0){
@@ -10725,8 +10948,8 @@ export default function App() {
   // Real-time chat subscription
   useEffect(()=>{ if(!team||!SB.IS_LIVE)return; return SB.subscribeToMessages(team.id,(msg)=>{setMessages(p=>{if(p.find(m=>m.id===msg.id))return p;return [...p,msg];});}); },[team]);
 
-  const handleAddTask=useCallback(async(d)=>{ if(!d?.title?.trim()) return; const {_timeBlock,...task}=d; const persistBlock=(tid)=>{ if(_timeBlock&&_timeBlock.start&&_timeBlock.end){ try{ const k='ss-schedule-'+(team?.id||'demo'); const cur=JSON.parse(localStorage.getItem(k)||'{}'); cur[tid]=_timeBlock; localStorage.setItem(k,JSON.stringify(cur)); }catch(e){} } }; if(!SB.IS_LIVE){const nt={id:'demo_'+Date.now(),...task,created_at:new Date().toISOString()};setTasks(p=>[...p,nt]);persistBlock(nt.id);return;} const{data}=await SB.addTask({...task,standup_id:standup?.id}); if(data){setTasks(p=>[...p,data]);persistBlock(data.id);} },[standup,team]);
-  const handleStatus=useCallback(async(id,status)=>{ const u={status,...(status==='done'?{completed_at:new Date().toISOString()}:{})}; if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));return;} await SB.updateTask(id,u); setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t)); },[]);
+  const handleAddTask=useCallback(async(d)=>{ if(!d?.title?.trim()) return; const {_timeBlock,...task}=d; const myEmail=session?.user?.email||''; const myName=session?.user?.user_metadata?.name||myEmail.split('@')[0]; const emitAssigned=(tid)=>{ const toSelf=(task.assignee_email||'').toLowerCase()===myEmail.toLowerCase(); pushEvent(team?.id,{ type:toSelf?'task_created':'task_assigned', actor:myName, actorEmail:myEmail, target:task.assignee_name||(task.assignee_email||'').split('@')[0], targetEmail:task.assignee_email, title:task.title, taskId:tid }); }; const persistBlock=(tid)=>{ if(_timeBlock&&_timeBlock.start&&_timeBlock.end){ try{ const k='ss-schedule-'+(team?.id||'demo'); const cur=JSON.parse(localStorage.getItem(k)||'{}'); cur[tid]=_timeBlock; localStorage.setItem(k,JSON.stringify(cur)); }catch(e){} } }; if(!SB.IS_LIVE){const nt={id:'demo_'+Date.now(),...task,created_at:new Date().toISOString()};setTasks(p=>[...p,nt]);persistBlock(nt.id);emitAssigned(nt.id);return;} const{data}=await SB.addTask({...task,standup_id:standup?.id}); if(data){setTasks(p=>[...p,data]);persistBlock(data.id);emitAssigned(data.id);} },[standup,team,session]);
+  const handleStatus=useCallback(async(id,status)=>{ const u={status,...(status==='done'?{completed_at:new Date().toISOString()}:{})}; const myEmail=session?.user?.email||''; const myName=session?.user?.user_metadata?.name||myEmail.split('@')[0]; const t=tasks.find(x=>x.id===id); if(t&&(status==='done'||status==='in-progress')){ pushEvent(team?.id,{ type:status==='done'?'task_completed':'task_started', actor:t.assignee_name||myName, actorEmail:t.assignee_email||myEmail, title:t.title||t.text, taskId:id }); } if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t));return;} await SB.updateTask(id,u); setTasks(p=>p.map(t=>t.id===id?{...t,...u}:t)); },[tasks,team,session]);
   const handleDeleteTask=useCallback(async(id)=>{ setTasks(p=>p.filter(t=>t.id!==id)); if(SB.IS_LIVE){ try{ const del=sbFn('deleteTask'); if(del){ await del(id); } else if(SB.supabase){ await SB.supabase.from('tasks').delete().eq('id',id); } }catch(e){} } },[]);
   const handlePriority=useCallback(async(id,priority)=>{ if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,priority}:t));return;} await SB.updateTask(id,{priority}); },[]);
   const handleNote=useCallback(async(id,manager_note)=>{ if(!SB.IS_LIVE){setTasks(p=>p.map(t=>t.id===id?{...t,manager_note}:t));return;} await SB.updateTask(id,{manager_note}); },[]);
