@@ -94,6 +94,25 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 3px var(--ss-focus,rgba
 @keyframes ssPop{0%{opacity:0;transform:scale(.97) translateY(8px)}100%{opacity:1;transform:scale(1) translateY(0)}}
 .ss-pop{animation:ssPop .22s cubic-bezier(.22,1,.36,1) both}
 @media(prefers-reduced-motion:reduce){button:active{transform:none}.ss-lift:hover{transform:none}.ss-pop{animation:none}}
+/* ── Premium depth & 3D-feel (no Three.js) ──────────────────────────── */
+/* Tilt-on-hover cards: perspective wrapper + transform on inner */
+.ss-tilt{transform-style:preserve-3d;transition:transform .25s cubic-bezier(.22,1,.36,1),box-shadow .25s}
+.ss-tilt:hover{box-shadow:0 30px 70px -30px rgba(0,112,243,.45),0 8px 24px -12px rgba(0,0,0,.3)}
+.ss-depth-1{box-shadow:0 1px 2px rgba(0,0,0,.06),0 8px 24px -12px rgba(0,0,0,.18)}
+.ss-depth-2{box-shadow:0 2px 6px rgba(0,0,0,.08),0 18px 48px -20px rgba(0,0,0,.28)}
+.ss-glass{backdrop-filter:blur(28px) saturate(1.4);-webkit-backdrop-filter:blur(28px) saturate(1.4)}
+/* Sheen sweep on hover for hero/CTA surfaces */
+@keyframes ssSheen{0%{transform:translateX(-120%) skewX(-18deg)}100%{transform:translateX(220%) skewX(-18deg)}}
+.ss-sheen{position:relative;overflow:hidden}
+.ss-sheen::after{content:'';position:absolute;top:0;bottom:0;left:0;width:60%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent);transform:translateX(-120%) skewX(-18deg);pointer-events:none;opacity:0;transition:opacity .2s}
+.ss-sheen:hover::after{opacity:1;animation:ssSheen .9s cubic-bezier(.22,1,.36,1)}
+/* Animated gradient text for hero accents */
+@keyframes ssGrad{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+.ss-grad-text{background:linear-gradient(110deg,#0070F3,#3B9EFF,#7C5CFF,#0070F3);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:ssGrad 8s ease infinite}
+/* Floating idle motion for accent elements */
+@keyframes ssFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+.ss-float{animation:ssFloat 6s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){.ss-tilt:hover{transform:none!important}.ss-sheen:hover::after{animation:none}.ss-grad-text{animation:none}.ss-float{animation:none}}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(0,112,243,.25);border-radius:10px}
@@ -128,17 +147,32 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 3px var(--ss-focus,rgba
 `;
 
 // ─── PRIMITIVES ───────────────────────────────────────────────────────────────
-// Slowly drifting ambient gradient blobs + faint grid — quietly alive behind the app.
+// Slowly drifting ambient gradient blobs + faint grid, with subtle mouse parallax — depth without 3D libs.
 function AmbientBackground() {
   const c = useC(); const dark = c.dark;
-  const blob = (bg) => ({ position:'absolute', borderRadius:'50%', filter:'blur(120px)', background:bg });
+  const [p, setP] = useState({ x: 0, y: 0 });
+  useEffect(() => {
+    let raf = null;
+    const onMove = (e) => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        const x = (e.clientX / window.innerWidth - 0.5);
+        const y = (e.clientY / window.innerHeight - 0.5);
+        setP({ x, y }); raf = null;
+      });
+    };
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reduce) window.addEventListener('pointermove', onMove);
+    return () => { window.removeEventListener('pointermove', onMove); if (raf) cancelAnimationFrame(raf); };
+  }, []);
+  const blob = (bg) => ({ position:'absolute', borderRadius:'50%', filter:'blur(120px)', background:bg, transition:'transform .5s cubic-bezier(.22,1,.36,1)' });
   return (
     <div aria-hidden="true" style={{ pointerEvents:'none', position:'fixed', inset:0, zIndex:0, overflow:'hidden' }}>
       <div style={{ position:'absolute', inset:0, background:c.bg }} />
-      <div className="blueprint-grid" style={{ position:'absolute', inset:0, color:c.bord, opacity:dark?.5:.6 }} />
-      <div className="ambient-blob-a" style={{ ...blob(dark?'radial-gradient(circle at center, rgba(0,122,255,.22), transparent 60%)':'radial-gradient(circle at center, rgba(0,112,243,.10), transparent 60%)'), top:-160, left:-160, height:720, width:720 }} />
-      <div className="ambient-blob-b" style={{ ...blob(dark?'radial-gradient(circle at center, rgba(120,80,255,.16), transparent 60%)':'radial-gradient(circle at center, rgba(120,80,255,.07), transparent 60%)'), top:'33%', right:-220, height:640, width:640 }} />
-      <div className="ambient-blob-c" style={{ ...blob(dark?'radial-gradient(circle at center, rgba(16,185,129,.12), transparent 60%)':'radial-gradient(circle at center, rgba(16,185,129,.06), transparent 60%)'), bottom:-260, left:'33%', height:680, width:680 }} />
+      <div className="blueprint-grid" style={{ position:'absolute', inset:0, color:c.bord, opacity:dark?.5:.6, transform:`translate(${p.x*-8}px,${p.y*-8}px)`, transition:'transform .5s cubic-bezier(.22,1,.36,1)' }} />
+      <div className="ambient-blob-a" style={{ ...blob(dark?'radial-gradient(circle at center, rgba(0,122,255,.22), transparent 60%)':'radial-gradient(circle at center, rgba(0,112,243,.10), transparent 60%)'), top:-160, left:-160, height:720, width:720, transform:`translate(${p.x*40}px,${p.y*40}px)` }} />
+      <div className="ambient-blob-b" style={{ ...blob(dark?'radial-gradient(circle at center, rgba(120,80,255,.16), transparent 60%)':'radial-gradient(circle at center, rgba(120,80,255,.07), transparent 60%)'), top:'33%', right:-220, height:640, width:640, transform:`translate(${p.x*-55}px,${p.y*-55}px)` }} />
+      <div className="ambient-blob-c" style={{ ...blob(dark?'radial-gradient(circle at center, rgba(16,185,129,.12), transparent 60%)':'radial-gradient(circle at center, rgba(16,185,129,.06), transparent 60%)'), bottom:-260, left:'33%', height:680, width:680, transform:`translate(${p.x*30}px,${p.y*-30}px)` }} />
     </div>
   );
 }
@@ -236,15 +270,27 @@ function Av({ member, size=36, url }) {
 }
 function PBadge({ priority }) { const p=getPriority(priority); return <span style={{ fontSize:10,fontWeight:700,letterSpacing:'.06em',background:p.bg,color:p.color,padding:'3px 8px',borderRadius:20,textTransform:'uppercase',border:`1px solid ${p.color}35`,whiteSpace:'nowrap' }}>{p.label}</span>; }
 function SBadge({ status }) { const s=getStatus(status); return <span style={{ fontSize:10,fontWeight:700,letterSpacing:'.06em',background:s.bg,color:s.color,padding:'3px 8px',borderRadius:20,textTransform:'uppercase',border:`1px solid ${s.color}35`,whiteSpace:'nowrap' }}>{s.label}</span>; }
-function Card({ children, style={}, onClick }) {
+function Card({ children, style={}, onClick, tilt=false }) {
   const c=useC(); const { dark }=useTheme(); const [h,setH]=useState(false);
+  const ref=useRef(null); const [t,setT]=useState({ rx:0, ry:0 });
+  const onMove=(e)=>{
+    if(!tilt||!ref.current)return;
+    const r=ref.current.getBoundingClientRect();
+    const px=(e.clientX-r.left)/r.width-0.5, py=(e.clientY-r.top)/r.height-0.5;
+    setT({ rx:py*-5, ry:px*6 });
+  };
+  const reset=()=>{ setH(false); setT({ rx:0, ry:0 }); };
   return(
-    <div onClick={onClick} onMouseEnter={()=>onClick&&setH(true)} onMouseLeave={()=>setH(false)} style={{
+    <div ref={ref} onClick={onClick}
+      onMouseEnter={()=>setH(true)} onMouseMove={onMove} onMouseLeave={reset}
+      style={{
       background:dark?(h&&onClick?'rgba(255,255,255,.07)':'rgba(255,255,255,.048)'):(h&&onClick?'rgba(255,255,255,.92)':'rgba(255,255,255,.72)'),
       border:`1px solid ${h&&onClick?c.bordH:c.bord}`,borderRadius:16,
-      backdropFilter:'blur(28px)',WebkitBackdropFilter:'blur(28px)',
+      backdropFilter:'blur(28px) saturate(1.3)',WebkitBackdropFilter:'blur(28px) saturate(1.3)',
       boxShadow:dark?'0 2px 20px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.04)':'0 2px 20px rgba(0,112,243,.06),inset 0 1px 0 rgba(255,255,255,.9)',
-      transition:'transform .18s cubic-bezier(.22,1,.36,1),background .18s,border-color .18s,box-shadow .18s',cursor:onClick?'pointer':undefined,transform:h&&onClick?'translateY(-2px)':'none',...style
+      transition:'transform .2s cubic-bezier(.22,1,.36,1),background .18s,border-color .18s,box-shadow .18s',cursor:onClick?'pointer':undefined,
+      transform:tilt?`perspective(900px) rotateX(${t.rx}deg) rotateY(${t.ry}deg) ${h?'translateY(-2px)':''}`:(h&&onClick?'translateY(-2px)':'none'),
+      ...style
     }}>{children}</div>
   );
 }
@@ -272,7 +318,7 @@ function Btn({ children, v='primary', style={}, disabled, loading, ...p }) {
     google:{background:'#fff',color:'#3C4043',border:'1px solid #dadce0',boxShadow:'0 1px 5px rgba(0,0,0,.1)'},
     gcal:{background:'linear-gradient(135deg,#4285F4,#34A853)',color:'#fff',border:'none'},
   };
-  return <button {...p} disabled={disabled||loading} style={{ display:'inline-flex',alignItems:'center',justifyContent:'center',gap:6,padding:'10px 20px',borderRadius:10,fontSize:13,fontWeight:600,cursor:(disabled||loading)?'not-allowed':'pointer',transition:'all .15s',opacity:(disabled||loading)?.5:1,...vs[v]||vs.primary,...style }}>{loading?<div style={{ width:16,height:16,borderRadius:'50%',border:'2px solid rgba(0,0,0,.15)',borderTop:'2px solid currentColor',animation:'spin .75s linear infinite' }}/>:children}</button>;
+  return <button {...p} className="ss-sheen" disabled={disabled||loading} style={{ display:'inline-flex',alignItems:'center',justifyContent:'center',gap:6,padding:'10px 20px',borderRadius:10,fontSize:13,fontWeight:600,cursor:(disabled||loading)?'not-allowed':'pointer',transition:'all .15s',opacity:(disabled||loading)?.5:1,...vs[v]||vs.primary,...style }}>{loading?<div style={{ width:16,height:16,borderRadius:'50%',border:'2px solid rgba(0,0,0,.15)',borderTop:'2px solid currentColor',animation:'spin .75s linear infinite' }}/>:children}</button>;
 }
 function Spin({ size=28, color='#3B9EFF' }) { return <div style={{ width:size,height:size,borderRadius:'50%',border:`2.5px solid rgba(128,128,128,.15)`,borderTop:`2.5px solid ${color}`,animation:'spin .75s linear infinite',flexShrink:0 }}/>; }
 function LiveDot() { return <span style={{ position:'relative',display:'inline-block',width:8,height:8,flexShrink:0 }}><span style={{ position:'absolute',inset:0,borderRadius:'50%',background:'#34D399',opacity:.4,animation:'pulse 2s ease infinite' }}/><span style={{ position:'absolute',inset:1,borderRadius:'50%',background:'#34D399' }}/></span>; }
@@ -287,7 +333,7 @@ function Modal({ children, onClose, title, width=500 }) {
 }
 function StatCard({ label, value, color='#3B9EFF', sub, icon }) {
   const c=useC();
-  return <Card style={{ padding:'16px 20px' }}><div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start' }}><div><div className="eyebrow" style={{ color:c.mut,marginBottom:6 }}>{label}</div><div className="font-heading" style={{ fontSize:30,fontWeight:600,color,letterSpacing:'-.025em',lineHeight:1,fontVariantNumeric:'tabular-nums' }}>{value}</div>{sub&&<div style={{ fontSize:11,color:c.mut,marginTop:5,fontFamily:"'JetBrains Mono',monospace" }}>{sub}</div>}</div>{icon&&<span style={{ fontSize:22,opacity:.45 }}>{icon}</span>}</div></Card>;
+  return <Card tilt style={{ padding:'16px 20px' }}><div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start' }}><div><div className="eyebrow" style={{ color:c.mut,marginBottom:6 }}>{label}</div><div className="font-heading" style={{ fontSize:30,fontWeight:600,color,letterSpacing:'-.025em',lineHeight:1,fontVariantNumeric:'tabular-nums' }}>{value}</div>{sub&&<div style={{ fontSize:11,color:c.mut,marginTop:5,fontFamily:"'JetBrains Mono',monospace" }}>{sub}</div>}</div>{icon&&<span className="ss-float" style={{ fontSize:22,opacity:.45 }}>{icon}</span>}</div></Card>;
 }
 function Lbl({ children, style={} }) { const c=useC(); return <div style={{ fontSize:10,fontWeight:700,letterSpacing:'.1em',color:c.mut,textTransform:'uppercase',marginBottom:8,...style }}>{children}</div>; }
 // Reusable empty state: icon/illustration, title, explanation, primary + secondary actions, optional preview.
@@ -508,7 +554,7 @@ function AuthPage({ onLogin, inviteToken }) {
             <Logo size={32}/>
             <span style={{ fontSize: 18, fontWeight: 800, color: c.text, letterSpacing: '-.02em' }}>StandSync</span>
           </div>
-          <h1 style={{ fontSize: 40, fontWeight: 800, color: c.text, letterSpacing: '-.03em', lineHeight: 1.1, margin: '0 0 18px', maxWidth: 520 }}>Run Standups. Manage Work. Stay Aligned.</h1>
+          <h1 className="font-heading" style={{ fontSize: 42, fontWeight: 700, color: c.text, letterSpacing: '-.035em', lineHeight: 1.08, margin: '0 0 18px', maxWidth: 540 }}>Run Standups. <span className="ss-grad-text">Manage Work.</span> Stay Aligned.</h1>
           <p style={{ fontSize: 16, color: c.sub, lineHeight: 1.6, margin: '0 0 40px', maxWidth: 480 }}>StandSync brings tasks, standups, collaboration, knowledge, and AI insights into one workspace.</p>
 
           <div className="ss-auth-features" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, maxWidth: 540 }}>
@@ -693,7 +739,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
       </div>
 
       <div style={{ maxWidth:960,margin:'0 auto',padding:'36px 24px' }}>
-        <h1 className="font-heading" style={{ fontSize:34,fontWeight:600,color:c.text,marginBottom:4,letterSpacing:'-.03em' }}>{greeting}, {name} 👋</h1>
+        <h1 className="font-heading" style={{ fontSize:34,fontWeight:600,color:c.text,marginBottom:4,letterSpacing:'-.03em' }}>{greeting}, <span className="ss-grad-text">{name}</span> 👋</h1>
         <p style={{ color:c.mut,fontSize:14,marginBottom:32 }}>What would you like to do today?</p>
 
         {/* ── TWO-PATH CHOOSER ── */}
