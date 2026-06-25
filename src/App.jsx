@@ -557,8 +557,9 @@ function AuthPage({ onLogin, inviteToken }) {
   ];
 
   return (
-    <div style={{ minHeight: '100vh', position: 'relative', zIndex: 1, animation: 'fadeIn .4s ease' }}>
-      <div className="ss-auth-wrap" style={{ display: 'flex', minHeight: '100vh' }}>
+    <div className="ss-3d-scene" style={{ minHeight: '100vh', position: 'relative', zIndex: 1 }}>
+      <AmbientBackground/>
+      <div className="ss-auth-wrap ss-3d-rise" style={{ display: 'flex', minHeight: '100vh', position:'relative', zIndex:1 }}>
 
         {/* LEFT — hero (60%) */}
         <div className="ss-auth-hero" style={{ flex: '0 0 58%', maxWidth: '58%', padding: '48px 56px', display: 'flex', flexDirection: 'column', justifyContent: 'center', boxSizing: 'border-box' }}>
@@ -662,7 +663,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
   const [roomId,setRoomId]=useState(''); const [roomPass,setRoomPass]=useState('');
   const [joinLoading,setJoinLoading]=useState(false); const [joinError,setJoinError]=useState('');
   const name=session?.user?.user_metadata?.name||session?.user?.email?.split('@')[0]||'there';
-  const greeting=(()=>{ const h=new Date().getHours(); return h<12?'Good morning':h<18?'Good afternoon':'Good evening'; })();
+  const greeting=(()=>{ const h=new Date().getHours(); return (h>=5&&h<12)?'Good morning':(h>=12&&h<17)?'Good afternoon':'Good evening'; })();
   const ICONS=['⚡','🚀','🎯','🔥','💡','🌟','🏗️','🎨','🔬','📱'];
 
   useEffect(()=>{
@@ -756,6 +757,17 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
   };
 
   // ── Team list ──────────────────────────────────────────────────────────────
+  // Branded splash while teams load or auto-enter resolves — prevents the
+  // team-picker from flashing on entry.
+  if(view==='list' && (loading || (teams && teams.length>0 && !autoEnteredRef.current && sessionStorage.getItem('ss-skip-autoenter')!=='1'))) return(
+    <div style={{ minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:20,position:'relative',zIndex:1 }}>
+      <AmbientBackground/>
+      <div className="ss-3d-pop" style={{ position:'relative',zIndex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:18 }}>
+        <Logo size={46}/>
+        <div style={{ width:30,height:30,borderRadius:'50%',border:`2.5px solid ${c.bord}`,borderTopColor:c.accent,animation:'spin .7s linear infinite' }}/>
+      </div>
+    </div>
+  );
   if(view==='list') return(
     <div style={{ minHeight:'100vh',position:'relative',zIndex:1,animation:'fadeIn .3s ease' }}>
       {/* Nav */}
@@ -1434,12 +1446,10 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
           userSelect:'none',
         }}
       >
-        {/* Minimal star/sparkle AI icon */}
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0 }}>
-          <path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z"
-            fill={dark?'#C4B5FD':'#0070F3'} opacity=".9"/>
-          <circle cx="19" cy="4" r="1.5" fill={dark?'#A78BFA':'#3B9EFF'} opacity=".7"/>
-          <circle cx="5" cy="19" r="1" fill={dark?'#A78BFA':'#3B9EFF'} opacity=".5"/>
+        {/* Minimal AI spark icon */}
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0 }}>
+          <path d="M12 3c.5 4 2.5 6 6.5 6.5-4 .5-6 2.5-6.5 6.5-.5-4-2.5-6-6.5-6.5C9.5 9 11.5 7 12 3z" fill={dark?'#C4B5FD':'#0070F3'}/>
+          <path d="M18.5 14c.25 1.6 1 2.35 2.5 2.6-1.5.25-2.25 1-2.5 2.6-.25-1.6-1-2.35-2.5-2.6 1.5-.25 2.25-1 2.5-2.6z" fill={dark?'#A78BFA':'#3B9EFF'} opacity=".85"/>
         </svg>
       </button>
 
@@ -3469,7 +3479,9 @@ function SettingsPage({ session, onBack, onSaved, team, members = [], setMembers
   const [soundEnabled,setSoundEnabledRaw]=useState(()=>{ try{ return localStorage.getItem('ss-sound')==='1'; }catch{ return false; } });
   const setSoundEnabled=(v)=>{ setSoundEnabledRaw(v); try{ localStorage.setItem('ss-sound',v?'1':'0'); }catch{} if(v){ try{ playChime(); }catch(e){} } };
   return (
-    <div style={{ position:'relative',zIndex:1,minHeight:'100vh' }}>
+    <div className="ss-3d-scene" style={{ position:'relative',zIndex:1,minHeight:'100vh' }}>
+      <AmbientBackground/>
+      <div className="ss-3d-rise" style={{ position:'relative',zIndex:1 }}>
       <div style={{ borderBottom:`1px solid ${c.bord}`,background:c.nav,backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',boxShadow:'0 1px 0 rgba(255,255,255,.06)',position:'sticky',top:0,zIndex:100,overflow:'visible' }}>
         <div style={{ maxWidth:900,margin:'0 auto',padding:'0 24px',height:58,display:'flex',alignItems:'center',gap:12 }}>
           <Logo size={28} onClick={onBack}/><div style={{ flex:1 }}/><ThemeToggle/><Btn v="ghost" onClick={onBack} style={{ padding:'6px 14px',fontSize:13 }}>← Back</Btn>
@@ -3533,6 +3545,7 @@ function SettingsPage({ session, onBack, onSaved, team, members = [], setMembers
           {tab==='team'&&team&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:6 }}>Team & invites</h2><p style={{ fontSize:12.5,color:c.mut,marginBottom:18 }}>Share room codes and invite people to your team. To change someone's role or remove them, open their card in Team → Directory.</p><TeamSettingsTab team={team} members={members} session={session} hideMembers={true} onMembersUpdate={()=>{ if(setMembers&&SB.IS_LIVE) SB.getTeamMembers(team.id).then(m=>setMembers(m||[])); }}/></Card>)}
           {tab==='faq'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>FAQ & Help</h2>{FAQ.map((item,i)=><div key={i} style={{ borderBottom:`1px solid ${c.bord}`,padding:'14px 0' }}><button onClick={()=>setOpenFaq(openFaq===i?null:i)} style={{ width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',background:'none',border:'none',cursor:'pointer',color:c.text,fontSize:14,fontWeight:600,textAlign:'left',gap:12 }}><span>{item.q}</span><span style={{ transform:openFaq===i?'rotate(180deg)':'none',transition:'transform .2s',color:c.mut,fontSize:18,flexShrink:0 }}>⌃</span></button>{openFaq===i&&<p style={{ fontSize:13,color:c.mut,lineHeight:1.6,marginTop:10,marginBottom:0 }}>{item.a}</p>}</div>)}</Card>)}
         </div>
+      </div>
       </div>
     </div>
   );
@@ -5503,25 +5516,38 @@ function WikiAIPanel({ projectId, projectName, getProjectContext, compact }) {
     setTimeout(() => inputRef.current?.focus(), 0);
     try {
       const ctx = getProjectContext(projectId);
-      const hasFiles = ctx.includes('===FILE ATTACHMENTS===') || ctx.includes('[PDF:') || ctx.includes('[Presentation:');
+      if (!ctx || !ctx.trim()) {
+        setHistory(h => [...h, { role: 'assistant', text: "There's nothing documented in this project yet. Add a page or upload a PDF/SOP, and I'll be able to answer questions about it." }]);
+        setLoading(false);
+        setTimeout(() => inputRef.current?.focus(), 50);
+        return;
+      }
+      const hasFiles = ctx.includes('=== UPLOADED FILES ===') || ctx.includes('[PDF:') || ctx.includes('[Presentation:');
       const prompt = `You are a helpful project assistant for "${projectName || 'this project'}".
 
-${ctx ? `Here is the complete project documentation, pages, and uploaded files:\n\n${ctx}` : 'No documentation added yet.'}
+Here is the complete project documentation, pages, and uploaded files:
+
+${ctx}
 
 ---
 User question: "${text}"
 
 Instructions:
-- Answer based on the project documentation above
+- Answer using the project documentation above
 - If files are mentioned (PDFs, presentations, docs), reference them by name
 - If the answer isn't in the docs, say so clearly and offer general guidance
 - Use bullet points for lists
 - Be concise and specific`;
 
       const reply = await askAI(prompt, { teamName: projectName || 'Project' });
-      setHistory(h => [...h, { role: 'assistant', text: reply }]);
+      const clean = (reply || '').trim();
+      if (!clean) {
+        setHistory(h => [...h, { role: 'assistant', text: "I couldn't generate a response just now. Please try rephrasing, or try again in a moment." }]);
+      } else {
+        setHistory(h => [...h, { role: 'assistant', text: clean }]);
+      }
     } catch(e) {
-      setHistory(h => [...h, { role: 'assistant', text: 'Could not reach AI. Make sure REACT_APP_GEMINI_KEY is set in Vercel.' }]);
+      setHistory(h => [...h, { role: 'assistant', text: 'The AI service is unavailable right now. If this keeps happening, the AI key may not be configured for this workspace.' }]);
     }
     setLoading(false);
     setTimeout(() => inputRef.current?.focus(), 50);
@@ -5828,9 +5854,16 @@ function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, pr
 // ─── PROJECT WIKI OVERVIEW ────────────────────────────────────────────────────
 // Stable top-level component so WikiAIPanel input never loses focus
 function WikiOverview({ curProject, projPages, pinnedPages, projectId, projectFiles, setProjectFiles, saveWiki, projects, pages, getProjectContext, onNewPage, onDeleteProject, onOpenPage, onTogglePin, onDeletePage, dark, c }) {
-  const totalPages = projPages.length;
-  const lastEdited = [...projPages].sort((a,b) => b.updatedAt - a.updatedAt)[0];
-  const wordCount = projPages.reduce((acc, pg) => acc + (pg.blocks?.map(b => b.content||'').join(' ').split(/\s+/).filter(Boolean).length||0), 0);
+  const filesForProject = (projectFiles && projectFiles[projectId]) ? projectFiles[projectId] : [];
+  const totalPages = projPages.length + filesForProject.length;
+  const pageEdits = projPages.map(p => p.updatedAt).filter(Boolean);
+  const fileEdits = filesForProject.map(f => f.uploadedAt).filter(Boolean);
+  const lastEditedTs = [...pageEdits, ...fileEdits].sort((a,b) => b - a)[0];
+  const lastEdited = lastEditedTs ? { updatedAt: lastEditedTs } : null;
+  const wordsFrom = (s) => (s || '').split(/\s+/).filter(Boolean).length;
+  const pageWords = projPages.reduce((acc, pg) => acc + wordsFrom((pg.blocks || []).map(b => b.content || '').join(' ')), 0);
+  const fileWords = filesForProject.reduce((acc, f) => acc + wordsFrom(f.extractedText || f.text || ''), 0);
+  const wordCount = pageWords + fileWords;
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '32px 40px', maxWidth: 860, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
@@ -5849,7 +5882,7 @@ function WikiOverview({ curProject, projPages, pinnedPages, projectId, projectFi
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 24 }}>
-        {[{label:'Pages',value:totalPages,icon:'📄'},{label:'Words documented',value:wordCount.toLocaleString(),icon:'📝'},{label:'Last edited',value:lastEdited?new Date(lastEdited.updatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'—',icon:'🕐'}].map(s=>(
+        {[{label:'Pages & files',value:totalPages,icon:'📄'},{label:'Words documented',value:wordCount.toLocaleString(),icon:'✍️'},{label:'Last edited',value:lastEdited?new Date(lastEdited.updatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'—',icon:'🕘'}].map(s=>(
           <div key={s.label} style={{ padding: '16px 18px', borderRadius: 12, background: dark?'rgba(255,255,255,.04)':'rgba(255,255,255,.8)', border: `1px solid ${c.bord}` }}>
             <div style={{ fontSize: 22, marginBottom: 6 }}>{s.icon}</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: c.text, letterSpacing: '-.02em' }}>{s.value}</div>
@@ -5974,15 +6007,30 @@ function ProjectWiki({ team, session, members = [] }) {
   }, [WIKI_KEY]);
 
   const saveWiki = useCallback((p, pg, pf) => {
-    try {
-      const files = pf !== undefined ? pf : projectFiles;
-      // Strip dataUrls from non-image files to save space
-      const fs = {};
-      Object.keys(files).forEach(pid => {
-        fs[pid] = files[pid].map(f => ({ ...f, dataUrl: f.type?.startsWith('image/') ? f.dataUrl : f.dataUrl }));
+    const files = pf !== undefined ? pf : projectFiles;
+    // Strip heavy base64 dataUrls from non-image files before persisting.
+    // PDFs/docs can be multiple MB each; keeping them blows past localStorage's
+    // ~5MB quota, the write throws, and nothing saves (files vanish on refresh).
+    // We keep extracted text + metadata so the file card and AI context survive;
+    // small images keep their preview.
+    const slim = {};
+    Object.keys(files).forEach(pid => {
+      slim[pid] = (files[pid] || []).map(f => {
+        const isSmallImage = f.type?.startsWith('image/') && (f.size || 0) < 600 * 1024;
+        return { ...f, dataUrl: isSmallImage ? f.dataUrl : undefined, _hadFile: !!f.dataUrl };
       });
-      localStorage.setItem(WIKI_KEY, JSON.stringify({ projects: p, pages: pg, projectFiles: fs, savedAt: Date.now() }));
-    } catch(e) {}
+    });
+    const payload = JSON.stringify({ projects: p, pages: pg, projectFiles: slim, savedAt: Date.now() });
+    try {
+      localStorage.setItem(WIKI_KEY, payload);
+    } catch (e) {
+      // Quota still exceeded (lots of images) — retry without any dataUrls.
+      try {
+        const bare = {};
+        Object.keys(slim).forEach(pid => { bare[pid] = slim[pid].map(f => ({ ...f, dataUrl: undefined })); });
+        localStorage.setItem(WIKI_KEY, JSON.stringify({ projects: p, pages: pg, projectFiles: bare, savedAt: Date.now() }));
+      } catch (e2) {}
+    }
   }, [WIKI_KEY, projectFiles]);
 
   const autoSave = useCallback((p, pg, pf) => {
@@ -6538,6 +6586,80 @@ const BS_TEMPLATES = [
       {k:'b',type:'shape',shape:'rect',x:370,y:115,w:140,h:70,text:'Step 2',fill:'#3B9EFF',color:'#fff',textAlign:'center'},
       {k:'e',type:'shape',shape:'pill',x:550,y:120,w:130,h:60,text:'End',fill:'#F87171',color:'#fff',textAlign:'center'},
     ],connections:[{from:'s',to:'a',type:'straight'},{from:'a',to:'b',type:'straight'},{from:'b',to:'e',type:'straight'}]},
+  // Strategy & Planning — additions
+  { id:'businessmodel', cat:'Strategy & Planning', name:'Business Model Canvas', icon:'🗂️', desc:'Nine building blocks of your business',
+    nodes:[
+      {k:'kp',type:'sticky',x:20,y:40,w:150,h:150,text:'KEY PARTNERS\\n\\n• ',color:'#DDD6FE'},
+      {k:'ka',type:'sticky',x:180,y:40,w:150,h:70,text:'KEY ACTIVITIES\\n\\n• ',color:'#BFDBFE'},
+      {k:'kr',type:'sticky',x:180,y:120,w:150,h:70,text:'KEY RESOURCES\\n\\n• ',color:'#BFDBFE'},
+      {k:'vp',type:'sticky',x:340,y:40,w:150,h:150,text:'VALUE PROPS\\n\\n• ',color:'#BBF7D0'},
+      {k:'cr',type:'sticky',x:500,y:40,w:150,h:70,text:'CUSTOMER REL.\\n\\n• ',color:'#FDE68A'},
+      {k:'ch',type:'sticky',x:500,y:120,w:150,h:70,text:'CHANNELS\\n\\n• ',color:'#FDE68A'},
+      {k:'cs',type:'sticky',x:660,y:40,w:150,h:150,text:'CUSTOMER SEG.\\n\\n• ',color:'#FBCFE8'},
+      {k:'co',type:'sticky',x:20,y:200,w:390,h:90,text:'COST STRUCTURE\\n\\n• ',color:'#FECACA'},
+      {k:'rv',type:'sticky',x:420,y:200,w:390,h:90,text:'REVENUE STREAMS\\n\\n• ',color:'#BBF7D0'},
+    ]},
+  { id:'goals', cat:'Strategy & Planning', name:'Goal Pyramid', icon:'🔺', desc:'Vision → strategy → tactics',
+    nodes:[
+      {k:'v',type:'shape',shape:'pill',x:280,y:20,w:240,h:60,text:'VISION',fill:'#0070F3',color:'#fff',fontWeight:700,textAlign:'center'},
+      {k:'s1',type:'sticky',x:180,y:130,w:200,h:110,text:'STRATEGY 1\\n\\n• ',color:'#BFDBFE'},
+      {k:'s2',type:'sticky',x:420,y:130,w:200,h:110,text:'STRATEGY 2\\n\\n• ',color:'#BFDBFE'},
+      {k:'t1',type:'sticky',x:60,y:280,w:170,h:110,text:'Tactics\\n\\n• ',color:'#BBF7D0'},
+      {k:'t2',type:'sticky',x:250,y:280,w:170,h:110,text:'Tactics\\n\\n• ',color:'#BBF7D0'},
+      {k:'t3',type:'sticky',x:440,y:280,w:170,h:110,text:'Tactics\\n\\n• ',color:'#BBF7D0'},
+    ],connections:[{from:'v',to:'s1'},{from:'v',to:'s2'},{from:'s1',to:'t1'},{from:'s1',to:'t2'},{from:'s2',to:'t3'}]},
+  // Product & UX — additions
+  { id:'moscow', cat:'Product & UX', name:'MoSCoW Prioritization', icon:'📊', desc:'Must / Should / Could / Won’t',
+    nodes:[
+      {k:'m',type:'sticky',x:40,y:40,w:230,h:180,text:'MUST HAVE\\n\\n• ',color:'#FECACA'},
+      {k:'s',type:'sticky',x:300,y:40,w:230,h:180,text:'SHOULD HAVE\\n\\n• ',color:'#FDE68A'},
+      {k:'c',type:'sticky',x:40,y:240,w:230,h:180,text:'COULD HAVE\\n\\n• ',color:'#BBF7D0'},
+      {k:'w',type:'sticky',x:300,y:240,w:230,h:180,text:"WON'T HAVE (now)\\n\\n• ",color:'#E5E7EB'},
+    ]},
+  { id:'empathy', cat:'Product & UX', name:'Empathy Map', icon:'💗', desc:'Says / Thinks / Does / Feels',
+    nodes:[
+      {k:'u',type:'shape',shape:'circle',x:320,y:170,w:120,h:120,text:'USER',fill:'#A78BFA',color:'#fff',fontWeight:700,textAlign:'center'},
+      {k:'says',type:'sticky',x:60,y:40,w:200,h:140,text:'SAYS\\n\\n• ',color:'#BFDBFE'},
+      {k:'thinks',type:'sticky',x:500,y:40,w:200,h:140,text:'THINKS\\n\\n• ',color:'#DDD6FE'},
+      {k:'does',type:'sticky',x:60,y:280,w:200,h:140,text:'DOES\\n\\n• ',color:'#BBF7D0'},
+      {k:'feels',type:'sticky',x:500,y:280,w:200,h:140,text:'FEELS\\n\\n• ',color:'#FECACA'},
+    ]},
+  // Brainstorming — additions
+  { id:'brainwrite', cat:'Brainstorming', name:'Brainwriting Grid', icon:'✍️', desc:'Rapid idea generation grid',
+    nodes:[
+      {k:'h',type:'text',x:0,y:0,w:400,h:30,text:'Brainwriting — add ideas in each cell',fontSize:15,fontWeight:700},
+      {k:'i1',type:'sticky',x:20,y:50,w:170,h:120,text:'Idea',color:'#BFDBFE'},
+      {k:'i2',type:'sticky',x:210,y:50,w:170,h:120,text:'Idea',color:'#BBF7D0'},
+      {k:'i3',type:'sticky',x:400,y:50,w:170,h:120,text:'Idea',color:'#FDE68A'},
+      {k:'i4',type:'sticky',x:20,y:190,w:170,h:120,text:'Idea',color:'#FBCFE8'},
+      {k:'i5',type:'sticky',x:210,y:190,w:170,h:120,text:'Idea',color:'#DDD6FE'},
+      {k:'i6',type:'sticky',x:400,y:190,w:170,h:120,text:'Idea',color:'#FECACA'},
+    ]},
+  { id:'starbursting', cat:'Brainstorming', name:'Starbursting (5W1H)', icon:'⭐', desc:'Who/What/When/Where/Why/How',
+    nodes:[
+      {k:'c',type:'shape',shape:'circle',x:320,y:170,w:130,h:130,text:'TOPIC',fill:'#0070F3',color:'#fff',fontWeight:700,textAlign:'center'},
+      {k:'who',type:'sticky',x:60,y:30,w:150,h:90,text:'WHO?',color:'#BFDBFE'},
+      {k:'what',type:'sticky',x:300,y:0,w:150,h:90,text:'WHAT?',color:'#BBF7D0'},
+      {k:'when',type:'sticky',x:560,y:30,w:150,h:90,text:'WHEN?',color:'#FDE68A'},
+      {k:'where',type:'sticky',x:60,y:340,w:150,h:90,text:'WHERE?',color:'#FBCFE8'},
+      {k:'why',type:'sticky',x:300,y:380,w:150,h:90,text:'WHY?',color:'#DDD6FE'},
+      {k:'how',type:'sticky',x:560,y:340,w:150,h:90,text:'HOW?',color:'#FECACA'},
+    ],connections:[{from:'c',to:'who'},{from:'c',to:'what'},{from:'c',to:'when'},{from:'c',to:'where'},{from:'c',to:'why'},{from:'c',to:'how'}]},
+  // Team & Operations — additions
+  { id:'raci', cat:'Team & Operations', name:'RACI Matrix', icon:'👥', desc:'Responsible / Accountable / Consulted / Informed',
+    nodes:[
+      {k:'h',type:'text',x:0,y:0,w:400,h:30,text:'RACI — who does what',fontSize:15,fontWeight:700},
+      {k:'r',type:'sticky',x:20,y:50,w:180,h:150,text:'RESPONSIBLE\n(does the work)\n\n• ',color:'#BBF7D0'},
+      {k:'a',type:'sticky',x:220,y:50,w:180,h:150,text:'ACCOUNTABLE\n(owns outcome)\n\n• ',color:'#FECACA'},
+      {k:'c',type:'sticky',x:420,y:50,w:180,h:150,text:'CONSULTED\n(gives input)\n\n• ',color:'#BFDBFE'},
+      {k:'i',type:'sticky',x:620,y:50,w:180,h:150,text:'INFORMED\n(kept updated)\n\n• ',color:'#FDE68A'},
+    ]},
+  { id:'startstop', cat:'Team & Operations', name:'Start / Stop / Continue', icon:'🔁', desc:'Team improvement retro',
+    nodes:[
+      {k:'s',type:'sticky',x:40,y:40,w:220,h:240,text:'▶ START\n\n• ',color:'#BBF7D0'},
+      {k:'st',type:'sticky',x:290,y:40,w:220,h:240,text:'⏹ STOP\n\n• ',color:'#FECACA'},
+      {k:'co',type:'sticky',x:540,y:40,w:220,h:240,text:'⏭ CONTINUE\n\n• ',color:'#BFDBFE'},
+    ]},
 ];
 
 function BrainstormWelcome({ c, dark, onPick }) {
@@ -6611,6 +6733,38 @@ function TemplateGallery({ c, dark, onClose, onApply, forShared }) {
   );
 }
 
+// Renders a tiny scaled-down preview of a template's node layout for the gallery card.
+function TplPreview({ t }) {
+  const nodes = (t.nodes || []).filter(n => n.type !== 'text' || (n.x !== undefined));
+  if (!nodes.length) return null;
+  const pad = 12;
+  const xs = nodes.map(n => n.x || 0), ys = nodes.map(n => n.y || 0);
+  const xe = nodes.map(n => (n.x || 0) + (n.w || 120)), ye = nodes.map(n => (n.y || 0) + (n.h || 80));
+  const minX = Math.min(...xs), minY = Math.min(...ys), maxX = Math.max(...xe), maxY = Math.max(...ye);
+  const W = Math.max(maxX - minX, 1), H = Math.max(maxY - minY, 1);
+  const VW = 240, VH = 96;
+  const scale = Math.min((VW - pad * 2) / W, (VH - pad * 2) / H);
+  const ox = (VW - W * scale) / 2 - minX * scale;
+  const oy = (VH - H * scale) / 2 - minY * scale;
+  const byKey = {}; nodes.forEach(n => { byKey[n.k] = n; });
+  return (
+    <svg viewBox={`0 0 ${VW} ${VH}`} width="100%" height="100%" style={{ display:'block' }} preserveAspectRatio="xMidYMid meet">
+      {(t.connections || []).map((cn, i) => {
+        const a = byKey[cn.from], b = byKey[cn.to]; if (!a || !b) return null;
+        const ax = ox + ((a.x||0) + (a.w||120)/2) * scale, ay = oy + ((a.y||0) + (a.h||80)/2) * scale;
+        const bx = ox + ((b.x||0) + (b.w||120)/2) * scale, by = oy + ((b.y||0) + (b.h||80)/2) * scale;
+        return <line key={i} x1={ax} y1={ay} x2={bx} y2={by} stroke="#94A3B8" strokeWidth="1" opacity=".5"/>;
+      })}
+      {nodes.map((n, i) => {
+        const x = ox + (n.x||0) * scale, y = oy + (n.y||0) * scale, w = (n.w||120) * scale, h = (n.h||80) * scale;
+        const fill = n.fill || n.color || '#CBD5E1';
+        const isRound = n.shape === 'circle' || n.shape === 'pill';
+        return <rect key={i} x={x} y={y} width={w} height={Math.max(h,4)} rx={isRound ? Math.min(w,h)/2 : 3} fill={fill} opacity={n.fill ? .9 : .85} stroke="rgba(0,0,0,.06)" strokeWidth="0.5"/>;
+      })}
+    </svg>
+  );
+}
+
 function TplRow({ title, list, c, dark, favs, toggleFav, onApply }) {
   return (
     <div style={{ marginBottom:22 }}>
@@ -6621,10 +6775,14 @@ function TplRow({ title, list, c, dark, favs, toggleFav, onApply }) {
             onMouseEnter={e=>e.currentTarget.style.borderColor='#0070F3'} onMouseLeave={e=>e.currentTarget.style.borderColor=c.bord}>
             <button onClick={()=>toggleFav(t.id)} title="Favorite" style={{ position:'absolute',top:8,right:8,zIndex:2,background:'rgba(0,0,0,.25)',border:'none',borderRadius:'50%',width:26,height:26,cursor:'pointer',fontSize:13,color:favs.includes(t.id)?'#FCD34D':'#fff' }}>{favs.includes(t.id)?'★':'☆'}</button>
             <button onClick={()=>onApply(t)} style={{ display:'block',width:'100%',textAlign:'left',border:'none',background:'transparent',cursor:'pointer',padding:0 }}>
-              <div style={{ height:84,background:`linear-gradient(135deg, ${dark?'#1B2236':'#EEF1FF'}, ${dark?'#141A2B':'#F8FAFF'})`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:34 }}>{t.icon}</div>
+              <div style={{ height:96,background:`linear-gradient(135deg, ${dark?'#1B2236':'#EEF1FF'}, ${dark?'#141A2B':'#F8FAFF'})`,position:'relative',overflow:'hidden' }}>
+                <TplPreview t={t}/>
+                <span style={{ position:'absolute',top:8,left:8,fontSize:18,filter:'drop-shadow(0 1px 2px rgba(0,0,0,.2))' }}>{t.icon}</span>
+              </div>
               <div style={{ padding:'11px 13px' }}>
                 <div style={{ fontSize:13.5,fontWeight:700,color:c.text,marginBottom:3 }}>{t.name}</div>
                 <div style={{ fontSize:11.5,color:c.mut,lineHeight:1.4 }}>{t.desc}</div>
+                <div style={{ fontSize:10,color:c.mut,marginTop:7,fontFamily:"'JetBrains Mono',monospace",opacity:.7 }}>{(t.nodes||[]).length} elements{t.connections?` · ${t.connections.length} links`:''}</div>
               </div>
             </button>
           </div>
@@ -7920,9 +8078,10 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
   const done = tasks.filter(t => t.status === 'done');
   const active = tasks.filter(t => t.status !== 'done');
   const dueToday = tasks.filter(t => {
-    if (!t.due_date && !t.timeline) return false;
-    const d = t.due_date ? new Date(t.due_date) : null;
-    return d ? d.toDateString() === new Date().toDateString() : /today/i.test(t.timeline || '');
+    if (t.status === 'done') return false;
+    // Prefer a real due date; only use timeline as a fallback when no date exists.
+    if (t.due_date) { const d = new Date(t.due_date); return !isNaN(d) && d.toDateString() === new Date().toDateString(); }
+    return /\btoday\b/i.test(t.timeline || '');
   });
   const completion = tasks.length ? Math.round(done.length / tasks.length * 100) : 0;
 
@@ -7955,14 +8114,15 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
       return s(b) - s(a);
     }).slice(0, 5);
 
-  const greeting = (() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; })();
+  const greeting = (() => { const h = new Date().getHours(); return (h >= 5 && h < 12) ? 'Good morning' : (h >= 12 && h < 17) ? 'Good afternoon' : 'Good evening'; })();
   const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase();
 
   const aiSummary = (() => {
-    const parts = [`You have ${active.length} active task${active.length !== 1 ? 's' : ''}.`];
+    const subj = isManager ? 'The team has' : 'You have';
+    const parts = [`${subj} ${active.length} active task${active.length !== 1 ? 's' : ''}.`];
     if (blocked.length) parts.push(`${blocked.length} ${blocked.length === 1 ? 'is' : 'are'} blocked.`);
     if (dueToday.length) parts.push(`${dueToday.length} ${dueToday.length === 1 ? 'is' : 'are'} due today.`);
-    if (!active.length) parts.push(`You're all caught up. 🎉`);
+    if (!active.length) parts.push(`Everything's wrapped up. 🎉`);
     return parts.join(' ');
   })();
 
@@ -8055,10 +8215,6 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
             <p style={{ fontSize: 16, color: c.sub, margin: '14px 0 0', lineHeight: 1.6, maxWidth: 560 }}>{aiSummary}</p>
           </div>
           <div style={{ display: 'flex', gap: 10, flexShrink: 0, marginTop: 6 }}>
-            <button onClick={() => onGoto('insights')}
-              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 11, border: `1px solid ${c.bord}`, background: c.surf, color: c.text, cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
-              <span style={{ color: '#A78BFA' }}>✦</span> Ask AI
-            </button>
             <button onClick={() => onNewTask && onNewTask()}
               style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 11, border: 'none', background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', boxShadow: '0 2px 10px rgba(0,112,243,.3)' }}>
               <span style={{ fontSize: 16 }}>＋</span> {isManager ? 'Assign task' : 'New task'}
@@ -8131,33 +8287,27 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
 
         {/* AI insights */}
         <div style={{ borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, padding: '18px 20px' }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: c.text }}>AI insights</div>
-          <div style={{ fontSize: 12.5, color: c.mut, marginTop: 3, marginBottom: 16 }}>What needs your attention.</div>
+          <div style={{ display:'flex',alignItems:'center',gap:8 }}><span className="ss-float" style={{ fontSize:15,color:'#A78BFA' }}>✦</span><div style={{ fontSize: 18, fontWeight: 700, color: c.text }}>AI insights</div></div>
+          <div style={{ fontSize: 12.5, color: c.mut, marginTop: 3, marginBottom: 16 }}>What needs your attention, read from your live data.</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {overloaded && overloaded.pct >= 80 && (
-              <div style={{ display: 'flex', gap: 10 }}>
-                <span style={{ fontSize: 15, flexShrink: 0 }}>⚠️</span>
-                <div style={{ fontSize: 13, color: c.sub, lineHeight: 1.5 }}><strong style={{ color: c.text }}>{(overloaded.member.name||overloaded.member.email||'Someone').split(' ')[0]} is overloaded</strong> — {overloaded.pct}% capacity with {overloaded.urgent} urgent task{overloaded.urgent!==1?'s':''}.</div>
-              </div>
-            )}
-            {blocked.length > 0 && (
-              <div style={{ display: 'flex', gap: 10 }}>
-                <span style={{ fontSize: 15, flexShrink: 0 }}>🕐</span>
-                <div style={{ fontSize: 13, color: c.sub, lineHeight: 1.5 }}><strong style={{ color: c.text }}>{blocked.length} blocker{blocked.length!==1?'s':''}</strong> {blocked.length!==1?'have':'has'} been open — consider reassigning.</div>
-              </div>
-            )}
-            {dueToday.length > 0 && (
-              <div style={{ display: 'flex', gap: 10 }}>
-                <span style={{ fontSize: 15, flexShrink: 0, color: '#A78BFA' }}>✦</span>
-                <div style={{ fontSize: 13, color: c.sub, lineHeight: 1.5 }}>{dueToday[0].title || dueToday[0].text} is due today.</div>
-              </div>
-            )}
-            {blocked.length === 0 && (!overloaded || overloaded.pct < 80) && dueToday.length === 0 && (
-              <div style={{ display: 'flex', gap: 10 }}>
-                <span style={{ fontSize: 15, flexShrink: 0 }}>✓</span>
-                <div style={{ fontSize: 13, color: c.sub, lineHeight: 1.5 }}>Everything looks healthy. {completion}% complete and no blockers.</div>
-              </div>
-            )}
+            {(() => {
+              // Build genuinely meaningful insights from real signals, ranked by importance.
+              const out = [];
+              const total = active.length + done.length;
+              const rate = total ? Math.round(done.length / total * 100) : 0;
+              if (overloaded && overloaded.pct >= 80) out.push({ i:'⚠️', t:`${(overloaded.member.name||overloaded.member.email||'Someone').split(' ')[0]} is overloaded`, b:`${overloaded.pct}% capacity${overloaded.urgent?` with ${overloaded.urgent} urgent task${overloaded.urgent!==1?'s':''}`:''} — consider redistributing before it stalls.` });
+              if (blocked.length) { const names=[...new Set(blocked.map(t=>(t.assignee_name||t.assignee_email||'').split(' ')[0]).filter(Boolean))]; out.push({ i:'🚧', t:`${blocked.length} blocker${blocked.length!==1?'s':''} need clearing`, b:`${blocked.length===1?'It is':'They are'} holding work back${names.length?` (${names.slice(0,2).join(', ')})`:''}. Unblocking ${blocked.length===1?'it':'these'} would lift today's throughput most.` }); }
+              if (dueToday.length) out.push({ i:'⏰', t:`${dueToday.length} due today`, b:`${dueToday.length===1?'':'Prioritize the highest-impact one first. '}Closing ${dueToday.length===1?'it':'these'} keeps the team on schedule.` });
+              if (active.length && !blocked.length && rate>=50) out.push({ i:'📈', t:'Momentum looks healthy', b:`${rate}% of work is complete with a clear runway — a good moment to pull forward an upcoming priority.` });
+              if (!active.length) out.push({ i:'🎉', t:'All caught up', b:'No open tasks — a great time to plan ahead or support a teammate.' });
+              if (!out.length) out.push({ i:'✓', t:'Everything looks healthy', b:`${completion}% complete and no blockers right now.` });
+              return out.slice(0,4).map((x,i)=>(
+                <div key={i} style={{ display: 'flex', gap: 10 }}>
+                  <span style={{ fontSize: 15, flexShrink: 0 }}>{x.i}</span>
+                  <div style={{ fontSize: 13, color: c.sub, lineHeight: 1.5 }}><strong style={{ color: c.text }}>{x.t}</strong> — {x.b}</div>
+                </div>
+              ));
+            })()}
           </div>
         </div>
       </div>
@@ -8227,7 +8377,7 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
               </div>
             ))}
           </div>
-          <Btn v="ghost" onClick={() => { setShowCompletion(false); onGoto('insights'); }} style={{ marginTop: 16, width: '100%', justifyContent: 'center' }}>See full performance →</Btn>
+          <Btn v="ghost" onClick={() => { setShowCompletion(false); onGoto('tasks'); }} style={{ marginTop: 16, width: '100%', justifyContent: 'center' }}>See full performance →</Btn>
         </Modal>
       )}
 
@@ -10244,8 +10394,8 @@ function ManagerView({
       if (e.type === 'task_assigned' && mine && !byMe) n = { icon: '\uD83D\uDCCC', accent: '#0070F3', title: 'New task assigned to you', body: e.actor + ' assigned "' + e.title + '"', go: 'tasks' };
       else if (e.type === 'task_assigned' && !mine && isManager) n = { icon: '\uD83D\uDCCC', accent: '#3B9EFF', title: 'Task assigned', body: e.actor + ' \u2192 ' + e.target + ': "' + e.title + '"', go: 'tasks' };
       else if (e.type === 'task_created' && !byMe) n = { icon: '\uD83D\uDCDD', accent: '#38BDF8', title: e.actor + ' added a task', body: '"' + e.title + '"', go: 'tasks' };
-      else if (e.type === 'task_started' && !byMe) n = { icon: '\u26A1', accent: '#38BDF8', title: e.actor + ' started a task', body: '"' + e.title + '"', go: 'tasks' };
-      else if (e.type === 'task_completed' && !byMe) n = { icon: '\u2705', accent: '#34D399', title: e.actor + ' completed a task', body: '"' + e.title + '"', go: 'tasks' };
+      else if (e.type === 'task_started' && !byMe && isManager) n = { icon: '\u26A1', accent: '#38BDF8', title: e.actor + ' started a task', body: '"' + e.title + '"', go: 'tasks' };
+      else if (e.type === 'task_completed' && !byMe && isManager) n = { icon: '\u2705', accent: '#34D399', title: e.actor + ' completed a task', body: '"' + e.title + '"', go: 'tasks' };
       else if (e.type === 'teamboard' && !byMe) n = { icon: '\uD83D\uDCCB', accent: '#0070F3', title: 'New on the team board', body: e.actor + ': ' + e.title, go: 'home' };
       else if (e.type === 'space_update' && !byMe) n = { icon: '\u25A6', accent: '#8B5CF6', title: 'Update in ' + (e.spaceName || 'a project space'), body: e.actor + ': ' + e.title, go: 'spaces' };
       else if (e.type === 'backlog' && (mine || isManager)) n = { icon: '\u26A0\uFE0F', accent: '#DC2626', title: mine ? 'Unfinished from ' + (e.fromDate || 'a previous day') : 'Carried-over backlog', body: '"' + e.title + '"' + (mine ? ' is still open' : ' \u2014 ' + (e.actor || 'someone')), go: 'tasks' };
@@ -10508,16 +10658,37 @@ function ManagerView({
         </button>
       </div>
 
-      {/* Profile footer */}
-      <button onClick={onSettings} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '14px 18px', borderTop: `1px solid ${c.bord}`, background: 'transparent', border: 'none', borderTopWidth: 1, cursor: 'pointer', textAlign: 'left', width: '100%' }}
-        onMouseEnter={e => e.currentTarget.style.background = c.row}
-        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-        <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0 }}>{userInitials}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName}</div>
-          <div style={{ fontSize: 11.5, color: c.mut }}>{userRole}</div>
+      {/* Profile footer with consolidated controls */}
+      <div style={{ borderTop: `1px solid ${c.bord}`, padding: '10px 12px 12px' }}>
+        {/* Control row: notifications · theme · settings */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <button onClick={toggleNotif} title="Notifications"
+            style={{ flex: 1, height: 34, borderRadius: 9, border: `1px solid ${c.bord}`, background: notifOpen ? c.row : 'transparent', color: notifOpen ? c.text : c.sub, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', transition: 'all .15s' }}
+            onMouseEnter={e=>{e.currentTarget.style.background=c.row;}} onMouseLeave={e=>{if(!notifOpen)e.currentTarget.style.background='transparent';}}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+            {unreadNotifs > 0 && <span style={{ position: 'absolute', top: 2, right: 6, minWidth: 14, height: 14, borderRadius: 7, background: '#EF4444', color: '#fff', fontSize: 8.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>{unreadNotifs > 9 ? '9+' : unreadNotifs}</span>}
+          </button>
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}><ThemeToggle/></div>
+          <button onClick={onSettings} title="Settings"
+            style={{ flex: 1, height: 34, borderRadius: 9, border: `1px solid ${c.bord}`, background: 'transparent', color: c.sub, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .15s' }}
+            onMouseEnter={e=>{e.currentTarget.style.background=c.row;e.currentTarget.style.color=c.text;}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color=c.sub;}}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
         </div>
-      </button>
+        {/* Profile + logout */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '6px 4px' }}>
+          <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0 }}>{userInitials}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName}</div>
+            <div style={{ fontSize: 11.5, color: c.mut }}>{userRole}</div>
+          </div>
+          <button onClick={onLogout} title="Log out"
+            style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: 'transparent', color: c.mut, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}
+            onMouseEnter={e=>{e.currentTarget.style.background='rgba(239,68,68,.1)';e.currentTarget.style.color='#F87171';}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color=c.mut;}}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </button>
+        </div>
+      </div>
     </div>
   );
 
@@ -10558,7 +10729,7 @@ function ManagerView({
         <div style={{ height: 60, borderBottom: `1px solid ${c.bord}`, background: c.nav, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', position: 'sticky', top: 0, zIndex: 100, display: 'flex', alignItems: 'center', gap: 12, padding: '0 24px' }}>
           <button className="ss-burger" onClick={() => setMobileNav(true)} style={{ display: 'none', width: 38, height: 38, borderRadius: 10, border: `1px solid ${c.bord}`, background: 'transparent', color: c.text, cursor: 'pointer', fontSize: 18, alignItems: 'center', justifyContent: 'center' }}>☰</button>
 
-          <div style={{ display:'flex', alignItems:'center', gap:7, fontFamily:"'JetBrains Mono',monospace", fontSize:11.5, color:c.mut, flexShrink:0 }} className="ss-crumb"><span>standsync</span><span style={{ opacity:.5 }}>/</span><span style={{ color:c.sub }}>{(areaTitle[area]||'').toLowerCase()}</span></div>
+          <div style={{ display:'flex', alignItems:'center', gap:7, fontFamily:"'JetBrains Mono',monospace", fontSize:12, fontWeight:600, color:c.accent, flexShrink:0, letterSpacing:'.02em' }} className="ss-crumb">standsync</div>
           <h2 className="font-heading" style={{ fontSize: 19, fontWeight: 600, color: c.text, margin: 0, flexShrink: 0, letterSpacing:'-.02em' }}>{areaTitle[area]}</h2>
 
           {/* Search */}
@@ -10626,15 +10797,7 @@ function ManagerView({
             );
           })()}
 
-          {/* Controls: Notifications, Theme, Profile */}
-          <button onClick={toggleNotif} title="Notifications"
-            style={{ width: 34, height: 34, borderRadius: '50%', border: `1px solid ${c.bord}`, background: notifOpen ? c.row : 'transparent', color: notifOpen ? c.text : c.sub, cursor: 'pointer', flexShrink: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s' }}
-            onMouseEnter={e=>{e.currentTarget.style.background=c.row;e.currentTarget.style.color=c.text;}} onMouseLeave={e=>{if(!notifOpen){e.currentTarget.style.background='transparent';e.currentTarget.style.color=c.sub;}}}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
-            {unreadNotifs > 0 && <span style={{ position: 'absolute', top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, background: '#EF4444', color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', border: `2px solid ${c.nav}` }}>{unreadNotifs > 9 ? '9+' : unreadNotifs}</span>}
-          </button>
-          <ThemeToggle/>
-          <ProfileMenu session={session} onSettings={onSettings} onLogout={onLogout}/>
+          {/* Controls moved to the left sidebar footer */}
 
           {notifOpen && <NotificationPanel notifs={notifs} onClose={() => setNotifOpen(false)} onAction={handleNotifAction} onMarkAllRead={markAllRead} onClearAll={clearAllNotifs} unread={unreadNotifs} onDigest={isManager ? onDigest : null} emailBusy={emailBusy}/>}
         </div>
@@ -11379,12 +11542,12 @@ export default function App() {
     load();
   },[team]);
 
-  useEffect(()=>{ if(!standup||!SB.IS_LIVE)return; return SB.subscribeToTasks(standup.id,({eventType:et,new:n,old:o})=>{setTasks(p=>{ if(et==='INSERT') return p.find(t=>t.id===n.id)?p:[...p,n]; if(et==='UPDATE') return p.map(t=>t.id===n.id?n:t); return p.filter(t=>t.id!==o.id); });}); },[standup]);
+  useEffect(()=>{ if(!standup||!SB.IS_LIVE)return; return SB.subscribeToTasks(standup.id,({eventType:et,new:n,old:o})=>{setTasks(p=>{ if(et==='INSERT') return p.find(t=>t.id===n.id)?p:[...p,n]; if(et==='UPDATE') return p.map(t=>t.id===n.id?{...n,...(t._carriedOver?{_carriedOver:t._carriedOver,_standupDate:t._standupDate}:{})}:t); return p.filter(t=>t.id!==o.id); });}); },[standup]);
   // Safety net: refresh tasks periodically and on window focus so a manager always
   // sees members' newly-added tasks even if a realtime event was missed.
   useEffect(()=>{
     if(!standup||!SB.IS_LIVE)return;
-    const refresh=async()=>{ try{ const t=await SB.getTasks(standup.id); if(Array.isArray(t)) setTasks(t); }catch(e){} };
+    const refresh=async()=>{ try{ const t=await SB.getTasks(standup.id); if(Array.isArray(t)){ setTasks(prev=>{ const carried=prev.filter(x=>x._carriedOver); const freshIds=new Set(t.map(x=>x.id)); const keptCarried=carried.filter(x=>!freshIds.has(x.id)); return [...t, ...keptCarried]; }); } }catch(e){} };
     const iv=setInterval(refresh,30000);
     const onFocus=()=>refresh();
     window.addEventListener('focus',onFocus);
