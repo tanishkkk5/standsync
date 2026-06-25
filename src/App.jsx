@@ -277,7 +277,9 @@ function playChime() {
 function Av({ member, size=36, url }) {
   const color=member?.color||'#3B9EFF';
   const ini=member?.name?member.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase():'?';
-  if(url) return <img src={url} alt={ini} style={{ width:size,height:size,borderRadius:'50%',objectFit:'cover',flexShrink:0,border:`2px solid ${color}55` }}/>;
+  // Fall back to member.avatar_url if the url prop wasn't passed explicitly
+  const src = url || member?.avatar_url || null;
+  if(src) return <img src={src} alt={ini} style={{ width:size,height:size,borderRadius:'50%',objectFit:'cover',flexShrink:0,border:`2px solid ${color}55` }}/>;
   return <div style={{ width:size,height:size,borderRadius:'50%',background:color+'22',border:`2px solid ${color}55`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:size*.32,fontWeight:700,color,flexShrink:0 }}>{ini}</div>;
 }
 function PBadge({ priority }) { const p=getPriority(priority); return <span style={{ fontSize:10,fontWeight:700,letterSpacing:'.06em',background:p.bg,color:p.color,padding:'3px 8px',borderRadius:20,textTransform:'uppercase',border:`1px solid ${p.color}35`,whiteSpace:'nowrap' }}>{p.label}</span>; }
@@ -1639,7 +1641,7 @@ function SpaceSettingsModal({ spaceId, customSpaces, members, isManager, onClose
 
   return (
     <div style={{ position:'fixed',inset:0,zIndex:9999,background:'rgba(0,0,0,.6)',display:'flex',alignItems:'center',justifyContent:'center' }} onClick={onClose}>
-      <div style={{ width:520,maxHeight:'85vh',background:c.dark?'#0F0D2A':'#fff',borderRadius:16,border:`1px solid ${c.bord}`,overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,.5)' }} onClick={e=>e.stopPropagation()}>
+      <div style={{ width:520,maxHeight:'85vh',background:c.surf,borderRadius:16,border:`1px solid ${c.bord}`,overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,.5)',animation:'ss3dPop .3s cubic-bezier(.22,1,.36,1) both' }} onClick={e=>e.stopPropagation()}>
         {/* Header */}
         <div style={{ padding:'16px 20px',borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',gap:10 }}>
           <span style={{ fontSize:16,fontWeight:700,color:c.text,flex:1 }}>{sp?.type==='announcements'?'📢':'#'} {sp?.name||sp?.label}</span>
@@ -1665,7 +1667,7 @@ function SpaceSettingsModal({ spaceId, customSpaces, members, isManager, onClose
                       <div style={{ position:'absolute',top:'100%',right:0,width:220,background:c.dark?'#1A1740':'#fff',border:`1px solid ${c.bord}`,borderRadius:10,zIndex:100,marginTop:4,boxShadow:'0 8px 24px rgba(0,0,0,.2)',maxHeight:160,overflowY:'auto' }}>
                         {members.filter(m=>!spMembers.find(sm=>sm.email===m.email)&&(m.name?.toLowerCase().includes(memberSearch.toLowerCase())||m.email?.toLowerCase().includes(memberSearch.toLowerCase()))).map(m=>(
                           <div key={m.email} onClick={()=>{addMemberToSpace(spaceId,m);setMemberSearch('');}} style={{ padding:'8px 12px',cursor:'pointer',fontSize:12,color:c.text,display:'flex',alignItems:'center',gap:8 }} onMouseEnter={e=>e.currentTarget.style.background='rgba(0,112,243,.1)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                            <Av member={m} size={22}/><span>{m.name||m.email}</span>
+                            <Av member={m} size={22} url={m.avatar_url}/><span>{m.name||m.email}</span>
                           </div>
                         ))}
                         {members.filter(m=>!spMembers.find(sm=>sm.email===m.email)).length===0&&<div style={{ padding:'10px 12px',fontSize:12,color:c.mut }}>All members added</div>}
@@ -1686,7 +1688,7 @@ function SpaceSettingsModal({ spaceId, customSpaces, members, isManager, onClose
                     const fullM=members.find(tm=>tm.email===m.email)||m;
                     return(
                       <tr key={m.email} style={{ borderBottom:`1px solid ${c.bord}` }}>
-                        <td style={{ padding:'10px' }}><div style={{ display:'flex',alignItems:'center',gap:8 }}><Av member={fullM} size={28}/><span style={{ fontSize:13,fontWeight:600,color:c.text }}>{m.name||m.email}</span></div></td>
+                        <td style={{ padding:'10px' }}><div style={{ display:'flex',alignItems:'center',gap:8 }}><Av member={fullM} size={28} url={fullM?.avatar_url}/><span style={{ fontSize:13,fontWeight:600,color:c.text }}>{m.name||m.email}</span></div></td>
                         <td style={{ padding:'10px',fontSize:12,color:c.mut }}>{m.email}</td>
                         <td style={{ padding:'10px' }}>
                           <select value={m.role||'member'} onChange={e=>{
@@ -2247,19 +2249,23 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
   const pinMsg=(m)=>{ setPinnedMsgs(p=>isPinned(m.id)?p.filter(x=>x.id!==m.id):[...p,m]); setContextMenu(null); };
 
   return (
-    <div style={{ display:'flex',height:'calc(100vh - 155px)',minHeight:480,borderRadius:14,overflow:'hidden',border:`1px solid ${c.bord}`,background:c.bg }} onClick={()=>{setContextMenu(null);setShowEmoji(false);}}>
+    <div style={{ display:'flex',height:'calc(100vh - 155px)',minHeight:480,borderRadius:14,overflow:'hidden',border:`1px solid ${c.bord}`,background:dark?'#111114':'#F4F5F7' }} onClick={()=>{setContextMenu(null);setShowEmoji(false);}}>
 
       {/* ── LEFT SIDEBAR ───────────────────────────────────────────────── */}
-      <div style={{ width:220,flexShrink:0,background:c.dark?'#0F0D2A':'#F3F4FF',borderRight:`1px solid ${c.bord}`,display:'flex',flexDirection:'column',overflow:'hidden' }}>
+      <div style={{ width:220,flexShrink:0,background:dark?'#0D0D10':'#EBEBF0',borderRight:`1px solid ${c.bord}`,display:'flex',flexDirection:'column',overflow:'hidden' }}>
         {/* Header */}
-        <div style={{ padding:'14px 14px 10px',borderBottom:`1px solid ${c.bord}`,flexShrink:0 }}>
-          <div style={{ fontSize:14,fontWeight:800,color:c.text,letterSpacing:'-.02em' }}>Chat</div>
+        <div style={{ padding:'14px 14px 10px',borderBottom:`1px solid ${c.bord}`,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'space-between' }}>
+          <div className="font-heading" style={{ fontSize:14,fontWeight:600,color:c.text,letterSpacing:'-.02em' }}>Chat</div>
+          <button onClick={()=>setShowNewSpace(true)} title="New space or group"
+            style={{ width:26,height:26,borderRadius:7,border:`1px solid ${c.bord}`,background:'transparent',color:c.mut,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s' }}
+            onMouseEnter={e=>{e.currentTarget.style.background=c.row;e.currentTarget.style.color=c.text;}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color=c.mut;}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
         </div>
         <div style={{ flex:1,overflowY:'auto',padding:'8px 6px' }}>
           {/* Spaces */}
           <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 10px 4px',marginTop:4 }}>
             <span style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em' }}>Spaces</span>
-            {isManager&&<button onClick={()=>setShowNewSpace(!showNewSpace)} style={{ width:20,height:20,borderRadius:5,background:'transparent',border:'none',color:c.mut,cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700 }} title="Create space">+</button>}
           </div>
           {[...DEFAULT_SPACES,...customSpaces].map(sp=>(
             <div key={sp.id} style={{ display:'flex',alignItems:'center',gap:1 }}
@@ -2271,7 +2277,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
                 <span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{sp.label||sp.name}</span>
               </button>
               <div className="sp-actions" style={{ display:'flex',gap:1,opacity:0,transition:'opacity .15s',flexShrink:0 }}>
-                <button onClick={()=>setShowSpaceSettings(sp.id)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:11,padding:'4px 3px' }} title="Space settings">⚙</button>
+                <button onClick={()=>setShowSpaceSettings(sp.id)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:11,padding:'4px 3px',display:'flex',alignItems:'center' }} title="Space settings"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0 .33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
                 {customSpaces.find(s=>s.id===sp.id)&&isManager&&<button onClick={()=>deleteCustomSpace(sp.id)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:12,padding:'4px 3px',opacity:.7 }} title="Delete space">✕</button>}
               </div>
             </div>
@@ -2314,7 +2320,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
       </div>
 
       {/* ── MAIN AREA ──────────────────────────────────────────────────── */}
-      <div style={{ flex:1,display:'flex',flexDirection:'column',minWidth:0,background:c.bg }}>
+      <div style={{ flex:1,display:'flex',flexDirection:'column',minWidth:0,background:dark?'#111114':'#F8F8FA' }}>
 
         {/* Header */}
         <div style={{ padding:'0 16px',height:52,display:'flex',alignItems:'center',gap:10,borderBottom:`1px solid ${c.bord}`,background:c.nav,flexShrink:0 }}>
@@ -2322,8 +2328,8 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
           <span style={{ fontSize:14,fontWeight:700,color:c.text }}>{activeLabel}</span>
           {!activeSpace.startsWith('dm-')&&<span style={{ fontSize:12,color:c.mut }}>· {members.length} members</span>}
           <div style={{ flex:1 }}/>
-          {pinnedMsgs.length>0&&<button onClick={()=>setShowPinned(!showPinned)} style={{ display:'flex',alignItems:'center',gap:5,padding:'4px 10px',borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',color:c.mut,fontSize:12 }}>📌 {pinnedMsgs.length}</button>}
-          <button onClick={()=>setShowFiles(!showFiles)} title="Files & links" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:showFiles?'rgba(0,112,243,.12)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:showFiles?'#3B9EFF':c.mut }}>🗂️</button>
+          {pinnedMsgs.length>0&&<button onClick={()=>setShowPinned(!showPinned)} style={{ display:'flex',alignItems:'center',gap:5,padding:'4px 10px',borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',color:c.mut,fontSize:12 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17z"/></svg> {pinnedMsgs.length}</button>}
+          <button onClick={()=>setShowFiles(!showFiles)} title="Files & links" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:showFiles?'rgba(0,112,243,.12)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:showFiles?'#3B9EFF':c.mut,transition:'all .15s' }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>
         </div>
 
         {/* Pinned messages */}
@@ -2371,10 +2377,10 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
         <div style={{ flex:1,display:'flex',minHeight:0 }}>
 
           {/* Messages */}
-          <div style={{ flex:1,overflowY:'auto',padding:'12px 0' }} onClick={()=>{setContextMenu(null);setShowEmoji(false);}}>
+          <div style={{ flex:1,overflowY:'auto',padding:'12px 0',background:dark?'#111114':'#F8F8FA' }} onClick={()=>{setContextMenu(null);setShowEmoji(false);}}>
             {spaceMessages.length===0&&(
               <div style={{ display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',color:c.mut,gap:10 }}>
-                <div style={{ fontSize:48 }}>{activeSpace.startsWith('dm-')?'👋':'💬'}</div>
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={c.mut} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity:.4 }}>{activeSpace.startsWith('dm-')?<><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></>:<><path d="M17 6.1H3"/><path d="M21 12.1H3"/><path d="M15.1 18H3"/></>}</svg>
                 <div style={{ fontSize:15,fontWeight:600,color:c.text }}>Start the conversation</div>
                 <div style={{ fontSize:13,color:c.mut }}>{activeSpace.startsWith('dm-')?'Send a message to '+activeLabel:'This is the start of #'+activeLabel}</div>
               </div>
@@ -2491,7 +2497,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
         {showSpaceSettings&&<SpaceSettingsModal spaceId={showSpaceSettings} customSpaces={customSpaces} members={members} isManager={isManager} onClose={()=>setShowSpaceSettings(null)} updateSpaceSettings={updateSpaceSettings} addMemberToSpace={addMemberToSpace} removeMemberFromSpace={removeMemberFromSpace} setCustomSpaces={setCustomSpaces} getSpaceSettings={getSpaceSettings}/>}
       {/* Context menu */}
         {contextMenu&&(
-          <div style={{ position:'fixed',left:contextMenu.x,top:contextMenu.y,zIndex:9999,background:c.dark?'rgba(18,15,50,.98)':'#fff',border:`1px solid ${c.bord}`,borderRadius:12,padding:6,boxShadow:'0 8px 30px rgba(0,0,0,.25)',minWidth:180 }} onClick={e=>e.stopPropagation()}>
+          <div style={{ position:'fixed',left:contextMenu.x,top:contextMenu.y,zIndex:9999,background:c.surf,border:`1px solid ${c.bord}`,borderRadius:12,padding:6,boxShadow:'0 8px 30px rgba(0,0,0,.35)',minWidth:180,animation:'ss3dPop .18s cubic-bezier(.22,1,.36,1) both' }} onClick={e=>e.stopPropagation()}>
             <div style={{ padding:'6px 10px 4px',borderBottom:`1px solid ${c.bord}`,marginBottom:4 }}>
               <div style={{ fontSize:11,color:c.mut,marginBottom:6 }}>React</div>
               <div style={{ display:'flex',gap:4 }}>{EMOJI_LIST.slice(0,8).map(e=><button key={e} onClick={()=>addReaction(contextMenu.msg.id,e)} style={{ width:30,height:30,borderRadius:8,border:'none',background:'transparent',cursor:'pointer',fontSize:17 }}>{e}</button>)}</div>
@@ -2554,7 +2560,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
 
           {/* Quick-actions popup */}
           {showQuick&&(
-            <div onClick={e=>e.stopPropagation()} style={{ position:'absolute',bottom:54,left:12,zIndex:30,background:c.dark?'#161B2E':'#fff',border:`1px solid ${c.bord}`,borderRadius:14,boxShadow:'0 12px 40px rgba(0,0,0,.3)',padding:8,width:230 }}>
+            <div onClick={e=>e.stopPropagation()} style={{ position:'absolute',bottom:54,left:12,zIndex:30,background:c.surf,border:`1px solid ${c.bord}`,borderRadius:14,boxShadow:'0 12px 40px rgba(0,0,0,.3)',padding:8,width:230,animation:'ss3dPop .2s cubic-bezier(.22,1,.36,1) both' }}>
               {[
                 {ic:'paperclip',label:'Attach file',act:()=>{attachRef.current.click();}},
                 {ic:'image',label:'Photo or video',act:()=>{fileRef.current.click();}},
@@ -5250,7 +5256,7 @@ function TimeSavedTab({ tasks, members, history, team }) {
 
 function HistTab({ history, members }) {
   const c=useC(); const [open,setOpen]=useState(null); const fmt=d=>new Date(d+'T12:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  return(<div><div style={{ marginBottom:18 }}><h2 style={{ fontSize:18,fontWeight:700,color:c.text,marginBottom:4 }}>🕓 Standup history</h2><p style={{ fontSize:12.5,color:c.mut }}>A day-by-day archive of past standups. Open any day to see exactly what each person committed to and whether it was completed — your audit trail and time machine, distinct from Overview (today) and Performance (cumulative scores).</p></div>{history.length===0?<Card style={{ padding:'40px',textAlign:'center' }}><div style={{ fontSize:36,marginBottom:12 }}>📅</div><div style={{ color:c.mut,fontSize:14 }}>History appears after your first standup</div></Card>:history.map(s=>{ const t=s.tasks||[],d=t.filter(x=>x.status==='done').length,b=t.filter(x=>x.status==='blocked').length,pct=t.length?Math.round(d/t.length*100):0,isOpen=open===s.id; return(<Card key={s.id} style={{ marginBottom:10,overflow:'hidden' }}><button onClick={()=>setOpen(isOpen?null:s.id)} style={{ width:'100%',display:'flex',alignItems:'center',gap:12,padding:'14px 18px',background:'transparent',border:'none',cursor:'pointer',color:c.text }}><div style={{ width:7,height:7,borderRadius:'50%',background:pct===100?'#34D399':'#3B9EFF',flexShrink:0 }}/><span style={{ flex:1,fontSize:14,fontWeight:500,textAlign:'left' }}>{fmt(s.date)}</span>{b>0&&<span style={{ fontSize:11,color:'#F87171',background:'rgba(239,68,68,.12)',padding:'2px 8px',borderRadius:20 }}>⚠️ {b}</span>}<span style={{ fontSize:11,color:c.mut,background:'rgba(128,128,128,.1)',padding:'2px 10px',borderRadius:20 }}>{d}/{t.length} · {pct}%</span><span style={{ color:c.mut,transform:isOpen?'rotate(180deg)':'none',transition:'transform .2s',fontSize:16 }}>⌃</span></button>{isOpen&&<div style={{ borderTop:`1px solid ${c.bord}` }}>{t.map(task=>{ const m=members.find(x=>x.email===task.assignee_email); return(<div key={task.id} style={{ display:'flex',alignItems:'center',gap:10,padding:'9px 18px',borderBottom:`1px solid ${c.bord}` }}><div style={{ width:6,height:6,borderRadius:'50%',background:getPriority(task.priority).color,flexShrink:0 }}/><span style={{ flex:1,fontSize:12,color:task.status==='done'?c.mut:c.sub,textDecoration:task.status==='done'?'line-through':'none' }}>{task.title}</span>{task.timeline&&<span style={{ fontSize:10,color:c.mut }}>{task.timeline}</span>}{m&&<Av member={m} size={22}/>}<SBadge status={task.status}/></div>); })}</div>}</Card>); })}</div>);
+  return(<div><div style={{ marginBottom:18 }}><h2 style={{ fontSize:18,fontWeight:700,color:c.text,marginBottom:4 }}>🕓 Standup history</h2><p style={{ fontSize:12.5,color:c.mut }}>A day-by-day archive of past standups. Open any day to see exactly what each person committed to and whether it was completed — your audit trail and time machine, distinct from Overview (today) and Performance (cumulative scores).</p></div>{history.length===0?<Card style={{ padding:'40px',textAlign:'center' }}><div style={{ fontSize:36,marginBottom:12 }}>📅</div><div style={{ color:c.mut,fontSize:14 }}>History appears after your first standup</div></Card>:history.map(s=>{ const t=s.tasks||[],d=t.filter(x=>x.status==='done').length,b=t.filter(x=>x.status==='blocked').length,pct=t.length?Math.round(d/t.length*100):0,isOpen=open===s.id; return(<Card key={s.id} style={{ marginBottom:10,overflow:'hidden' }}><button onClick={()=>setOpen(isOpen?null:s.id)} style={{ width:'100%',display:'flex',alignItems:'center',gap:12,padding:'14px 18px',background:'transparent',border:'none',cursor:'pointer',color:c.text }}><div style={{ width:7,height:7,borderRadius:'50%',background:pct===100?'#34D399':'#3B9EFF',flexShrink:0 }}/><span style={{ flex:1,fontSize:14,fontWeight:500,textAlign:'left' }}>{fmt(s.date)}</span>{b>0&&<span style={{ fontSize:11,color:'#F87171',background:'rgba(239,68,68,.12)',padding:'2px 8px',borderRadius:20 }}>⚠️ {b}</span>}<span style={{ fontSize:11,color:c.mut,background:'rgba(128,128,128,.1)',padding:'2px 10px',borderRadius:20 }}>{d}/{t.length} · {pct}%</span><span style={{ color:c.mut,transform:isOpen?'rotate(180deg)':'none',transition:'transform .2s',fontSize:16 }}>⌃</span></button>{isOpen&&<div style={{ borderTop:`1px solid ${c.bord}` }}>{t.map(task=>{ const m=members.find(x=>x.email===task.assignee_email); return(<div key={task.id} style={{ display:'flex',alignItems:'center',gap:10,padding:'9px 18px',borderBottom:`1px solid ${c.bord}` }}><div style={{ width:6,height:6,borderRadius:'50%',background:getPriority(task.priority).color,flexShrink:0 }}/><span style={{ flex:1,fontSize:12,color:task.status==='done'?c.mut:c.sub,textDecoration:task.status==='done'?'line-through':'none' }}>{task.title}</span>{task.timeline&&<span style={{ fontSize:10,color:c.mut }}>{task.timeline}</span>}{m&&<Av member={m} size={22} url={m.avatar_url}/>}<SBadge status={task.status}/></div>); })}</div>}</Card>); })}</div>);
 }
 
 function TeamSettingsTab({ team, members, session, onMembersUpdate, hideMembers = false }) {
