@@ -121,10 +121,14 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 3px var(--ss-focus,rgba
 .ss-3d-rise{animation:ss3dRise .55s cubic-bezier(.22,1,.36,1) both;transform-style:preserve-3d}
 @keyframes ss3dPop{0%{opacity:0;transform:perspective(1000px) scale(.94) translateZ(-40px)}100%{opacity:1;transform:perspective(1000px) scale(1) translateZ(0)}}
 .ss-3d-pop{animation:ss3dPop .4s cubic-bezier(.22,1,.36,1) both}
+/* Boot flash for splash logo */
+@keyframes ssLogoFlash{0%{opacity:0;transform:perspective(1200px) rotateX(20deg) translateZ(-120px) scale(.85)}45%{opacity:1;transform:perspective(1200px) rotateX(0) translateZ(0) scale(1.04)}65%{transform:perspective(1200px) rotateX(0) translateZ(0) scale(.98)}100%{opacity:1;transform:perspective(1200px) rotateX(0) translateZ(0) scale(1)}}
+.ss-logo-flash{animation:ssLogoFlash .7s cubic-bezier(.22,1,.36,1) both;transform-style:preserve-3d}
+@keyframes ssScan{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
 /* Depth lift: card pushes toward the viewer on hover */
 .ss-depth-hover{transition:transform .25s cubic-bezier(.22,1,.36,1),box-shadow .25s}
 .ss-depth-hover:hover{transform:perspective(900px) translateZ(22px);box-shadow:0 40px 80px -36px rgba(0,112,243,.5),0 12px 30px -16px rgba(0,0,0,.35)}
-@media(prefers-reduced-motion:reduce){.ss-3d-rise,.ss-3d-pop{animation:none}.ss-depth-hover:hover{transform:none}}
+@media(prefers-reduced-motion:reduce){.ss-3d-rise,.ss-3d-pop,.ss-logo-flash{animation:none}.ss-depth-hover:hover{transform:none}}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(0,112,243,.25);border-radius:10px}
@@ -689,16 +693,19 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
   // their team (most recent first). The picker stays reachable via "Back to teams"
   // for multi-team users and for create/join — but isn't shown as a gate on entry.
   const autoEnteredRef = useRef(false);
+  const [splashHeld, setSplashHeld] = useState(true);
+  useEffect(() => { const t = setTimeout(() => setSplashHeld(false), 700); return () => clearTimeout(t); }, []);
   useEffect(()=>{
     if(autoEnteredRef.current) return;
     if(sessionStorage.getItem('ss-skip-autoenter')==='1') return; // user chose to view picker
+    if(splashHeld) return; // wait for the minimum splash duration so the entrance feels intentional
     if(teams && teams.length>0){
       const tm = teams[0];
       const teamData = tm.teams?.id ? tm.teams : (tm.id ? tm : tm.teams);
       const role = tm.role || 'member';
       if(teamData && teamData.id){ autoEnteredRef.current = true; goToTeam(teamData, role); }
     }
-  },[teams]);
+  },[teams, splashHeld]);
 
   const [createError,setCreateError]=useState('');
   const deleteTeam=async(teamId)=>{
@@ -760,13 +767,19 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
 
   // ── Team list ──────────────────────────────────────────────────────────────
   // Branded splash while teams load or auto-enter resolves — prevents the
-  // team-picker from flashing on entry.
-  if(view==='list' && (loading || (teams && teams.length>0 && !autoEnteredRef.current && sessionStorage.getItem('ss-skip-autoenter')!=='1'))) return(
-    <div style={{ minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:20,position:'relative',zIndex:1 }}>
+  // team-picker from flashing on entry. Plays a deliberate 3D flash so the
+  // transition into the app feels intentional, not glitchy.
+  if(view==='list' && (loading || splashHeld || (teams && teams.length>0 && !autoEnteredRef.current && sessionStorage.getItem('ss-skip-autoenter')!=='1'))) return(
+    <div className="ss-3d-scene" style={{ minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:24,position:'relative',zIndex:1 }}>
       <AmbientBackground/>
-      <div className="ss-3d-pop" style={{ position:'relative',zIndex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:18 }}>
-        <Logo size={46}/>
-        <div style={{ width:30,height:30,borderRadius:'50%',border:`2.5px solid ${c.bord}`,borderTopColor:c.accent,animation:'spin .7s linear infinite' }}/>
+      <div style={{ position:'relative',zIndex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:22 }}>
+        <div className="ss-logo-flash" style={{ display:'flex',alignItems:'center',gap:14 }}>
+          <Logo size={56} iconOnly/>
+          <div className="font-heading" style={{ fontSize:32,fontWeight:600,color:c.text,letterSpacing:'-.03em' }}>Stand<span className="ss-grad-text">Sync</span></div>
+        </div>
+        <div className="ss-logo-bar" style={{ width:120,height:2,borderRadius:2,background:c.bord,overflow:'hidden',position:'relative' }}>
+          <div style={{ position:'absolute',inset:0,background:`linear-gradient(90deg,transparent,${c.accent},transparent)`,animation:'ssScan 1.1s cubic-bezier(.65,0,.35,1) infinite' }}/>
+        </div>
       </div>
     </div>
   );
@@ -10372,6 +10385,7 @@ function ManagerView({
   // ── Notifications (daily, auto-refresh next day) ──
   const todayKey = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   const [notifOpen, setNotifOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   // read set is scoped to today; loading also clears any stale (previous-day) data
   const [readIds, setReadIds] = useState(() => {
     try {
@@ -10664,36 +10678,43 @@ function ManagerView({
         </button>
       </div>
 
-      {/* Profile footer with consolidated controls */}
-      <div style={{ borderTop: `1px solid ${c.bord}`, padding: '10px 12px 12px' }}>
-        {/* Control row: notifications · theme · settings */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-          <button onClick={toggleNotif} title="Notifications"
-            style={{ flex: 1, height: 34, borderRadius: 9, border: `1px solid ${c.bord}`, background: notifOpen ? c.row : 'transparent', color: notifOpen ? c.text : c.sub, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', transition: 'all .15s' }}
-            onMouseEnter={e=>{e.currentTarget.style.background=c.row;}} onMouseLeave={e=>{if(!notifOpen)e.currentTarget.style.background='transparent';}}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
-            {unreadNotifs > 0 && <span style={{ position: 'absolute', top: 2, right: 6, minWidth: 14, height: 14, borderRadius: 7, background: '#EF4444', color: '#fff', fontSize: 8.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>{unreadNotifs > 9 ? '9+' : unreadNotifs}</span>}
-          </button>
-          <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}><ThemeToggle/></div>
-          <button onClick={onSettings} title="Settings"
-            style={{ flex: 1, height: 34, borderRadius: 9, border: `1px solid ${c.bord}`, background: 'transparent', color: c.sub, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .15s' }}
-            onMouseEnter={e=>{e.currentTarget.style.background=c.row;e.currentTarget.style.color=c.text;}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color=c.sub;}}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          </button>
-        </div>
-        {/* Profile + logout */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '6px 4px' }}>
-          <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0 }}>{userInitials}</div>
+      {/* Profile footer — Settings + Logout live inside the profile menu */}
+      <div style={{ borderTop: `1px solid ${c.bord}`, padding: '10px 12px 12px', position: 'relative' }}>
+        <button onClick={() => setProfileMenuOpen(o => !o)} title="Profile menu"
+          style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '8px 8px', width: '100%', borderRadius: 10, border: 'none', background: profileMenuOpen ? c.row : 'transparent', cursor: 'pointer', textAlign: 'left', transition: 'background .15s' }}
+          onMouseEnter={e=>{ if(!profileMenuOpen) e.currentTarget.style.background = c.row; }}
+          onMouseLeave={e=>{ if(!profileMenuOpen) e.currentTarget.style.background = 'transparent'; }}>
+          <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0, overflow: 'hidden' }}>
+            {session?.user?.user_metadata?.avatar_url
+              ? <img src={session.user.user_metadata.avatar_url} alt={userInitials} style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+              : userInitials}
+          </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13.5, fontWeight: 700, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName}</div>
             <div style={{ fontSize: 11.5, color: c.mut }}>{userRole}</div>
           </div>
-          <button onClick={onLogout} title="Log out"
-            style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: 'transparent', color: c.mut, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}
-            onMouseEnter={e=>{e.currentTarget.style.background='rgba(239,68,68,.1)';e.currentTarget.style.color='#F87171';}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color=c.mut;}}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          </button>
-        </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: c.mut, flexShrink: 0, transform: profileMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        {profileMenuOpen && (
+          <>
+            <div onClick={() => setProfileMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 199 }}/>
+            <div style={{ position: 'absolute', bottom: 64, left: 12, right: 12, zIndex: 200, background: c.surf, border: `1px solid ${c.bord}`, borderRadius: 12, padding: 6, boxShadow: '0 14px 40px rgba(0,0,0,.3)', animation: 'ss3dPop .2s cubic-bezier(.22,1,.36,1) both' }}>
+              <button onClick={() => { setProfileMenuOpen(false); onSettings(); }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 11px', borderRadius: 8, border: 'none', background: 'transparent', color: c.text, cursor: 'pointer', fontSize: 13, textAlign: 'left', transition: 'background .15s' }}
+                onMouseEnter={e => e.currentTarget.style.background = c.row} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: c.sub }}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                Settings
+              </button>
+              <div style={{ height: 1, background: c.bord, margin: '4px 6px' }}/>
+              <button onClick={() => { setProfileMenuOpen(false); onLogout(); }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 11px', borderRadius: 8, border: 'none', background: 'transparent', color: '#F87171', cursor: 'pointer', fontSize: 13, textAlign: 'left', transition: 'background .15s' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,.1)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Log out
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -10803,7 +10824,14 @@ function ManagerView({
             );
           })()}
 
-          {/* Controls moved to the left sidebar footer */}
+          {/* Top-right controls: Notifications + Theme. Settings + Logout live in the sidebar profile menu. */}
+          <button onClick={toggleNotif} title="Notifications"
+            style={{ width: 34, height: 34, borderRadius: '50%', border: `1px solid ${c.bord}`, background: notifOpen ? c.row : 'transparent', color: notifOpen ? c.text : c.sub, cursor: 'pointer', flexShrink: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s' }}
+            onMouseEnter={e=>{e.currentTarget.style.background=c.row;e.currentTarget.style.color=c.text;}} onMouseLeave={e=>{if(!notifOpen){e.currentTarget.style.background='transparent';e.currentTarget.style.color=c.sub;}}}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+            {unreadNotifs > 0 && <span style={{ position: 'absolute', top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, background: '#EF4444', color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', border: `2px solid ${c.nav}` }}>{unreadNotifs > 9 ? '9+' : unreadNotifs}</span>}
+          </button>
+          <ThemeToggle/>
 
           {notifOpen && <NotificationPanel notifs={notifs} onClose={() => setNotifOpen(false)} onAction={handleNotifAction} onMarkAllRead={markAllRead} onClearAll={clearAllNotifs} unread={unreadNotifs} onDigest={isManager ? onDigest : null} emailBusy={emailBusy}/>}
         </div>
