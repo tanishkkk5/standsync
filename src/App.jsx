@@ -3618,7 +3618,7 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
     {id:'notes',   l:'Meeting notes', ic:'≡'},
     {id:'chat',    l:'Team chat',     ic:'◌'},
     {id:'cal',     l:'Calendar',      ic:'⊟'},
-    {id:'wiki',    l:'Project Wiki',  ic:'📚'},
+    {id:'wiki',    l:'Project Wiki',  ic:'◈'},
     {id:'brain',   l:'Brainstorm',    ic:'⬡'},
     {id:'ai',      l:'AI assistant',  ic:'◉'},
   ];
@@ -4743,7 +4743,7 @@ function SilentRiskPanel({ members, tasks, history, commitments }) {
   if (flagged.length === 0) return (
     <Card style={{ padding: '18px 20px', marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 4 }}>
-        <span style={{ fontSize: 16 }}>🔍</span>
+        <span style={{ display:"inline-flex", color: c.mut }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
         <span style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Silent execution risk</span>
         <span style={{ fontSize: 11, color: '#16A34A', background: 'rgba(22,163,74,.1)', padding: '2px 9px', borderRadius: 20, fontWeight: 700 }}>All clear</span>
       </div>
@@ -4753,7 +4753,7 @@ function SilentRiskPanel({ members, tasks, history, commitments }) {
   return (
     <Card style={{ padding: '18px 20px', marginBottom: 16, border: '1px solid rgba(220,38,38,.22)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 4 }}>
-        <span style={{ fontSize: 16 }}>🔍</span>
+        <span style={{ display:"inline-flex", color: c.mut }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
         <span style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Silent execution risk</span>
         <span style={{ fontSize: 11, color: '#DC2626', background: 'rgba(220,38,38,.1)', padding: '2px 9px', borderRadius: 20, fontWeight: 700 }}>{flagged.length} flagged</span>
       </div>
@@ -5852,12 +5852,15 @@ function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, pr
                 }
                 <div style={{ fontSize: 12, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }} title={f.name}>{f.name}</div>
                 <div style={{ fontSize: 10, color: c.mut, marginBottom: 3 }}>{Math.round(f.size/1024)}KB · {new Date(f.uploadedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
-                <div style={{ fontSize: 10, color: textExtracted(f) ? '#34D399' : '#3B9EFF' }}>
-                  {textExtracted(f) ? '✓ Text extracted · AI readable' : (f.dataUrl ? '👁 Click to view · AI reference' : '📎 AI reference')}
+                <div style={{ fontSize: 10, color: textExtracted(f) ? '#34D399' : '#3B9EFF', display:'inline-flex', alignItems:'center', gap:4 }}>
+                  {textExtracted(f) ? (<><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Text extracted · AI readable</>) : (f.dataUrl ? 'Click to view · AI reference' : 'AI reference')}
                 </div>
                 <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
                   <button onClick={e => { e.stopPropagation(); openFile(f); }}
-                    style={{ flex: 1, padding: '4px 0', borderRadius: 6, background: dark ? 'rgba(255,255,255,.07)' : 'rgba(0,112,243,.08)', border: 'none', color: c.text, cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>👁 View</button>
+                    style={{ flex: 1, padding: '4px 0', borderRadius: 6, background: dark ? 'rgba(255,255,255,.07)' : 'rgba(0,112,243,.08)', border: 'none', color: c.text, cursor: 'pointer', fontSize: 11, fontWeight: 600, display:'inline-flex', alignItems:'center', justifyContent:'center', gap:5 }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    View
+                  </button>
                   <button onClick={e => { e.stopPropagation(); removeFile(f.id); }}
                     style={{ width: 28, padding: '4px 0', borderRadius: 6, background: 'rgba(239,68,68,.08)', border: 'none', color: '#F87171', cursor: 'pointer', fontSize: 11 }}>×</button>
                 </div>
@@ -5902,7 +5905,9 @@ function WikiOverview({ curProject, projPages, pinnedPages, projectId, projectFi
         </div>
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
           <button onClick={onNewPage} style={{ padding: '8px 16px', borderRadius: 9, background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>+ New page</button>
-          <button onClick={onDeleteProject} style={{ padding: '8px 14px', borderRadius: 9, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', color: '#F87171', cursor: 'pointer', fontSize: 13 }}>🗑</button>
+          <button onClick={onDeleteProject} title="Delete project" style={{ padding: '8px 12px', borderRadius: 9, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', color: '#F87171', cursor: 'pointer', display:'inline-flex', alignItems:'center' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+          </button>
         </div>
       </div>
 
@@ -5932,7 +5937,10 @@ function WikiOverview({ curProject, projPages, pinnedPages, projectId, projectFi
       {/* Pinned */}
       {pinnedPages.length > 0 && (
         <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>📌 Pinned</div>
+          <div className="eyebrow" style={{ color: c.mut, marginBottom: 10, display:'inline-flex', alignItems:'center', gap:6 }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17z"/></svg>
+            Pinned
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px,1fr))', gap: 10 }}>
             {pinnedPages.map(pg => (
               <div key={pg.id} onClick={() => onOpenPage(pg.id)} style={{ padding: '14px 16px', borderRadius: 12, background: dark?'rgba(255,255,255,.05)':'rgba(255,255,255,.8)', border: `1px solid ${c.bord}`, cursor: 'pointer', transition: 'all .15s' }}
@@ -5951,7 +5959,7 @@ function WikiOverview({ curProject, projPages, pinnedPages, projectId, projectFi
         <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>All pages ({projPages.length})</div>
         {projPages.length === 0 ? (
           <div style={{ padding: 32, textAlign: 'center', borderRadius: 12, border: `1.5px dashed ${c.bord}` }}>
-            <div style={{ fontSize: 36, marginBottom: 10 }}>📄</div>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={c.mut} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 12, opacity: .5 }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             <div style={{ color: c.mut, fontSize: 14, marginBottom: 14 }}>No pages yet</div>
             <button onClick={onNewPage} style={{ padding: '9px 20px', borderRadius: 9, background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>+ Create first page</button>
           </div>
@@ -5965,8 +5973,15 @@ function WikiOverview({ curProject, projPages, pinnedPages, projectId, projectFi
                 <span style={{ fontSize: 18, flexShrink: 0 }}>{pg.emoji}</span>
                 <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: c.text }}>{pg.title}</span>
                 <span style={{ fontSize: 11, color: c.mut }}>{new Date(pg.updatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>
-                <span style={{ fontSize: 13, cursor: 'pointer', color: pg.pinned?'#FBBF24':c.mut }} onClick={e=>{e.stopPropagation();onTogglePin(pg.id);}} title={pg.pinned?'Unpin':'Pin'}>{pg.pinned?'📌':'📍'}</span>
-                <span style={{ fontSize: 11, color: '#F87171', cursor: 'pointer', opacity: 0.6 }} onClick={e=>{e.stopPropagation();onDeletePage(pg.id);}} title="Delete">🗑</span>
+                <button onClick={e=>{e.stopPropagation();onTogglePin(pg.id);}} title={pg.pinned?'Unpin':'Pin'}
+                  style={{ background:'none', border:'none', cursor:'pointer', color: pg.pinned?'#FBBF24':c.mut, padding:0, display:'inline-flex', alignItems:'center' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill={pg.pinned?'currentColor':'none'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17z"/></svg>
+                </button>
+                <button onClick={e=>{e.stopPropagation();onDeletePage(pg.id);}} title="Delete"
+                  style={{ background:'none', border:'none', cursor:'pointer', color:'#F87171', opacity:0.55, padding:0, display:'inline-flex', alignItems:'center' }}
+                  onMouseEnter={e=>e.currentTarget.style.opacity='1'} onMouseLeave={e=>e.currentTarget.style.opacity='0.55'}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                </button>
               </div>
             ))}
           </div>
@@ -6161,7 +6176,10 @@ function ProjectWiki({ team, session, members = [] }) {
       {!sideCollapsed && (
         <>
           <div style={{ padding:'8px 10px', borderBottom:`1px solid ${c.bord}`, flexShrink:0, position:'relative' }}>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Search docs..." style={{ width:'100%', background:dark?'rgba(255,255,255,.06)':'rgba(0,112,243,.07)', border:`1px solid ${c.bord}`, borderRadius:8, padding:'6px 10px', color:c.text, fontSize:12, outline:'none', boxSizing:'border-box' }}/>
+            <div style={{ position:'relative' }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ position:'absolute', left:9, top:'50%', transform:'translateY(-50%)', color:c.mut, pointerEvents:'none' }}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search docs..." style={{ width:'100%', background:dark?'rgba(255,255,255,.06)':'rgba(0,112,243,.07)', border:`1px solid ${c.bord}`, borderRadius:8, padding:'6px 10px 6px 28px', color:c.text, fontSize:12, outline:'none', boxSizing:'border-box' }}/>
+            </div>
             {search && searchResults.length > 0 && (
               <div style={{ position:'absolute', zIndex:100, width:220, background:dark?'#12103A':'#fff', border:`1px solid ${c.bord}`, borderRadius:10, marginTop:4, boxShadow:'0 8px 24px rgba(0,0,0,.2)', maxHeight:240, overflowY:'auto', left:10 }}>
                 {searchResults.map(pg => {
@@ -6196,7 +6214,9 @@ function ProjectWiki({ team, session, members = [] }) {
                         style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', borderRadius:7, cursor:'pointer', background:selPage===pg.id?(dark?'rgba(0,112,243,.14)':'rgba(0,112,243,.09)'):'transparent', marginBottom:1, transition:'background .1s' }}
                         onMouseEnter={e=>{if(selPage!==pg.id)e.currentTarget.style.background=dark?'rgba(255,255,255,.04)':'rgba(0,112,243,.05)';}}
                         onMouseLeave={e=>{if(selPage!==pg.id)e.currentTarget.style.background='transparent';}}>
-                        <span style={{ fontSize:12 }}>{pg.pinned?'📌':pg.emoji}</span>
+                        <span style={{ fontSize:12, display:'inline-flex', alignItems:'center', color:pg.pinned?'#FBBF24':undefined }}>{pg.pinned ? (
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17z"/></svg>
+                        ) : pg.emoji}</span>
                         <span style={{ fontSize:12, color:selPage===pg.id?'#3B9EFF':c.sub, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight:selPage===pg.id?600:400 }}>{pg.title}</span>
                       </div>
                     ))}
@@ -6300,18 +6320,27 @@ function ProjectWiki({ team, session, members = [] }) {
       );
 
       if (block.type==='callout') {
-        const ts = {info:{bg:'rgba(0,112,243,.08)',border:'rgba(0,112,243,.25)',icon:'ℹ️'},warning:{bg:'rgba(245,158,11,.08)',border:'rgba(245,158,11,.25)',icon:'⚠️'},success:{bg:'rgba(52,211,153,.08)',border:'rgba(52,211,153,.25)',icon:'✅'},danger:{bg:'rgba(239,68,68,.08)',border:'rgba(239,68,68,.25)',icon:'🚨'}};
+        const icoInfo = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
+        const icoWarn = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+        const icoOk   = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
+        const icoDanger = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
+        const ts = {
+          info:    { bg:'rgba(0,112,243,.08)',   border:'rgba(0,112,243,.25)',   col:'#0070F3', icon: icoInfo },
+          warning: { bg:'rgba(245,158,11,.08)',  border:'rgba(245,158,11,.25)',  col:'#F59E0B', icon: icoWarn },
+          success: { bg:'rgba(52,211,153,.08)',  border:'rgba(52,211,153,.25)',  col:'#10B981', icon: icoOk },
+          danger:  { bg:'rgba(239,68,68,.08)',   border:'rgba(239,68,68,.25)',   col:'#EF4444', icon: icoDanger },
+        };
         const t = ts[block.calloutType||'info'];
         return (
           <div key={block.id} style={{ display:'flex', gap:12, padding:'12px 16px', background:t.bg, border:`1px solid ${t.border}`, borderRadius:10, margin:'4px 0', position:'relative' }}
             onMouseEnter={e=>e.currentTarget.querySelector('.bdel')&&(e.currentTarget.querySelector('.bdel').style.opacity='1')}
             onMouseLeave={e=>e.currentTarget.querySelector('.bdel')&&(e.currentTarget.querySelector('.bdel').style.opacity='0')}>
-            <span style={{ fontSize:18, flexShrink:0, marginTop:2 }}>{t.icon}</span>
+            <span style={{ flexShrink:0, marginTop:2, color:t.col, display:'inline-flex' }}>{t.icon}</span>
             <textarea ref={el=>blockRefs.current[block.id]=el} value={block.content} rows={Math.max(1,(block.content||'').split('\n').length)}
               onChange={e=>updateBlock(block.id,{content:e.target.value})} onKeyDown={e=>handleKey(e,block,idx)}
               style={{...bStyle('paragraph'),flex:1,height:'auto',minHeight:24}} placeholder="Callout text…"/>
             <div style={{ display:'flex', gap:3, flexShrink:0 }}>
-              {Object.keys(ts).map(tp=><button key={tp} onClick={()=>updateBlock(block.id,{calloutType:tp})} style={{ width:20, height:20, borderRadius:'50%', border:'none', background:ts[tp].bg, cursor:'pointer', fontSize:10 }}>{ts[tp].icon}</button>)}
+              {Object.keys(ts).map(tp=><button key={tp} onClick={()=>updateBlock(block.id,{calloutType:tp})} title={tp} style={{ width:22, height:22, borderRadius:'50%', border: `1px solid ${block.calloutType===tp?ts[tp].col:'transparent'}`, background:ts[tp].bg, cursor:'pointer', color:ts[tp].col, display:'inline-flex', alignItems:'center', justifyContent:'center' }}>{React.cloneElement(ts[tp].icon,{width:11,height:11})}</button>)}
             </div>
             <button className="bdel" onClick={()=>deleteBlock(idx)} style={{ position:'absolute', right:-26, top:10, width:20, height:20, borderRadius:'50%', background:'rgba(239,68,68,.1)', border:'none', color:'#F87171', cursor:'pointer', opacity:0, transition:'opacity .15s' }}>×</button>
           </div>
@@ -6361,9 +6390,18 @@ function ProjectWiki({ team, session, members = [] }) {
           <span style={{ fontSize:13, color:'#374151', fontWeight:600 }}>{page.emoji} {page.title}</span>
           <div style={{ flex:1 }}/>
           <span style={{ fontSize:11, color:'#94A3B8' }}>{saving?'Saving…':'Auto-saved'}</span>
-          <button onClick={()=>togglePin(page.id)} style={{ padding:'4px 10px', borderRadius:7, background:page.pinned?'rgba(251,191,36,.12)':'transparent', border:`1px solid ${page.pinned?'rgba(251,191,36,.3)':'rgba(0,0,0,.1)'}`, color:page.pinned?'#D97706':'#94A3B8', cursor:'pointer', fontSize:12 }}>{page.pinned?'📌 Pinned':'📍 Pin'}</button>
-          <button onClick={()=>setShowAI(s=>!s)} style={{ padding:'4px 12px', borderRadius:7, background:showAI?'rgba(0,112,243,.12)':'transparent', border:`1px solid ${showAI?'rgba(0,112,243,.3)':'rgba(0,0,0,.1)'}`, color:showAI?'#0070F3':'#94A3B8', cursor:'pointer', fontSize:12, fontWeight:600 }}>✦ Ask AI</button>
-          <button onClick={()=>deletePage(page.id)} style={{ padding:'4px 10px', borderRadius:7, background:'rgba(239,68,68,.06)', border:'1px solid rgba(239,68,68,.15)', color:'#EF4444', cursor:'pointer', fontSize:12 }}>🗑 Delete</button>
+          <button onClick={()=>togglePin(page.id)} style={{ padding:'4px 10px', borderRadius:7, background:page.pinned?'rgba(251,191,36,.12)':'transparent', border:`1px solid ${page.pinned?'rgba(251,191,36,.3)':'rgba(0,0,0,.1)'}`, color:page.pinned?'#D97706':'#94A3B8', cursor:'pointer', fontSize:12, display:'inline-flex', alignItems:'center', gap:5 }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill={page.pinned?'currentColor':'none'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17z"/></svg>
+            {page.pinned?'Pinned':'Pin'}
+          </button>
+          <button onClick={()=>setShowAI(s=>!s)} style={{ padding:'4px 12px', borderRadius:7, background:showAI?'rgba(0,112,243,.12)':'transparent', border:`1px solid ${showAI?'rgba(0,112,243,.3)':'rgba(0,0,0,.1)'}`, color:showAI?'#0070F3':'#94A3B8', cursor:'pointer', fontSize:12, fontWeight:600, display:'inline-flex', alignItems:'center', gap:5 }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3c.5 4 2.5 6 6.5 6.5-4 .5-6 2.5-6.5 6.5-.5-4-2.5-6-6.5-6.5C9.5 9 11.5 7 12 3z"/></svg>
+            Ask AI
+          </button>
+          <button onClick={()=>deletePage(page.id)} style={{ padding:'4px 10px', borderRadius:7, background:'rgba(239,68,68,.06)', border:'1px solid rgba(239,68,68,.15)', color:'#EF4444', cursor:'pointer', fontSize:12, display:'inline-flex', alignItems:'center', gap:5 }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+            Delete
+          </button>
         </div>
 
         <div style={{ display:'flex', flex:1, minHeight:0 }}>
@@ -6409,8 +6447,8 @@ function ProjectWiki({ team, session, members = [] }) {
 
   const HomeView = () => (
     <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:40, gap:20 }}>
-      <div style={{ fontSize:56 }}>📚</div>
-      <h2 style={{ fontSize:24, fontWeight:800, color:c.text, margin:0 }}>Project Wiki</h2>
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke={c.mut} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity:.45 }}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      <h2 className="font-heading" style={{ fontSize:26, fontWeight:600, color:c.text, margin:0, letterSpacing:'-.03em' }}>Project Wiki</h2>
       <p style={{ color:c.mut, fontSize:14, textAlign:'center', maxWidth:380, lineHeight:1.7, margin:0 }}>SOPs, runbooks, decisions, onboarding docs — all in one place with AI search.</p>
       <button onClick={()=>setView('newProject')} style={{ padding:'12px 28px', borderRadius:10, background:'linear-gradient(135deg,#0070F3,#3B9EFF)', color:'#fff', border:'none', cursor:'pointer', fontSize:14, fontWeight:700 }}>+ Create your first project</button>
     </div>
@@ -10939,7 +10977,9 @@ function ManagerView({
           )}
 
           {area === 'communication' && (
-            <RichChatPanel messages={messages} onSend={onSendMessage} session={session} members={members} chatTheme={chatTheme} onChangeTheme={onChangeTheme} isManager={true} onCreateTask={onAddTask} teamId={team?.id||'demo'}/>
+            <ErrorBoundary>
+              <RichChatPanel messages={Array.isArray(messages)?messages:[]} onSend={onSendMessage} session={session} members={Array.isArray(members)?members:[]} chatTheme={chatTheme} onChangeTheme={onChangeTheme} isManager={true} onCreateTask={onAddTask} teamId={team?.id||'demo'}/>
+            </ErrorBoundary>
           )}
 
           {area === 'spaces' && <SpacesArea team={team} session={session} members={members}/>}
@@ -10950,7 +10990,7 @@ function ManagerView({
                 tabs={[{ id: 'docs', label: 'Docs & SOPs' }, { id: 'brainstorm', label: 'Brainstorm' }, { id: 'meetings', label: 'Meeting notes' }]}/>
               {knowledgeSub === 'docs' && <ProjectWiki team={team} session={session} members={members}/>}
               {knowledgeSub === 'brainstorm' && <BrainstormSpace team={team} session={session} members={members}/>}
-              {knowledgeSub === 'meetings' && <ManagerNotesTab session={session} team={team}/>}
+              {knowledgeSub === 'meetings' && <ManagerNotesTab session={session} team={team} history={history}/>}
             </>
           )}
 
@@ -11778,7 +11818,7 @@ export default function App() {
 }
 
 // ─── MANAGER MEETING NOTES ───────────────────────────────────────────────────
-function NotesTab({ session, team, role='manager' }) {
+function NotesTab({ session, team, role='manager', history=[] }) {
   const c=useC();
   const teamId=team?.id||'demo';
   const userId=session?.user?.email||'user';
@@ -11791,6 +11831,7 @@ function NotesTab({ session, team, role='manager' }) {
   const [noteContent,setNoteContent]=useState('');
   const [noteTitle,setNoteTitle]=useState('');
   const [saved,setSaved]=useState(false);
+  const [showStandupPicker,setShowStandupPicker]=useState(false);
 
   // Load all saved notes
   const [allNotes,setAllNotes]=useState(()=>{
@@ -11813,13 +11854,25 @@ function NotesTab({ session, team, role='manager' }) {
   };
 
   const newNote=(type)=>{
+    if(type==='meeting'){ setShowStandupPicker(true); return; }
     const id='note-'+Date.now();
-    const title=type==='meeting'
-      ?'Meeting · '+new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
-      :'Project note · '+new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+    const title='Project note · '+new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short'});
     const note={id,type,title,created:new Date().toISOString()};
     const updated=[note,...allNotes];
     setAllNotes(updated); saveIndex(updated);
+    openNote(note);
+  };
+
+  const createMeetingNote=(standupRef)=>{
+    const id='note-'+Date.now();
+    const dateStr=standupRef
+      ? new Date(standupRef.date+'T12:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
+      : new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+    const title='Meeting · '+dateStr;
+    const note={id,type:'meeting',title,created:new Date().toISOString(),standupId:standupRef?.id||null,standupDate:standupRef?.date||null};
+    const updated=[note,...allNotes];
+    setAllNotes(updated); saveIndex(updated);
+    setShowStandupPicker(false);
     openNote(note);
   };
 
@@ -11848,7 +11901,7 @@ function NotesTab({ session, team, role='manager' }) {
     <div>
       <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:14 }}>
         <button onClick={()=>setView('list')} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:13,padding:0 }}>← Back</button>
-        <span style={{ fontSize:11,padding:'2px 8px',borderRadius:20,background:selectedNote?.type==='meeting'?'rgba(0,112,243,.12)':'rgba(52,211,153,.12)',color:selectedNote?.type==='meeting'?'#3B9EFF':'#34D399',fontWeight:600 }}>{selectedNote?.type==='meeting'?'📅 Meeting':'📁 Project'}</span>
+        <span style={{ fontSize:11,padding:'2px 8px',borderRadius:20,background:selectedNote?.type==='meeting'?'rgba(0,112,243,.12)':'rgba(52,211,153,.12)',color:selectedNote?.type==='meeting'?'#3B9EFF':'#34D399',fontWeight:600 }}>{selectedNote?.type==='meeting'?'Meeting':'Project'}</span>
         <div style={{ flex:1 }}/>
         <Btn onClick={saveNote}>{saved?'✓ Saved!':'Save'}</Btn>
       </div>
@@ -11863,8 +11916,56 @@ function NotesTab({ session, team, role='manager' }) {
 
   return(
     <div>
+      {showStandupPicker && (
+        <div style={{ position:'fixed',inset:0,zIndex:1000,background:'rgba(0,0,0,.65)',backdropFilter:'blur(6px)',display:'flex',alignItems:'center',justifyContent:'center',padding:20 }} onClick={e=>e.target===e.currentTarget&&setShowStandupPicker(false)}>
+          <Card style={{ width:'100%',maxWidth:520,padding:24,animation:'ss3dPop .3s cubic-bezier(.22,1,.36,1) both',maxHeight:'80vh',display:'flex',flexDirection:'column' }}>
+            <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:6 }}>
+              <div style={{ width:34,height:34,borderRadius:9,background:'rgba(0,112,243,.12)',display:'flex',alignItems:'center',justifyContent:'center',color:'#3B9EFF' }}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </div>
+              <h3 className="font-heading" style={{ margin:0,fontSize:18,fontWeight:600,color:c.text,letterSpacing:'-.02em' }}>Which standup is this note for?</h3>
+            </div>
+            <p style={{ fontSize:13,color:c.mut,marginTop:0,marginBottom:18 }}>Pick a past standup to link these notes to, or create a general meeting note.</p>
+            <div style={{ flex:1,overflowY:'auto',display:'flex',flexDirection:'column',gap:6,marginBottom:14 }}>
+              <button onClick={()=>createMeetingNote(null)} style={{ display:'flex',alignItems:'center',gap:11,padding:'12px 14px',borderRadius:10,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',textAlign:'left',transition:'all .15s' }}
+                onMouseEnter={e=>{e.currentTarget.style.background=c.row;e.currentTarget.style.borderColor=c.bordH;}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.borderColor=c.bord;}}>
+                <div style={{ width:32,height:32,borderRadius:8,background:c.row,display:'flex',alignItems:'center',justifyContent:'center',color:c.mut,flexShrink:0 }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13.5,fontWeight:600,color:c.text }}>General meeting note</div>
+                  <div style={{ fontSize:11.5,color:c.mut,marginTop:1 }}>Not linked to a specific standup</div>
+                </div>
+              </button>
+              {(history||[]).length===0 && <div style={{ fontSize:12,color:c.mut,padding:'10px 4px',textAlign:'center' }}>No past standups yet</div>}
+              {(history||[]).map(s=>{
+                const t=s.tasks||[],d=t.filter(x=>x.status==='done').length,pct=t.length?Math.round(d/t.length*100):0;
+                const dateStr=new Date(s.date+'T12:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+                return (
+                  <button key={s.id} onClick={()=>createMeetingNote(s)} style={{ display:'flex',alignItems:'center',gap:11,padding:'12px 14px',borderRadius:10,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',textAlign:'left',transition:'all .15s' }}
+                    onMouseEnter={e=>{e.currentTarget.style.background=c.row;e.currentTarget.style.borderColor=c.bordH;}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.borderColor=c.bord;}}>
+                    <div style={{ width:32,height:32,borderRadius:8,background:'rgba(0,112,243,.1)',display:'flex',alignItems:'center',justifyContent:'center',color:'#3B9EFF',flexShrink:0 }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    </div>
+                    <div style={{ flex:1,minWidth:0 }}>
+                      <div style={{ fontSize:13.5,fontWeight:600,color:c.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{dateStr}</div>
+                      <div style={{ fontSize:11.5,color:c.mut,marginTop:1,fontFamily:"'JetBrains Mono',monospace" }}>{d}/{t.length} done · {pct}%</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ display:'flex',justifyContent:'flex-end' }}>
+              <Btn v="ghost" onClick={()=>setShowStandupPicker(false)}>Cancel</Btn>
+            </div>
+          </Card>
+        </div>
+      )}
       <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:18 }}>
-        <h2 style={{ fontSize:18,fontWeight:700,color:c.text,margin:0 }}>📝 Notes</h2>
+        <h2 className="font-heading" style={{ fontSize:20,fontWeight:600,color:c.text,margin:0,letterSpacing:'-.02em',display:'flex',alignItems:'center',gap:9 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color:c.sub }}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Notes
+        </h2>
         <div style={{ display:'flex',gap:7 }}>
           <Btn onClick={()=>newNote('meeting')} style={{ fontSize:12,padding:'6px 12px' }}>+ Meeting note</Btn>
           <Btn v="ghost" onClick={()=>newNote('project')} style={{ fontSize:12,padding:'6px 12px' }}>+ Project note</Btn>
@@ -11872,38 +11973,43 @@ function NotesTab({ session, team, role='manager' }) {
       </div>
       {/* Meeting notes section */}
       <div style={{ marginBottom:20 }}>
-        <div style={{ fontSize:12,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.07em',marginBottom:10,display:'flex',alignItems:'center',gap:6 }}>
-          <span>📅 Meeting notes</span><span style={{ fontSize:11,fontWeight:400 }}>({meeting.length})</span>
+        <div className="eyebrow" style={{ color:c.mut,marginBottom:10,display:'flex',alignItems:'center',gap:7 }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Meeting notes <span style={{ opacity:.7,fontWeight:400 }}>({meeting.length})</span>
         </div>
         {meeting.length===0&&<div style={{ fontSize:13,color:c.mut,padding:'12px 0' }}>No meeting notes yet — click "+ Meeting note" to create one</div>}
         <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
           {meeting.map(n=>(
             <Card key={n.id} onClick={()=>openNote(n)} style={{ padding:'12px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:10 }}>
-              <span style={{ fontSize:18 }}>📅</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ color:"#3B9EFF", flexShrink:0 }}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               <div style={{ flex:1,minWidth:0 }}>
                 <div style={{ fontSize:13,fontWeight:600,color:c.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{n.title}</div>
-                <div style={{ fontSize:11,color:c.mut }}>{n.updated?new Date(n.updated).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):new Date(n.created).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
+                <div style={{ fontSize:11,color:c.mut,display:'flex',alignItems:'center',gap:7,flexWrap:'wrap' }}>
+                  <span>{n.updated?new Date(n.updated).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):new Date(n.created).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>
+                  {n.standupDate && <span style={{ fontSize:10,padding:'2px 7px',borderRadius:6,background:'rgba(0,112,243,.12)',color:'#3B9EFF',fontWeight:600,fontFamily:"'JetBrains Mono',monospace" }}>Standup · {new Date(n.standupDate+'T12:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>}
+                </div>
               </div>
-              <button onClick={e=>deleteNote(n.id,e)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:14,opacity:.5,flexShrink:0 }}>🗑</button>
+              <button onClick={e=>deleteNote(n.id,e)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',padding:0,opacity:.55,flexShrink:0,display:'flex' }} onMouseEnter={e=>{e.currentTarget.style.opacity='1';e.currentTarget.style.color='#F87171';}} onMouseLeave={e=>{e.currentTarget.style.opacity='.55';e.currentTarget.style.color=c.mut;}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
             </Card>
           ))}
         </div>
       </div>
       {/* Project notes section */}
       <div>
-        <div style={{ fontSize:12,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.07em',marginBottom:10,display:'flex',alignItems:'center',gap:6 }}>
-          <span>📁 Project notes</span><span style={{ fontSize:11,fontWeight:400 }}>({project.length})</span>
+        <div className="eyebrow" style={{ color:c.mut,marginBottom:10,display:'flex',alignItems:'center',gap:7 }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          Project notes <span style={{ opacity:.7,fontWeight:400 }}>({project.length})</span>
         </div>
         {project.length===0&&<div style={{ fontSize:13,color:c.mut,padding:'12px 0' }}>No project notes yet — click "+ Project note" to create one</div>}
         <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
           {project.map(n=>(
             <Card key={n.id} onClick={()=>openNote(n)} style={{ padding:'12px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:10 }}>
-              <span style={{ fontSize:18 }}>📁</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ color:"#34D399", flexShrink:0 }}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
               <div style={{ flex:1,minWidth:0 }}>
                 <div style={{ fontSize:13,fontWeight:600,color:c.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{n.title}</div>
                 <div style={{ fontSize:11,color:c.mut }}>{n.updated?new Date(n.updated).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):new Date(n.created).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
               </div>
-              <button onClick={e=>deleteNote(n.id,e)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:14,opacity:.5,flexShrink:0 }}>🗑</button>
+              <button onClick={e=>deleteNote(n.id,e)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',padding:0,opacity:.55,flexShrink:0,display:'flex' }} onMouseEnter={e=>{e.currentTarget.style.opacity='1';e.currentTarget.style.color='#F87171';}} onMouseLeave={e=>{e.currentTarget.style.opacity='.55';e.currentTarget.style.color=c.mut;}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
             </Card>
           ))}
         </div>
@@ -11911,7 +12017,7 @@ function NotesTab({ session, team, role='manager' }) {
     </div>
   );
 }
-function ManagerNotesTab({ session, team }) { return <NotesTab session={session} team={team} role="manager"/>; }
+function ManagerNotesTab({ session, team, history }) { return <NotesTab session={session} team={team} role="manager" history={history}/>; }
 
 // ─── TEAM ANALYSIS TAB ───────────────────────────────────────────────────────
 // ─── BLOCKER INTELLIGENCE ─────────────────────────────────────────────────────
