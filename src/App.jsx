@@ -10,26 +10,26 @@ const useTheme = () => useContext(ThemeCtx);
 function useC() {
   const { dark } = useTheme();
   return dark ? {
-    bg:'#0B1020', surf:'#111827', surfH:'#161E2E',
-    bord:'rgba(255,255,255,.08)', bordH:'rgba(129,140,248,.35)',
-    text:'#F1F4F9', sub:'rgba(241,244,249,.64)', mut:'rgba(241,244,249,.42)',
-    nav:'rgba(11,16,32,.88)', inp:'rgba(255,255,255,.04)', inpB:'rgba(129,140,248,.22)',
-    sel:'#111827', row:'rgba(255,255,255,.02)',
-    accent:'#818CF8', glow:'rgba(99,102,241,.18)', dark:true,
+    bg:'#0A0A0A', surf:'#121212', surfH:'#181818',
+    bord:'rgba(255,255,255,.09)', bordH:'rgba(0,122,255,.45)',
+    text:'#FFFFFF', sub:'rgba(255,255,255,.66)', mut:'rgba(255,255,255,.44)',
+    nav:'rgba(10,10,10,.7)', inp:'rgba(255,255,255,.04)', inpB:'rgba(255,255,255,.16)',
+    sel:'#121212', row:'rgba(255,255,255,.02)',
+    accent:'#3B9EFF', glow:'rgba(0,122,255,.18)', dark:true,
   } : {
-    bg:'#F4F6FB', surf:'#FFFFFF', surfH:'#FFFFFF',
-    bord:'rgba(15,23,42,.1)', bordH:'rgba(99,102,241,.4)',
-    text:'#0F172A', sub:'#475569', mut:'#94A3B8',
-    nav:'rgba(255,255,255,.9)', inp:'#FFFFFF', inpB:'rgba(15,23,42,.16)',
-    sel:'#FFFFFF', row:'rgba(15,23,42,.025)',
-    accent:'#6366F1', glow:'rgba(99,102,241,.1)', dark:false,
+    bg:'#FAFAFA', surf:'#FFFFFF', surfH:'#FFFFFF',
+    bord:'rgba(15,18,28,.1)', bordH:'rgba(0,112,243,.45)',
+    text:'#0A0A0B', sub:'#3F4147', mut:'#8A8D94',
+    nav:'rgba(250,250,250,.72)', inp:'#FFFFFF', inpB:'rgba(15,18,28,.16)',
+    sel:'#FFFFFF', row:'rgba(15,18,28,.025)',
+    accent:'#0070F3', glow:'rgba(0,112,243,.1)', dark:false,
   };
 }
 
 const CSS = `
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @keyframes orb{from{transform:translate(0,0) scale(1) rotate(0deg)}to{transform:translate(20px,24px) scale(1.1) rotate(5deg)}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
@@ -41,7 +41,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 @keyframes popIn{0%{opacity:0;transform:scale(.92) translateY(8px)}100%{opacity:1;transform:scale(1) translateY(0)}}
 .ss-tip{position:relative;display:inline-flex}
 .ss-tip{position:relative!important}
-.ss-tip::after{content:attr(data-tip);position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%) scale(.88);transform-origin:top center;background:rgba(12,10,35,.97);color:#F0ECFF;font-size:11px;font-weight:600;padding:5px 11px;border-radius:8px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s,transform .15s;border:1px solid rgba(124,110,245,.3);box-shadow:0 4px 16px rgba(0,0,0,.5);letter-spacing:-.01em;z-index:99999}
+.ss-tip::after{content:attr(data-tip);position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%) scale(.88);transform-origin:top center;background:rgba(12,10,35,.97);color:#F0ECFF;font-size:11px;font-weight:600;padding:5px 11px;border-radius:8px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s,transform .15s;border:1px solid rgba(0,112,243,.3);box-shadow:0 4px 16px rgba(0,0,0,.5);letter-spacing:-.01em;z-index:99999}
 .ss-tip:hover::after{opacity:1;transform:translateX(-50%) scale(1)}
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
@@ -61,11 +61,29 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 @media(prefers-reduced-motion:reduce){.ss-area-enter{animation:none!important}}
 @media(prefers-reduced-motion:reduce){.ss-home-root>*{animation:none!important}}
 input,select,textarea,button{font-family:inherit}
+/* ── Emergent design language ───────────────────────────────────────── */
+.font-heading{font-family:'Outfit',sans-serif;letter-spacing:-.025em}
+.font-mono{font-family:'JetBrains Mono',monospace}
+.eyebrow{font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.18em;font-size:11px}
+/* Ambient drifting blobs */
+@keyframes drift-a{0%,100%{transform:translate3d(-10%,-10%,0) scale(1)}50%{transform:translate3d(10%,5%,0) scale(1.08)}}
+@keyframes drift-b{0%,100%{transform:translate3d(10%,15%,0) scale(1.05)}50%{transform:translate3d(-15%,-10%,0) scale(.95)}}
+@keyframes drift-c{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(20%,-10%,0) scale(1.1)}}
+.ambient-blob-a{animation:drift-a 28s ease-in-out infinite}
+.ambient-blob-b{animation:drift-b 34s ease-in-out infinite}
+.ambient-blob-c{animation:drift-c 40s ease-in-out infinite}
+.blueprint-grid{background-image:linear-gradient(to right,currentColor 1px,transparent 1px),linear-gradient(to bottom,currentColor 1px,transparent 1px);background-size:28px 28px}
+/* Task completion check-draw */
+@keyframes draw-check{to{stroke-dashoffset:0}}
+.check-path{stroke-dasharray:24;stroke-dashoffset:24;animation:draw-check .4s .05s cubic-bezier(.65,0,.35,1) forwards}
+@keyframes check-burst{0%{transform:scale(.4);opacity:.55}100%{transform:scale(2.4);opacity:0}}
+.check-burst{animation:check-burst .55s ease-out forwards}
+@media(prefers-reduced-motion:reduce){.ambient-blob-a,.ambient-blob-b,.ambient-blob-c{animation:none}.check-path{stroke-dashoffset:0;animation:none}}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:rgba(124,110,245,.25);border-radius:10px}
-::-webkit-scrollbar-thumb:hover{background:rgba(124,110,245,.45)}
-::selection{background:rgba(124,110,245,.3);color:inherit}
+::-webkit-scrollbar-thumb{background:rgba(0,112,243,.25);border-radius:10px}
+::-webkit-scrollbar-thumb:hover{background:rgba(0,112,243,.45)}
+::selection{background:rgba(0,112,243,.3);color:inherit}
 .ss-sidebar-desktop{display:block}
 @media(max-width:1024px){
   .ss-home-quick{grid-template-columns:repeat(2,1fr)!important}
@@ -95,11 +113,26 @@ input,select,textarea,button{font-family:inherit}
 `;
 
 // ─── PRIMITIVES ───────────────────────────────────────────────────────────────
+// Slowly drifting ambient gradient blobs + faint grid — quietly alive behind the app.
+function AmbientBackground() {
+  const c = useC(); const dark = c.dark;
+  const blob = (bg) => ({ position:'absolute', borderRadius:'50%', filter:'blur(120px)', background:bg });
+  return (
+    <div aria-hidden="true" style={{ pointerEvents:'none', position:'fixed', inset:0, zIndex:0, overflow:'hidden' }}>
+      <div style={{ position:'absolute', inset:0, background:c.bg }} />
+      <div className="blueprint-grid" style={{ position:'absolute', inset:0, color:c.bord, opacity:dark?.5:.6 }} />
+      <div className="ambient-blob-a" style={{ ...blob(dark?'radial-gradient(circle at center, rgba(0,122,255,.22), transparent 60%)':'radial-gradient(circle at center, rgba(0,112,243,.10), transparent 60%)'), top:-160, left:-160, height:720, width:720 }} />
+      <div className="ambient-blob-b" style={{ ...blob(dark?'radial-gradient(circle at center, rgba(120,80,255,.16), transparent 60%)':'radial-gradient(circle at center, rgba(120,80,255,.07), transparent 60%)'), top:'33%', right:-220, height:640, width:640 }} />
+      <div className="ambient-blob-c" style={{ ...blob(dark?'radial-gradient(circle at center, rgba(16,185,129,.12), transparent 60%)':'radial-gradient(circle at center, rgba(16,185,129,.06), transparent 60%)'), bottom:-260, left:'33%', height:680, width:680 }} />
+    </div>
+  );
+}
+
 function Logo({ size=32, onClick, iconOnly=false }) {
   const { dark } = useTheme();
   return (
     <div onClick={onClick} style={{ display:'flex',alignItems:'center',gap:9,cursor:onClick?'pointer':'default',flexShrink:0 }}>
-      <div style={{ width:size,height:size,borderRadius:size*.28,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 18px rgba(99,102,241,.4)',flexShrink:0 }}>
+      <div style={{ width:size,height:size,borderRadius:size*.28,background:'linear-gradient(135deg,#0070F3,#3B9EFF)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 18px rgba(0,112,243,.4)',flexShrink:0 }}>
         <svg width={size*.55} height={size*.55} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       </div>
       {!iconOnly && <span style={{ fontSize:size*.56,fontWeight:800,color:dark?'#fff':'#1E1B4B',letterSpacing:'-.025em',lineHeight:1 }}>StandSync</span>}
@@ -181,7 +214,7 @@ function playChime() {
 }
 
 function Av({ member, size=36, url }) {
-  const color=member?.color||'#818CF8';
+  const color=member?.color||'#3B9EFF';
   const ini=member?.name?member.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase():'?';
   if(url) return <img src={url} alt={ini} style={{ width:size,height:size,borderRadius:'50%',objectFit:'cover',flexShrink:0,border:`2px solid ${color}55` }}/>;
   return <div style={{ width:size,height:size,borderRadius:'50%',background:color+'22',border:`2px solid ${color}55`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:size*.32,fontWeight:700,color,flexShrink:0 }}>{ini}</div>;
@@ -195,19 +228,19 @@ function Card({ children, style={}, onClick }) {
       background:dark?(h&&onClick?'rgba(255,255,255,.07)':'rgba(255,255,255,.048)'):(h&&onClick?'rgba(255,255,255,.92)':'rgba(255,255,255,.72)'),
       border:`1px solid ${h&&onClick?c.bordH:c.bord}`,borderRadius:16,
       backdropFilter:'blur(28px)',WebkitBackdropFilter:'blur(28px)',
-      boxShadow:dark?'0 2px 20px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.04)':'0 2px 20px rgba(99,102,241,.06),inset 0 1px 0 rgba(255,255,255,.9)',
+      boxShadow:dark?'0 2px 20px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.04)':'0 2px 20px rgba(0,112,243,.06),inset 0 1px 0 rgba(255,255,255,.9)',
       transition:'all .18s',cursor:onClick?'pointer':undefined,...style
     }}>{children}</div>
   );
 }
-function Bar({ pct, color='#818CF8', h=6, style={} }) { return <div style={{ height:h,background:'rgba(128,128,128,.15)',borderRadius:h,overflow:'hidden',...style }}><div style={{ height:'100%',width:`${Math.min(100,Math.max(0,pct))}%`,background:color,borderRadius:h,transition:'width .6s ease' }}/></div>; }
+function Bar({ pct, color='#3B9EFF', h=6, style={} }) { return <div style={{ height:h,background:'rgba(128,128,128,.15)',borderRadius:h,overflow:'hidden',...style }}><div style={{ height:'100%',width:`${Math.min(100,Math.max(0,pct))}%`,background:color,borderRadius:h,transition:'width .6s ease' }}/></div>; }
 function Inp({ label, error, style={}, ...p }) {
   const c=useC(); const [f,setF]=useState(false);
-  return <div style={{ width:'100%' }}>{label&&<div style={{ fontSize:11,fontWeight:600,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6 }}>{label}</div>}<input {...p} style={{ width:'100%',background:c.inp,border:`1.5px solid ${f?'#6366F1':error?'#EF4444':c.inpB}`,borderRadius:10,padding:'10px 14px',color:c.text,fontSize:14,outline:'none',boxSizing:'border-box',transition:'border-color .2s',...style }} onFocus={e=>{setF(true);p.onFocus&&p.onFocus(e);}} onBlur={e=>{setF(false);p.onBlur&&p.onBlur(e);}}/>{error&&<div style={{ fontSize:11,color:'#F87171',marginTop:4 }}>{error}</div>}</div>;
+  return <div style={{ width:'100%' }}>{label&&<div style={{ fontSize:11,fontWeight:600,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6 }}>{label}</div>}<input {...p} style={{ width:'100%',background:c.inp,border:`1.5px solid ${f?'#0070F3':error?'#EF4444':c.inpB}`,borderRadius:10,padding:'10px 14px',color:c.text,fontSize:14,outline:'none',boxSizing:'border-box',transition:'border-color .2s',...style }} onFocus={e=>{setF(true);p.onFocus&&p.onFocus(e);}} onBlur={e=>{setF(false);p.onBlur&&p.onBlur(e);}}/>{error&&<div style={{ fontSize:11,color:'#F87171',marginTop:4 }}>{error}</div>}</div>;
 }
 function Textarea({ label, style={}, ...p }) {
   const c=useC(); const [f,setF]=useState(false);
-  return <div style={{ width:'100%' }}>{label&&<div style={{ fontSize:11,fontWeight:600,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6 }}>{label}</div>}<textarea {...p} style={{ width:'100%',background:c.inp,border:`1.5px solid ${f?'#6366F1':c.inpB}`,borderRadius:10,padding:'10px 14px',color:c.text,fontSize:14,outline:'none',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit',lineHeight:1.55,transition:'border-color .2s',...style }} onFocus={e=>{setF(true);p.onFocus&&p.onFocus(e);}} onBlur={e=>{setF(false);p.onBlur&&p.onBlur(e);}}/></div>;
+  return <div style={{ width:'100%' }}>{label&&<div style={{ fontSize:11,fontWeight:600,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6 }}>{label}</div>}<textarea {...p} style={{ width:'100%',background:c.inp,border:`1.5px solid ${f?'#0070F3':c.inpB}`,borderRadius:10,padding:'10px 14px',color:c.text,fontSize:14,outline:'none',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit',lineHeight:1.55,transition:'border-color .2s',...style }} onFocus={e=>{setF(true);p.onFocus&&p.onFocus(e);}} onBlur={e=>{setF(false);p.onBlur&&p.onBlur(e);}}/></div>;
 }
 function Sel({ label, children, style={}, ...p }) {
   const c=useC();
@@ -217,7 +250,7 @@ function Btn({ children, v='primary', style={}, disabled, loading, ...p }) {
   const { dark }=useTheme();
   const vs={
     primary:{background:'linear-gradient(135deg,#6B5FE4 0%,#9B8AFB 100%)',color:'#fff',border:'none',boxShadow:'0 3px 14px rgba(107,95,228,.38)'},
-    ghost:{background:dark?'rgba(255,255,255,.06)':'rgba(99,102,241,.07)',color:dark?'rgba(240,236,255,.7)':'#4338CA',border:dark?'1px solid rgba(255,255,255,.1)':'1px solid rgba(99,102,241,.16)'},
+    ghost:{background:dark?'rgba(255,255,255,.06)':'rgba(0,112,243,.07)',color:dark?'rgba(240,236,255,.7)':'#4338CA',border:dark?'1px solid rgba(255,255,255,.1)':'1px solid rgba(0,112,243,.16)'},
     danger:{background:'rgba(239,68,68,.1)',color:'#F87171',border:'1px solid rgba(239,68,68,.2)'},
     warn:{background:'rgba(245,158,11,.1)',color:'#FCD34D',border:'1px solid rgba(245,158,11,.2)'},
     success:{background:'linear-gradient(135deg,#059669,#34D399)',color:'#fff',border:'none',boxShadow:'0 3px 12px rgba(52,211,153,.28)'},
@@ -226,7 +259,7 @@ function Btn({ children, v='primary', style={}, disabled, loading, ...p }) {
   };
   return <button {...p} disabled={disabled||loading} style={{ display:'inline-flex',alignItems:'center',justifyContent:'center',gap:6,padding:'10px 20px',borderRadius:10,fontSize:13,fontWeight:600,cursor:(disabled||loading)?'not-allowed':'pointer',transition:'all .15s',opacity:(disabled||loading)?.5:1,...vs[v]||vs.primary,...style }}>{loading?<div style={{ width:16,height:16,borderRadius:'50%',border:'2px solid rgba(0,0,0,.15)',borderTop:'2px solid currentColor',animation:'spin .75s linear infinite' }}/>:children}</button>;
 }
-function Spin({ size=28, color='#818CF8' }) { return <div style={{ width:size,height:size,borderRadius:'50%',border:`2.5px solid rgba(128,128,128,.15)`,borderTop:`2.5px solid ${color}`,animation:'spin .75s linear infinite',flexShrink:0 }}/>; }
+function Spin({ size=28, color='#3B9EFF' }) { return <div style={{ width:size,height:size,borderRadius:'50%',border:`2.5px solid rgba(128,128,128,.15)`,borderTop:`2.5px solid ${color}`,animation:'spin .75s linear infinite',flexShrink:0 }}/>; }
 function LiveDot() { return <span style={{ position:'relative',display:'inline-block',width:8,height:8,flexShrink:0 }}><span style={{ position:'absolute',inset:0,borderRadius:'50%',background:'#34D399',opacity:.4,animation:'pulse 2s ease infinite' }}/><span style={{ position:'absolute',inset:1,borderRadius:'50%',background:'#34D399' }}/></span>; }
 function ToastEl({ msg, type, onClose }) {
   const ok=type!=='error';
@@ -237,9 +270,9 @@ function Modal({ children, onClose, title, width=500 }) {
   const c=useC();
   return <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,.65)',backdropFilter:'blur(6px)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:20 }} onClick={e=>e.target===e.currentTarget&&onClose()}><Card style={{ width:'100%',maxWidth:width,padding:28,animation:'fadeUp .22s ease',maxHeight:'90vh',overflowY:'auto' }}>{title&&<h3 style={{ margin:'0 0 20px',color:c.text,fontSize:16,fontWeight:700 }}>{title}</h3>}{children}</Card></div>;
 }
-function StatCard({ label, value, color='#818CF8', sub, icon }) {
+function StatCard({ label, value, color='#3B9EFF', sub, icon }) {
   const c=useC();
-  return <Card style={{ padding:'16px 20px' }}><div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start' }}><div><div style={{ fontSize:10,color:c.mut,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6 }}>{label}</div><div style={{ fontSize:28,fontWeight:800,color,letterSpacing:'-.02em',lineHeight:1 }}>{value}</div>{sub&&<div style={{ fontSize:11,color:c.mut,marginTop:4 }}>{sub}</div>}</div>{icon&&<span style={{ fontSize:22,opacity:.45 }}>{icon}</span>}</div></Card>;
+  return <Card style={{ padding:'16px 20px' }}><div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start' }}><div><div className="eyebrow" style={{ color:c.mut,marginBottom:6 }}>{label}</div><div className="font-heading" style={{ fontSize:30,fontWeight:600,color,letterSpacing:'-.025em',lineHeight:1,fontVariantNumeric:'tabular-nums' }}>{value}</div>{sub&&<div style={{ fontSize:11,color:c.mut,marginTop:5,fontFamily:"'JetBrains Mono',monospace" }}>{sub}</div>}</div>{icon&&<span style={{ fontSize:22,opacity:.45 }}>{icon}</span>}</div></Card>;
 }
 function Lbl({ children, style={} }) { const c=useC(); return <div style={{ fontSize:10,fontWeight:700,letterSpacing:'.1em',color:c.mut,textTransform:'uppercase',marginBottom:8,...style }}>{children}</div>; }
 // Reusable empty state: icon/illustration, title, explanation, primary + secondary actions, optional preview.
@@ -270,7 +303,7 @@ function BgEl() {
     <div style={{ position:'fixed',inset:0,zIndex:0,overflow:'hidden',pointerEvents:'none' }}>
       <div style={{ position:'absolute',inset:0,background:base }}/>
       {/* one extremely subtle top vignette for depth — no blobs, no color fog */}
-      {dark && <div style={{ position:'absolute',inset:0,background:'linear-gradient(180deg,rgba(99,102,241,.04) 0%,transparent 22%)' }}/>}
+      {dark && <div style={{ position:'absolute',inset:0,background:'linear-gradient(180deg,rgba(0,112,243,.04) 0%,transparent 22%)' }}/>}
     </div>
   );
 }
@@ -288,7 +321,7 @@ function ThemeToggle() {
 function ProfileMenu({ session, onSettings, onLogout }) {
   const c=useC(); const [open,setOpen]=useState(false); const ref=useRef();
   const name=session?.user?.user_metadata?.name||session?.user?.email?.split('@')[0]||'You';
-  const email=session?.user?.email||''; const color='#818CF8';
+  const email=session?.user?.email||''; const color='#3B9EFF';
   const ini=name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
   const avatarUrl=session?.user?.user_metadata?.avatar_url;
   useEffect(()=>{ const h=e=>{ if(ref.current&&!ref.current.contains(e.target))setOpen(false); }; document.addEventListener('mousedown',h); return()=>document.removeEventListener('mousedown',h); },[]);
@@ -383,7 +416,7 @@ function InfoModal({ which, onClose }) {
           ].map(([t, d], i, arr) => (
             <div key={t} style={{ display: 'flex', gap: 14 }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#6366F1,#818CF8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
                 {i < arr.length - 1 && <div style={{ width: 2, flex: 1, background: c.bord, margin: '4px 0' }}/>}
               </div>
               <div style={{ paddingBottom: 18 }}>
@@ -493,7 +526,7 @@ function AuthPage({ onLogin, inviteToken }) {
             <p style={{ color: c.mut, fontSize: 14, marginBottom: 24 }}>
               {mode === 'login' ? 'Sign in to continue' : mode === 'signup' ? 'Join and track your standups' : 'We will send a reset link'}
             </p>
-            {inviteToken && mode === 'signup' && <div style={{ background: 'rgba(99,102,241,.12)', border: '1px solid rgba(99,102,241,.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 18, fontSize: 13, color: '#818CF8' }}>🎉 You were invited! Create an account to join.</div>}
+            {inviteToken && mode === 'signup' && <div style={{ background: 'rgba(0,112,243,.12)', border: '1px solid rgba(0,112,243,.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 18, fontSize: 13, color: '#3B9EFF' }}>🎉 You were invited! Create an account to join.</div>}
             {info && <div style={{ background: 'rgba(52,211,153,.1)', border: '1px solid rgba(52,211,153,.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#34D399', marginBottom: 14 }}>✅ {info}</div>}
             {gError && <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#F87171', marginBottom: 14 }}>{gError}</div>}
             {error && !gError && <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#F87171', marginBottom: 14 }}>{error}</div>}
@@ -515,9 +548,9 @@ function AuthPage({ onLogin, inviteToken }) {
               {mode === 'login' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send reset link'}
             </Btn>
             <div style={{ marginTop: 18, textAlign: 'center', fontSize: 13, color: c.mut }}>
-              {mode === 'login' ? <><button onClick={() => { setMode('forgot'); setGError(''); setError(''); }} style={{ background: 'none', border: 'none', color: '#818CF8', cursor: 'pointer', fontSize: 13, textDecoration: 'underline' }}>Forgot password?</button><span style={{ margin: '0 8px' }}>·</span><button onClick={() => { setMode('signup'); setGError(''); setError(''); }} style={{ background: 'none', border: 'none', color: '#818CF8', cursor: 'pointer', fontSize: 13 }}>Create account</button></>
-              : mode === 'signup' ? <><span>Already have an account? </span><button onClick={() => { setMode('login'); setGError(''); setError(''); }} style={{ background: 'none', border: 'none', color: '#818CF8', cursor: 'pointer', fontSize: 13 }}>Sign in</button></>
-              : <button onClick={() => { setMode('login'); setGError(''); setError(''); }} style={{ background: 'none', border: 'none', color: '#818CF8', cursor: 'pointer', fontSize: 13 }}>Back to login</button>}
+              {mode === 'login' ? <><button onClick={() => { setMode('forgot'); setGError(''); setError(''); }} style={{ background: 'none', border: 'none', color: '#3B9EFF', cursor: 'pointer', fontSize: 13, textDecoration: 'underline' }}>Forgot password?</button><span style={{ margin: '0 8px' }}>·</span><button onClick={() => { setMode('signup'); setGError(''); setError(''); }} style={{ background: 'none', border: 'none', color: '#3B9EFF', cursor: 'pointer', fontSize: 13 }}>Create account</button></>
+              : mode === 'signup' ? <><span>Already have an account? </span><button onClick={() => { setMode('login'); setGError(''); setError(''); }} style={{ background: 'none', border: 'none', color: '#3B9EFF', cursor: 'pointer', fontSize: 13 }}>Sign in</button></>
+              : <button onClick={() => { setMode('login'); setGError(''); setError(''); }} style={{ background: 'none', border: 'none', color: '#3B9EFF', cursor: 'pointer', fontSize: 13 }}>Back to login</button>}
             </div>
           </div>
         </div>
@@ -645,20 +678,20 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
       </div>
 
       <div style={{ maxWidth:960,margin:'0 auto',padding:'36px 24px' }}>
-        <h1 style={{ fontSize:26,fontWeight:800,color:c.text,marginBottom:4 }}>{greeting}, {name} 👋</h1>
+        <h1 className="font-heading" style={{ fontSize:34,fontWeight:600,color:c.text,marginBottom:4,letterSpacing:'-.03em' }}>{greeting}, {name} 👋</h1>
         <p style={{ color:c.mut,fontSize:14,marginBottom:32 }}>What would you like to do today?</p>
 
         {/* ── TWO-PATH CHOOSER ── */}
         <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:36 }}>
           {/* Path 1: Join Standup */}
           <div onClick={()=>setView('standup-entry')} style={{ padding:'28px 24px',borderRadius:16,border:`2px solid ${c.bord}`,background:c.surf,cursor:'pointer',transition:'all .2s',position:'relative',overflow:'hidden' }}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor='#6366F1';e.currentTarget.style.background=c.dark?'rgba(99,102,241,.08)':'rgba(99,102,241,.05)';}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor='#0070F3';e.currentTarget.style.background=c.dark?'rgba(0,112,243,.08)':'rgba(0,112,243,.05)';}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor=c.bord;e.currentTarget.style.background=c.surf;}}>
             <div style={{ fontSize:40,marginBottom:14 }}>⚡</div>
             <div style={{ fontSize:18,fontWeight:800,color:c.text,marginBottom:6 }}>Join Standup</div>
             <div style={{ fontSize:13,color:c.mut,lineHeight:1.6 }}>Pick today's meeting from your calendar and write tasks in real time — even in PiP mode during Google Meet.</div>
             <div style={{ marginTop:16,display:'flex',gap:6,flexWrap:'wrap' }}>
-              {['📅 From calendar','✅ Write tasks','🖥️ PiP mode'].map(t=><span key={t} style={{ fontSize:11,background:'rgba(99,102,241,.1)',color:'#818CF8',padding:'3px 9px',borderRadius:20 }}>{t}</span>)}
+              {['📅 From calendar','✅ Write tasks','🖥️ PiP mode'].map(t=><span key={t} style={{ fontSize:11,background:'rgba(0,112,243,.1)',color:'#3B9EFF',padding:'3px 9px',borderRadius:20 }}>{t}</span>)}
             </div>
           </div>
 
@@ -686,7 +719,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
                 return(
                 <Card key={tm.team_id||tm.id} style={{ padding:'16px 18px',position:'relative',cursor:'pointer' }}>
                   <div onClick={()=>goToTeam(teamData,role)} style={{ display:'flex',alignItems:'center',gap:12 }}>
-                    <div style={{ width:38,height:38,borderRadius:10,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:18 }}>{ICONS[i%ICONS.length]}</div>
+                    <div style={{ width:38,height:38,borderRadius:10,background:'linear-gradient(135deg,#0070F3,#3B9EFF)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:18 }}>{ICONS[i%ICONS.length]}</div>
                     <div style={{ flex:1,minWidth:0 }}>
                       <div style={{ fontSize:14,fontWeight:700,color:c.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{teamData?.name||'Team'}</div>
                       <div style={{ fontSize:11,color:c.mut }}>{role==='manager'?'Manager':'Member'}</div>
@@ -730,14 +763,14 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
               <div style={{ display:'flex',flexDirection:'column',gap:8 }}>
                 {todayEvts.map(ev=>(
                   <div key={ev.id} onClick={()=>{setSelectedCalEvent(ev);setView('standup-select-team');}} style={{ padding:'16px 18px',borderRadius:12,border:`1.5px solid ${c.bord}`,background:c.surf,cursor:'pointer',display:'flex',alignItems:'center',gap:14,transition:'all .15s' }}
-                    onMouseEnter={e=>{e.currentTarget.style.borderColor='#6366F1';}}
+                    onMouseEnter={e=>{e.currentTarget.style.borderColor='#0070F3';}}
                     onMouseLeave={e=>{e.currentTarget.style.borderColor=c.bord;}}>
-                    <div style={{ width:8,borderRadius:4,alignSelf:'stretch',background:ev.colorId?'#'+ev.colorId:'#6366F1',flexShrink:0 }}/>
+                    <div style={{ width:8,borderRadius:4,alignSelf:'stretch',background:ev.colorId?'#'+ev.colorId:'#0070F3',flexShrink:0 }}/>
                     <div style={{ flex:1,minWidth:0 }}>
                       <div style={{ fontSize:15,fontWeight:700,color:c.text,marginBottom:3 }}>{ev.summary||'Untitled'}</div>
                       <div style={{ fontSize:12,color:c.mut }}>{ev.start?.dateTime?new Date(ev.start.dateTime).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'All day'}{ev.attendees?` · ${ev.attendees.length} attendees`:''}</div>
                     </div>
-                    <span style={{ fontSize:13,color:'#818CF8',fontWeight:600,flexShrink:0 }}>Join →</span>
+                    <span style={{ fontSize:13,color:'#3B9EFF',fontWeight:600,flexShrink:0 }}>Join →</span>
                   </div>
                 ))}
               </div>
@@ -759,9 +792,9 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
                   const td=tm.teams?.id?tm.teams:(tm.id?tm:tm.teams);
                   return(
                   <div key={tm.team_id||tm.id} onClick={()=>goToTeam(td,tm.role)} style={{ padding:'14px 16px',borderRadius:10,border:`1px solid ${c.bord}`,background:c.surf,cursor:'pointer',display:'flex',alignItems:'center',gap:10,transition:'all .15s' }}
-                    onMouseEnter={e=>{e.currentTarget.style.borderColor='#6366F1';}}
+                    onMouseEnter={e=>{e.currentTarget.style.borderColor='#0070F3';}}
                     onMouseLeave={e=>{e.currentTarget.style.borderColor=c.bord;}}>
-                    <div style={{ width:32,height:32,borderRadius:9,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>{ICONS[i%ICONS.length]}</div>
+                    <div style={{ width:32,height:32,borderRadius:9,background:'linear-gradient(135deg,#0070F3,#3B9EFF)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>{ICONS[i%ICONS.length]}</div>
                     <div style={{ flex:1,minWidth:0 }}><div style={{ fontSize:13,fontWeight:700,color:c.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{td?.name||'Team'}</div><div style={{ fontSize:11,color:c.mut }}>{tm.role==='manager'?'Manager':'Member'}</div></div>
                   </div>
                   );
@@ -793,20 +826,20 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
             {teams.map((tm,i)=>(
               <Card key={tm.team_id} style={{ padding:'22px',position:'relative',cursor:'pointer' }}>
                 <div onClick={()=>goToTeam(tm.teams,tm.role)}>
-                  <div style={{ width:48,height:48,borderRadius:14,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:14,fontSize:22 }}>{ICONS[i%ICONS.length]}</div>
+                  <div style={{ width:48,height:48,borderRadius:14,background:'linear-gradient(135deg,#0070F3,#3B9EFF)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:14,fontSize:22 }}>{ICONS[i%ICONS.length]}</div>
                   <div style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:3 }}>{tm.teams?.name}</div>
                   <div style={{ fontSize:12,color:c.mut,marginBottom:8 }}>{tm.role==='manager'?'Manager':'Member'} · {tm.teams?.standup_name||'Standup'}</div>
-                  <span style={{ fontSize:11,background:'rgba(99,102,241,.12)',color:'#818CF8',padding:'3px 9px',borderRadius:20 }}>Active</span>
+                  <span style={{ fontSize:11,background:'rgba(0,112,243,.12)',color:'#3B9EFF',padding:'3px 9px',borderRadius:20 }}>Active</span>
                 </div>
                 {tm.role==='manager'&&<button onClick={e=>{e.stopPropagation();if(window.confirm('Delete "'+tm.teams?.name+'"?'))deleteTeam(tm.teams?.id);}} style={{ position:'absolute',top:10,right:10,width:28,height:28,borderRadius:8,background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',color:'#F87171',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13 }}>🗑</button>}
               </Card>
             ))}
             <Card onClick={()=>setView('create')} style={{ padding:'22px',cursor:'pointer',border:`1.5px dashed ${c.bord}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,minHeight:130 }}>
-              <div style={{ width:38,height:38,borderRadius:'50%',background:'rgba(99,102,241,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20 }}>+</div>
+              <div style={{ width:38,height:38,borderRadius:'50%',background:'rgba(0,112,243,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20 }}>+</div>
               <div style={{ fontSize:13,color:c.sub,fontWeight:600 }}>New team</div>
             </Card>
             <Card onClick={()=>setView('join')} style={{ padding:'22px',cursor:'pointer',border:`1.5px dashed ${c.bord}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,minHeight:130 }}>
-              <div style={{ width:38,height:38,borderRadius:'50%',background:'rgba(99,102,241,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20 }}>🔑</div>
+              <div style={{ width:38,height:38,borderRadius:'50%',background:'rgba(0,112,243,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20 }}>🔑</div>
               <div style={{ fontSize:13,color:c.sub,fontWeight:600 }}>Join a team</div>
             </Card>
           </div>
@@ -826,7 +859,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
       </div>
       <div style={{ maxWidth:760,margin:'0 auto',padding:'36px 24px' }}>
         {selectedCalEvent&&(
-          <div style={{ padding:'16px 20px',borderRadius:12,background:'rgba(99,102,241,.08)',border:'1px solid rgba(99,102,241,.2)',marginBottom:28,display:'flex',alignItems:'center',gap:14 }}>
+          <div style={{ padding:'16px 20px',borderRadius:12,background:'rgba(0,112,243,.08)',border:'1px solid rgba(0,112,243,.2)',marginBottom:28,display:'flex',alignItems:'center',gap:14 }}>
             <div style={{ fontSize:32 }}>📅</div>
             <div>
               <div style={{ fontSize:16,fontWeight:700,color:c.text }}>{selectedCalEvent.summary}</div>
@@ -839,14 +872,14 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
         <div style={{ display:'flex',flexDirection:'column',gap:10 }}>
           {teams.map((tm,i)=>(
             <div key={tm.team_id} onClick={()=>{ goToTeam(tm.teams?.id?tm.teams:(tm.id?tm:tm.teams),tm.role); }} style={{ padding:'18px 22px',borderRadius:12,border:`1.5px solid ${c.bord}`,background:c.surf,cursor:'pointer',display:'flex',alignItems:'center',gap:14,transition:'all .15s' }}
-              onMouseEnter={e=>{e.currentTarget.style.borderColor='#6366F1';}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor='#0070F3';}}
               onMouseLeave={e=>{e.currentTarget.style.borderColor=c.bord;}}>
-              <div style={{ width:44,height:44,borderRadius:12,background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0 }}>{ICONS[i%ICONS.length]}</div>
+              <div style={{ width:44,height:44,borderRadius:12,background:'linear-gradient(135deg,#0070F3,#3B9EFF)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0 }}>{ICONS[i%ICONS.length]}</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:15,fontWeight:700,color:c.text,marginBottom:3 }}>{(tm.teams?.id?tm.teams:(tm.id?tm:tm.teams))?.name||'Team'}</div>
                 <div style={{ fontSize:12,color:c.mut }}>{tm.role==='manager'?'Manager':'Member'} · {tm.teams?.standup_name||'Standup'}</div>
               </div>
-              <span style={{ fontSize:13,color:'#818CF8',fontWeight:600 }}>Open board →</span>
+              <span style={{ fontSize:13,color:'#3B9EFF',fontWeight:600 }}>Open board →</span>
             </div>
           ))}
           {teams.length===0&&(
@@ -894,9 +927,9 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
           <p style={{ fontSize:13,color:c.mut }}>Share these credentials with your team so they can join</p>
         </div>
         <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:20 }}>
-          <div style={{ background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.3)',borderRadius:12,padding:'16px',textAlign:'center' }}>
-            <div style={{ fontSize:10,color:'#818CF8',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',marginBottom:8 }}>Room ID</div>
-            <div style={{ fontSize:26,fontWeight:800,color:'#818CF8',letterSpacing:'.15em',fontFamily:'monospace' }}>{createdTeam.default_room_id||'—'}</div>
+          <div style={{ background:'rgba(0,112,243,.1)',border:'1px solid rgba(0,112,243,.3)',borderRadius:12,padding:'16px',textAlign:'center' }}>
+            <div style={{ fontSize:10,color:'#3B9EFF',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',marginBottom:8 }}>Room ID</div>
+            <div style={{ fontSize:26,fontWeight:800,color:'#3B9EFF',letterSpacing:'.15em',fontFamily:'monospace' }}>{createdTeam.default_room_id||'—'}</div>
           </div>
           <div style={{ background:'rgba(52,211,153,.08)',border:'1px solid rgba(52,211,153,.25)',borderRadius:12,padding:'16px',textAlign:'center' }}>
             <div style={{ fontSize:10,color:'#34D399',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',marginBottom:8 }}>Password</div>
@@ -925,7 +958,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
         </div>
         {/* Step progress */}
         <div style={{ display:'flex',gap:4,marginBottom:24 }}>
-          {[1,2,3].map(s=><div key={s} style={{ flex:1,height:4,borderRadius:2,background:step>=s?'#6366F1':'rgba(128,128,128,.2)',transition:'background .3s' }}/>)}
+          {[1,2,3].map(s=><div key={s} style={{ flex:1,height:4,borderRadius:2,background:step>=s?'#0070F3':'rgba(128,128,128,.2)',transition:'background .3s' }}/>)}
         </div>
 
         {step===1&&(<>
@@ -943,7 +976,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
                 const emails=contacts.split(/[,\n]/).map(e=>e.trim()).filter(e=>e.includes('@')&&e.toLowerCase()!==(session?.user?.email||'').toLowerCase());
                 if(emails.length) setMemberEmails(p=>[...p.filter(x=>x.trim()),...emails]);
               }
-            }} style={{ display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'9px 10px',borderRadius:10,border:'1px solid rgba(99,102,241,.3)',background:'rgba(99,102,241,.08)',color:'#818CF8',cursor:'pointer',fontSize:12,fontWeight:600 }}>
+            }} style={{ display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'9px 10px',borderRadius:10,border:'1px solid rgba(0,112,243,.3)',background:'rgba(0,112,243,.08)',color:'#3B9EFF',cursor:'pointer',fontSize:12,fontWeight:600 }}>
               📋 Paste multiple emails
             </button>
             <button onClick={()=>{
@@ -977,7 +1010,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
               </div>
             );
           })}
-          <button onClick={()=>setMemberEmails(p=>[...p,''])} style={{ background:'none',border:'none',color:'#818CF8',cursor:'pointer',fontSize:13,fontWeight:600,marginBottom:18,padding:0 }}>+ Add another</button>
+          <button onClick={()=>setMemberEmails(p=>[...p,''])} style={{ background:'none',border:'none',color:'#3B9EFF',cursor:'pointer',fontSize:13,fontWeight:600,marginBottom:18,padding:0 }}>+ Add another</button>
           <div style={{ display:'flex',gap:10 }}>
             <Btn v="ghost" onClick={()=>setStep(1)} style={{ flex:1,justifyContent:'center' }}>← Back</Btn>
             <Btn onClick={()=>setStep(3)} disabled={memberEmails.some(e=>e.trim()!==''&&e.trim().toLowerCase()===(session?.user?.email||'').toLowerCase())} style={{ flex:1,justifyContent:'center' }}>Next →</Btn>
@@ -991,7 +1024,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
             <div style={{ fontSize:13,color:c.sub,marginBottom:4 }}>Standup: <strong>{standupName||teamName}</strong></div>
             <div style={{ fontSize:13,color:c.sub }}>Inviting: <strong>{memberEmails.filter(e=>e.trim()&&e.includes('@')).length} member{memberEmails.filter(e=>e.trim()&&e.includes('@')).length!==1?'s':''}</strong> by email</div>
           </div>
-          <div style={{ background:'rgba(99,102,241,.08)',border:'1px solid rgba(99,102,241,.2)',borderRadius:10,padding:'11px 14px',fontSize:12,color:'#818CF8',marginBottom:20 }}>
+          <div style={{ background:'rgba(0,112,243,.08)',border:'1px solid rgba(0,112,243,.2)',borderRadius:10,padding:'11px 14px',fontSize:12,color:'#3B9EFF',marginBottom:20 }}>
             A unique Room ID and password will be generated so anyone can join without an email invite.
           </div>
           {createError&&<div style={{ background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:8,padding:'11px 14px',fontSize:12,color:'#F87171',marginBottom:14,lineHeight:1.55 }}>{createError}</div>}
@@ -1299,16 +1332,16 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
           width:56, height:56,
           borderRadius:'50%',
           background:dark
-            ?'rgba(124,110,245,.18)'
+            ?'rgba(0,112,243,.18)'
             :'rgba(255,255,255,.55)',
           backdropFilter:'blur(20px)',
           WebkitBackdropFilter:'blur(20px)',
-          border:dark?'1px solid rgba(196,181,253,.25)':'1px solid rgba(99,102,241,.2)',
+          border:dark?'1px solid rgba(196,181,253,.25)':'1px solid rgba(0,112,243,.2)',
           cursor:dragging?'grabbing':'grab',
           display:'flex',alignItems:'center',justifyContent:'center',
           boxShadow:dark
-            ?'0 4px 24px rgba(124,110,245,.35),inset 0 1px 0 rgba(255,255,255,.1)'
-            :'0 4px 24px rgba(99,102,241,.2),inset 0 1px 0 rgba(255,255,255,.8)',
+            ?'0 4px 24px rgba(0,112,243,.35),inset 0 1px 0 rgba(255,255,255,.1)'
+            :'0 4px 24px rgba(0,112,243,.2),inset 0 1px 0 rgba(255,255,255,.8)',
           transition:dragging?'none':'box-shadow .2s',
           userSelect:'none',
         }}
@@ -1316,9 +1349,9 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
         {/* Minimal star/sparkle AI icon */}
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0 }}>
           <path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z"
-            fill={dark?'#C4B5FD':'#6366F1'} opacity=".9"/>
-          <circle cx="19" cy="4" r="1.5" fill={dark?'#A78BFA':'#818CF8'} opacity=".7"/>
-          <circle cx="5" cy="19" r="1" fill={dark?'#A78BFA':'#818CF8'} opacity=".5"/>
+            fill={dark?'#C4B5FD':'#0070F3'} opacity=".9"/>
+          <circle cx="19" cy="4" r="1.5" fill={dark?'#A78BFA':'#3B9EFF'} opacity=".7"/>
+          <circle cx="5" cy="19" r="1" fill={dark?'#A78BFA':'#3B9EFF'} opacity=".5"/>
         </svg>
       </button>
 
@@ -1335,15 +1368,15 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
           border:`1px solid ${c.bord}`,
           borderRadius:20,
           display:'flex',flexDirection:'column',
-          boxShadow:dark?'0 16px 56px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.05)':'0 16px 56px rgba(99,102,241,.15),inset 0 1px 0 rgba(255,255,255,.9)',
+          boxShadow:dark?'0 16px 56px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.05)':'0 16px 56px rgba(0,112,243,.15),inset 0 1px 0 rgba(255,255,255,.9)',
           overflow:'hidden',
           animation:'fadeUp .18s ease',
         }}>
           {/* Header */}
           <div style={{ padding:'14px 16px 12px',display:'flex',alignItems:'center',gap:10,flexShrink:0 }}>
-            <div style={{ width:32,height:32,borderRadius:'50%',background:'rgba(124,110,245,.15)',border:'1px solid rgba(196,181,253,.25)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
+            <div style={{ width:32,height:32,borderRadius:'50%',background:'rgba(0,112,243,.15)',border:'1px solid rgba(196,181,253,.25)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z" fill={dark?'#C4B5FD':'#6366F1'}/>
+                <path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z" fill={dark?'#C4B5FD':'#0070F3'}/>
               </svg>
             </div>
             <div style={{ flex:1 }}>
@@ -1360,7 +1393,7 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
           <div style={{ flex:1,overflowY:'auto',padding:'8px 12px',display:'flex',flexDirection:'column',gap:8 }}>
             {msgs.map(m=>(
               <div key={m.id} style={{ display:'flex',flexDirection:m.role==='user'?'row-reverse':'row',alignItems:'flex-end',gap:6 }}>
-                {m.role==='assistant'&&<div style={{ width:22,height:22,borderRadius:'50%',background:'rgba(124,110,245,.15)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginBottom:2 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z" fill={dark?'#C4B5FD':'#6366F1'}/></svg></div>}
+                {m.role==='assistant'&&<div style={{ width:22,height:22,borderRadius:'50%',background:'rgba(0,112,243,.15)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginBottom:2 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z" fill={dark?'#C4B5FD':'#0070F3'}/></svg></div>}
                 <div style={{ maxWidth:'84%',background:m.role==='user'?'linear-gradient(135deg,#6B5FE4,#9B8AFB)':dark?'rgba(255,255,255,.06)':'rgba(255,255,255,.8)',color:m.role==='user'?'#fff':c.text,padding:'8px 12px',borderRadius:m.role==='user'?'14px 14px 4px 14px':'14px 14px 14px 4px',fontSize:12,lineHeight:1.55,border:m.role==='user'?'none':`1px solid ${c.bord}`,boxShadow:m.role==='assistant'?'0 1px 6px rgba(0,0,0,.06)':'none' }}>
                   {m.text.split('\n').map((l,i)=><div key={i} style={{ marginBottom:l?0:4 }}>{l||<br/>}</div>)}
                 </div>
@@ -1384,7 +1417,7 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
 // Modern AI mark — a clean four-point spark in a gradient disc (replaces the robot emoji)
 function AIMark({ size=32 }) {
   return (
-    <div style={{ width:size,height:size,borderRadius:'50%',background:'linear-gradient(135deg,#6366F1,#818CF8)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,boxShadow:'0 2px 8px rgba(99,102,241,.35)' }}>
+    <div style={{ width:size,height:size,borderRadius:'50%',background:'linear-gradient(135deg,#0070F3,#3B9EFF)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,boxShadow:'0 2px 8px rgba(0,112,243,.35)' }}>
       <svg width={size*0.56} height={size*0.56} viewBox="0 0 24 24" fill="#fff">
         <path d="M12 2c.4 3.4 2.2 5.2 5.6 5.6C14.2 8 12.4 9.8 12 13.2 11.6 9.8 9.8 8 6.4 7.6 9.8 7.2 11.6 5.4 12 2z"/>
         <path d="M18.5 13c.2 1.7 1.1 2.6 2.8 2.8-1.7.2-2.6 1.1-2.8 2.8-.2-1.7-1.1-2.6-2.8-2.8 1.7-.2 2.6-1.1 2.8-2.8z" opacity=".9"/>
@@ -1448,7 +1481,7 @@ function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], te
         </div>
         <div style={{ textAlign:'right' }}>
           <div style={{ fontSize:12,color:c.mut }}>Team completion</div>
-          <div style={{ fontSize:18,fontWeight:700,color:pct>=80?'#34D399':pct>=50?'#818CF8':'#F97316' }}>{pct}%</div>
+          <div style={{ fontSize:18,fontWeight:700,color:pct>=80?'#34D399':pct>=50?'#3B9EFF':'#F97316' }}>{pct}%</div>
         </div>
       </div>
       {/* Quick actions */}
@@ -1460,7 +1493,7 @@ function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], te
         {msgs.map(m=>(
           <div key={m.id} style={{ display:'flex',gap:10,alignItems:'flex-start',flexDirection:m.role==='user'?'row-reverse':'row' }}>
             {m.role==='assistant'&&<AIMark size={32}/>}
-            <div style={{ maxWidth:'78%',background:m.role==='user'?'linear-gradient(135deg,#6366F1,#818CF8)':c.surf,color:m.role==='user'?'#fff':c.text,padding:'11px 15px',borderRadius:m.role==='user'?'16px 16px 4px 16px':'16px 16px 16px 4px',fontSize:13,lineHeight:1.6,border:m.role==='user'?'none':`1px solid ${c.bord}`,boxShadow:m.role==='assistant'?'0 1px 4px rgba(0,0,0,.06)':'none' }}>
+            <div style={{ maxWidth:'78%',background:m.role==='user'?'linear-gradient(135deg,#0070F3,#3B9EFF)':c.surf,color:m.role==='user'?'#fff':c.text,padding:'11px 15px',borderRadius:m.role==='user'?'16px 16px 4px 16px':'16px 16px 16px 4px',fontSize:13,lineHeight:1.6,border:m.role==='user'?'none':`1px solid ${c.bord}`,boxShadow:m.role==='assistant'?'0 1px 4px rgba(0,0,0,.06)':'none' }}>
               {m.text.split('\n').map((line,i)=><div key={i} style={{ marginBottom:line?2:6 }}>{line||<br/>}</div>)}
             </div>
           </div>
@@ -1469,7 +1502,7 @@ function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], te
           <div style={{ display:'flex',gap:8,alignItems:'flex-start' }}>
             <AIMark size={32}/>
             <div style={{ padding:'11px 16px',background:c.surf,borderRadius:'16px 16px 16px 4px',border:`1px solid ${c.bord}`,display:'flex',gap:5,alignItems:'center' }}>
-              {[0,1,2].map(i=><div key={i} style={{ width:7,height:7,borderRadius:'50%',background:'#818CF8',animation:`bounce .8s ease ${i*.15}s infinite` }}/>)}
+              {[0,1,2].map(i=><div key={i} style={{ width:7,height:7,borderRadius:'50%',background:'#3B9EFF',animation:`bounce .8s ease ${i*.15}s infinite` }}/>)}
             </div>
           </div>
         )}
@@ -1478,7 +1511,7 @@ function AIAssistant({ tasks=[], members=[], history=[], session, myTasks=[], te
       {/* Input */}
       <div style={{ padding:'12px 16px',borderTop:`1px solid ${c.bord}`,display:'flex',gap:8,background:c.nav,flexShrink:0 }}>
         <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&send()} placeholder="Ask about tasks, blockers, team performance..." style={{ flex:1,background:c.inp,border:`1.5px solid ${c.inpB}`,borderRadius:10,padding:'10px 14px',color:c.text,fontSize:13,outline:'none' }}/>
-        <button onClick={()=>send()} disabled={!input.trim()||loading} style={{ width:40,height:40,borderRadius:10,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',color:'#fff',cursor:input.trim()&&!loading?'pointer':'not-allowed',opacity:input.trim()&&!loading?1:.5,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0 }}>↑</button>
+        <button onClick={()=>send()} disabled={!input.trim()||loading} style={{ width:40,height:40,borderRadius:10,background:'linear-gradient(135deg,#0070F3,#3B9EFF)',border:'none',color:'#fff',cursor:input.trim()&&!loading?'pointer':'not-allowed',opacity:input.trim()&&!loading?1:.5,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0 }}>↑</button>
       </div>
     </div>
   );
@@ -1517,7 +1550,7 @@ function SpaceSettingsModal({ spaceId, customSpaces, members, isManager, onClose
         {/* Tabs */}
         <div style={{ display:'flex',borderBottom:`1px solid ${c.bord}`,padding:'0 12px' }}>
           {[{id:'members',l:'Manage members'},{id:'settings',l:'Space settings'},{id:'permissions',l:'Permissions'}].map(t=>(
-            <button key={t.id} onClick={()=>setSsTab(t.id)} style={{ padding:'10px 14px',border:'none',borderBottom:ssTab===t.id?'2px solid #818CF8':'2px solid transparent',background:'transparent',color:ssTab===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:13,fontWeight:ssTab===t.id?600:400 }}>{t.l}</button>
+            <button key={t.id} onClick={()=>setSsTab(t.id)} style={{ padding:'10px 14px',border:'none',borderBottom:ssTab===t.id?'2px solid #3B9EFF':'2px solid transparent',background:'transparent',color:ssTab===t.id?'#3B9EFF':c.mut,cursor:'pointer',fontSize:13,fontWeight:ssTab===t.id?600:400 }}>{t.l}</button>
           ))}
         </div>
         {/* Content */}
@@ -1533,7 +1566,7 @@ function SpaceSettingsModal({ spaceId, customSpaces, members, isManager, onClose
                     {memberSearch&&(
                       <div style={{ position:'absolute',top:'100%',right:0,width:220,background:c.dark?'#1A1740':'#fff',border:`1px solid ${c.bord}`,borderRadius:10,zIndex:100,marginTop:4,boxShadow:'0 8px 24px rgba(0,0,0,.2)',maxHeight:160,overflowY:'auto' }}>
                         {members.filter(m=>!spMembers.find(sm=>sm.email===m.email)&&(m.name?.toLowerCase().includes(memberSearch.toLowerCase())||m.email?.toLowerCase().includes(memberSearch.toLowerCase()))).map(m=>(
-                          <div key={m.email} onClick={()=>{addMemberToSpace(spaceId,m);setMemberSearch('');}} style={{ padding:'8px 12px',cursor:'pointer',fontSize:12,color:c.text,display:'flex',alignItems:'center',gap:8 }} onMouseEnter={e=>e.currentTarget.style.background='rgba(99,102,241,.1)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                          <div key={m.email} onClick={()=>{addMemberToSpace(spaceId,m);setMemberSearch('');}} style={{ padding:'8px 12px',cursor:'pointer',fontSize:12,color:c.text,display:'flex',alignItems:'center',gap:8 }} onMouseEnter={e=>e.currentTarget.style.background='rgba(0,112,243,.1)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                             <Av member={m} size={22}/><span>{m.name||m.email}</span>
                           </div>
                         ))}
@@ -1583,8 +1616,8 @@ function SpaceSettingsModal({ spaceId, customSpaces, members, isManager, onClose
                 <div style={{ fontSize:14,fontWeight:700,color:c.text,marginBottom:4 }}>Access</div>
                 <div style={{ fontSize:12,color:c.mut,marginBottom:10 }}>Control who can find and join this space.</div>
                 {[{v:'organisation',l:'Anyone in organisation can find, view and join'},{v:'restricted',l:'Only invited members can join'},{v:'request',l:'Anyone can request to join'}].map(opt=>(
-                  <div key={opt.v} onClick={()=>isCustom&&isManager&&updateSpaceSettings(spaceId,{access:opt.v})} style={{ display:'flex',alignItems:'center',gap:10,padding:'8px',borderRadius:8,cursor:isCustom&&isManager?'pointer':'default',marginBottom:4,background:cfg.access===opt.v?'rgba(99,102,241,.08)':'transparent' }}>
-                    <div style={{ width:14,height:14,borderRadius:'50%',border:`2px solid ${cfg.access===opt.v?'#818CF8':'rgba(128,128,128,.4)'}`,background:cfg.access===opt.v?'#818CF8':'transparent',flexShrink:0 }}/>
+                  <div key={opt.v} onClick={()=>isCustom&&isManager&&updateSpaceSettings(spaceId,{access:opt.v})} style={{ display:'flex',alignItems:'center',gap:10,padding:'8px',borderRadius:8,cursor:isCustom&&isManager?'pointer':'default',marginBottom:4,background:cfg.access===opt.v?'rgba(0,112,243,.08)':'transparent' }}>
+                    <div style={{ width:14,height:14,borderRadius:'50%',border:`2px solid ${cfg.access===opt.v?'#3B9EFF':'rgba(128,128,128,.4)'}`,background:cfg.access===opt.v?'#3B9EFF':'transparent',flexShrink:0 }}/>
                     <span style={{ fontSize:13,color:c.text }}>{opt.l}</span>
                   </div>
                 ))}
@@ -1593,7 +1626,7 @@ function SpaceSettingsModal({ spaceId, customSpaces, members, isManager, onClose
                 <div style={{ fontSize:14,fontWeight:700,color:c.text,marginBottom:10 }}>Who can manage members</div>
                 {[{v:'all',l:'All members'},{v:'managers',l:'Managers and owners'},{v:'owners',l:'Owners only'}].map(opt=>(
                   <div key={opt.v} onClick={()=>isCustom&&isManager&&updateSpaceSettings(spaceId,{whoManages:opt.v})} style={{ display:'flex',alignItems:'center',gap:10,padding:'6px 8px',borderRadius:8,cursor:isCustom&&isManager?'pointer':'default',marginBottom:4 }}>
-                    <div style={{ width:14,height:14,borderRadius:'50%',border:`2px solid ${cfg.whoManages===opt.v?'#818CF8':'rgba(128,128,128,.4)'}`,background:cfg.whoManages===opt.v?'#818CF8':'transparent',flexShrink:0 }}/>
+                    <div style={{ width:14,height:14,borderRadius:'50%',border:`2px solid ${cfg.whoManages===opt.v?'#3B9EFF':'rgba(128,128,128,.4)'}`,background:cfg.whoManages===opt.v?'#3B9EFF':'transparent',flexShrink:0 }}/>
                     <span style={{ fontSize:13,color:c.text }}>{opt.l}</span>
                   </div>
                 ))}
@@ -1675,7 +1708,7 @@ function PollModal({ onClose, onCreate }){
           </div>
         ))}
       </div>
-      {opts.length<6&&<button onClick={()=>setOpts(o=>[...o,''])} style={{ background:'none',border:'none',color:'#6366F1',cursor:'pointer',fontSize:13,fontWeight:600,padding:0,marginBottom:18 }}>+ Add option</button>}
+      {opts.length<6&&<button onClick={()=>setOpts(o=>[...o,''])} style={{ background:'none',border:'none',color:'#0070F3',cursor:'pointer',fontSize:13,fontWeight:600,padding:0,marginBottom:18 }}>+ Add option</button>}
       <div style={{ display:'flex',justifyContent:'flex-end',gap:8 }}>
         <Btn v="ghost" onClick={onClose}>Cancel</Btn>
         <Btn onClick={()=>onCreate({question:q.trim(),options:opts.filter(o=>o.trim()).map(o=>({text:o.trim(),votes:[]}))})} disabled={!valid}>Post poll</Btn>
@@ -1705,7 +1738,7 @@ function ChatTaskModal({ members, onClose, onCreate }){
 function GroupCreateModal({ members, myEmail, onClose, onCreate }){
   const c=useC(); const { dark }=useTheme(); const dpRef=useRef();
   const [name,setName]=useState(''); const [desc,setDesc]=useState('');
-  const [dp,setDp]=useState(null); const [color,setColor]=useState('#6366F1');
+  const [dp,setDp]=useState(null); const [color,setColor]=useState('#0070F3');
   const [visibility,setVisibility]=useState('public');
   const [basedOn,setBasedOn]=useState('team');
   const [type,setType]=useState('collaboration');
@@ -1739,7 +1772,7 @@ function GroupCreateModal({ members, myEmail, onClose, onCreate }){
       {/* Step tabs */}
       <div style={{ display:'flex',gap:6,marginBottom:18 }}>
         {['Details','Members','Permissions'].map((s,i)=>(
-          <button key={s} onClick={()=>setStep(i+1)} style={{ flex:1,padding:'8px',borderRadius:9,border:'none',background:step===i+1?'rgba(99,102,241,.14)':c.row,color:step===i+1?'#6366F1':c.mut,fontWeight:step===i+1?700:500,fontSize:12.5,cursor:'pointer' }}>{i+1}. {s}</button>
+          <button key={s} onClick={()=>setStep(i+1)} style={{ flex:1,padding:'8px',borderRadius:9,border:'none',background:step===i+1?'rgba(0,112,243,.14)':c.row,color:step===i+1?'#0070F3':c.mut,fontWeight:step===i+1?700:500,fontSize:12.5,cursor:'pointer' }}>{i+1}. {s}</button>
         ))}
       </div>
 
@@ -1752,7 +1785,7 @@ function GroupCreateModal({ members, myEmail, onClose, onCreate }){
           <input ref={dpRef} type="file" accept="image/*" onChange={handleDp} style={{ display:'none' }}/>
           <div style={{ flex:1 }}>
             <Inp value={name} onChange={e=>setName(e.target.value)} placeholder="Group name" autoFocus/>
-            <button onClick={()=>dpRef.current?.click()} style={{ fontSize:11.5,color:'#6366F1',background:'none',border:'none',cursor:'pointer',padding:0,marginTop:6 }}>Upload group picture</button>
+            <button onClick={()=>dpRef.current?.click()} style={{ fontSize:11.5,color:'#0070F3',background:'none',border:'none',cursor:'pointer',padding:0,marginTop:6 }}>Upload group picture</button>
           </div>
         </div>
         <Textarea value={desc} onChange={e=>setDesc(e.target.value)} placeholder="What's this group about? (description)" rows={2}/>
@@ -1766,8 +1799,8 @@ function GroupCreateModal({ members, myEmail, onClose, onCreate }){
           <div style={{ fontSize:11.5,fontWeight:600,color:c.mut,marginBottom:7 }}>Visibility</div>
           <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
             {VIS.map(o=>(
-              <div key={o.v} onClick={()=>setVisibility(o.v)} style={{ display:'flex',gap:10,padding:'9px 12px',borderRadius:10,cursor:'pointer',border:`1px solid ${visibility===o.v?'rgba(99,102,241,.4)':c.bord}`,background:visibility===o.v?'rgba(99,102,241,.07)':'transparent' }}>
-                <div style={{ width:15,height:15,borderRadius:'50%',marginTop:1,flexShrink:0,border:`2px solid ${visibility===o.v?'#6366F1':c.mut}`,background:visibility===o.v?'#6366F1':'transparent' }}/>
+              <div key={o.v} onClick={()=>setVisibility(o.v)} style={{ display:'flex',gap:10,padding:'9px 12px',borderRadius:10,cursor:'pointer',border:`1px solid ${visibility===o.v?'rgba(0,112,243,.4)':c.bord}`,background:visibility===o.v?'rgba(0,112,243,.07)':'transparent' }}>
+                <div style={{ width:15,height:15,borderRadius:'50%',marginTop:1,flexShrink:0,border:`2px solid ${visibility===o.v?'#0070F3':c.mut}`,background:visibility===o.v?'#0070F3':'transparent' }}/>
                 <div><div style={{ fontSize:12.5,fontWeight:600,color:c.text }}>{o.l}</div><div style={{ fontSize:11,color:c.mut }}>{o.d}</div></div>
               </div>
             ))}
@@ -1786,8 +1819,8 @@ function GroupCreateModal({ members, myEmail, onClose, onCreate }){
         <div style={{ fontSize:12,color:c.mut,marginBottom:10 }}>{selected.length} of {members.length} selected · tap the shield to make someone an admin</div>
         <div style={{ display:'flex',flexDirection:'column',gap:4,maxHeight:320,overflowY:'auto' }}>
           {members.map(m=>{ const sel=selected.includes(m.email); const adm=admins.includes(m.email); return (
-            <div key={m.email} style={{ display:'flex',alignItems:'center',gap:11,padding:'9px 10px',borderRadius:10,background:sel?'rgba(99,102,241,.06)':'transparent',border:`1px solid ${sel?'rgba(99,102,241,.2)':c.bord}` }}>
-              <input type="checkbox" checked={sel} onChange={()=>toggleMember(m.email)} style={{ accentColor:'#6366F1' }}/>
+            <div key={m.email} style={{ display:'flex',alignItems:'center',gap:11,padding:'9px 10px',borderRadius:10,background:sel?'rgba(0,112,243,.06)':'transparent',border:`1px solid ${sel?'rgba(0,112,243,.2)':c.bord}` }}>
+              <input type="checkbox" checked={sel} onChange={()=>toggleMember(m.email)} style={{ accentColor:'#0070F3' }}/>
               <Av member={m} size={32} url={m.avatar_url}/>
               <div style={{ flex:1,minWidth:0 }}><div style={{ fontSize:13,fontWeight:600,color:c.text }}>{m.name||m.email}</div><div style={{ fontSize:11,color:c.mut }}>{m.email}</div></div>
               <button onClick={()=>toggleAdmin(m.email)} disabled={!sel} title="Toggle admin" style={{ fontSize:11,fontWeight:700,padding:'4px 10px',borderRadius:20,border:`1px solid ${adm?'#A78BFA':c.bord}`,background:adm?'rgba(167,139,250,.15)':'transparent',color:adm?'#A78BFA':c.mut,cursor:sel?'pointer':'not-allowed',opacity:sel?1:.4 }}>{adm?'Admin':'Make admin'}</button>
@@ -1974,7 +2007,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
   const createGroup=(cfg)=>{
     const id='space-'+(cfg.name||'group').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'')+'-'+Date.now().toString(36).slice(-4);
     const space={ id, name:cfg.name.trim(), label:cfg.name.trim(), type:cfg.type==='announcements'?'announcements':'collaboration',
-      description:cfg.description||'', dp:cfg.dp||null, color:cfg.color||'#6366F1', visibility:cfg.visibility||'public',
+      description:cfg.description||'', dp:cfg.dp||null, color:cfg.color||'#0070F3', visibility:cfg.visibility||'public',
       basedOn:cfg.basedOn||'team', tags:cfg.tags||[], welcome:cfg.welcome||'',
       settings:{ access:cfg.visibility==='public'?'organisation':'invite', allowRequests:cfg.visibility!=='secret',
         canSend:cfg.canSend||'members', whoManages:cfg.canAddMembers||'admins', canModify:cfg.canEditInfo||'admins',
@@ -2036,11 +2069,11 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
       const total=opts.reduce((s,o)=>s+o.votes.length,0);
       return (
         <div style={{ minWidth:240,maxWidth:340,background:c.surf,border:`1px solid ${c.bord}`,borderRadius:12,padding:'12px 14px' }}>
-          <div style={{ display:'flex',alignItems:'center',gap:7,marginBottom:10 }}><span style={{ color:'#6366F1' }}>{chatIcon('poll')}</span><span style={{ fontSize:13.5,fontWeight:700,color:c.text }}>{poll.question}</span></div>
+          <div style={{ display:'flex',alignItems:'center',gap:7,marginBottom:10 }}><span style={{ color:'#0070F3' }}>{chatIcon('poll')}</span><span style={{ fontSize:13.5,fontWeight:700,color:c.text }}>{poll.question}</span></div>
           <div style={{ display:'flex',flexDirection:'column',gap:7 }}>
             {opts.map((o,i)=>{ const votes=o.votes.length; const pctv=total?Math.round(votes/total*100):0; const voted=myVote===i; return (
-              <button key={i} onClick={()=>votePoll(m.id,i)} style={{ position:'relative',textAlign:'left',padding:'8px 11px',borderRadius:9,border:`1px solid ${voted?'#6366F1':c.bord}`,background:'transparent',cursor:'pointer',overflow:'hidden' }}>
-                <div style={{ position:'absolute',inset:0,width:pctv+'%',background:voted?'rgba(99,102,241,.16)':'rgba(128,128,128,.08)',transition:'width .3s' }}/>
+              <button key={i} onClick={()=>votePoll(m.id,i)} style={{ position:'relative',textAlign:'left',padding:'8px 11px',borderRadius:9,border:`1px solid ${voted?'#0070F3':c.bord}`,background:'transparent',cursor:'pointer',overflow:'hidden' }}>
+                <div style={{ position:'absolute',inset:0,width:pctv+'%',background:voted?'rgba(0,112,243,.16)':'rgba(128,128,128,.08)',transition:'width .3s' }}/>
                 <div style={{ position:'relative',display:'flex',justifyContent:'space-between',fontSize:12.5,color:c.text }}><span>{o.text}{voted?' ✓':''}</span><span style={{ color:c.mut,fontWeight:600 }}>{pctv}%</span></div>
               </button>
             ); })}
@@ -2049,7 +2082,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
         </div>
       );
     }
-    if(m.type==='tasknote') return <div style={{ display:'inline-flex',alignItems:'center',gap:8,background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.25)',borderRadius:10,padding:'8px 12px',fontSize:13,color:c.text }}><span style={{ color:'#6366F1' }}>{chatIcon('task')}</span>{m.text.replace('📋 ','')}</div>;
+    if(m.type==='tasknote') return <div style={{ display:'inline-flex',alignItems:'center',gap:8,background:'rgba(0,112,243,.1)',border:'1px solid rgba(0,112,243,.25)',borderRadius:10,padding:'8px 12px',fontSize:13,color:c.text }}><span style={{ color:'#0070F3' }}>{chatIcon('task')}</span>{m.text.replace('📋 ','')}</div>;
     if(m.type==='image') return <img src={m.url} alt="img" onClick={()=>openFile(m.url,m.filename)} style={{ maxWidth:260,maxHeight:260,borderRadius:10,objectFit:'cover',cursor:'pointer',display:'block' }}/>;
     if(m.type==='gif') return <img src={m.url} alt="gif" style={{ maxWidth:260,borderRadius:10,display:'block' }}/>;
     if(m.type==='video') return <video src={m.url} controls style={{ maxWidth:280,borderRadius:10,display:'block' }}/>;
@@ -2135,8 +2168,8 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
               onMouseEnter={e=>e.currentTarget.querySelector('.sp-actions')&&(e.currentTarget.querySelector('.sp-actions').style.opacity='1')}
               onMouseLeave={e=>e.currentTarget.querySelector('.sp-actions')&&(e.currentTarget.querySelector('.sp-actions').style.opacity='0')}
             >
-              <button onClick={()=>setActiveSpace(sp.id)} style={{ flex:1,display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:9,border:'none',background:activeSpace===sp.id?(c.dark?'rgba(99,102,241,.2)':'rgba(99,102,241,.12)'):'transparent',color:activeSpace===sp.id?'#818CF8':c.sub,cursor:'pointer',fontSize:13,fontWeight:activeSpace===sp.id?600:400,textAlign:'left' }}>
-                <span style={{ fontSize:12,fontWeight:700,color:activeSpace===sp.id?'#818CF8':c.mut,flexShrink:0 }}>{sp.type==='announcements'?'📢':'#'}</span>
+              <button onClick={()=>setActiveSpace(sp.id)} style={{ flex:1,display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:9,border:'none',background:activeSpace===sp.id?(c.dark?'rgba(0,112,243,.2)':'rgba(0,112,243,.12)'):'transparent',color:activeSpace===sp.id?'#3B9EFF':c.sub,cursor:'pointer',fontSize:13,fontWeight:activeSpace===sp.id?600:400,textAlign:'left' }}>
+                <span style={{ fontSize:12,fontWeight:700,color:activeSpace===sp.id?'#3B9EFF':c.mut,flexShrink:0 }}>{sp.type==='announcements'?'📢':'#'}</span>
                 <span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{sp.label||sp.name}</span>
               </button>
               <div className="sp-actions" style={{ display:'flex',gap:1,opacity:0,transition:'opacity .15s',flexShrink:0 }}>
@@ -2155,7 +2188,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
             <div style={{ margin:'2px 6px 6px',padding:'8px',background:c.surf,borderRadius:10,border:`1px solid ${c.bord}` }}>
               <input value={dmSearch} onChange={e=>setDmSearch(e.target.value)} placeholder="Search members..." autoFocus style={{ width:'100%',background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:7,padding:'5px 8px',color:c.text,fontSize:11,outline:'none',boxSizing:'border-box',marginBottom:5 }}/>
               {members.filter(m=>m.email!==myEmail&&(!dmSearch||m.name?.toLowerCase().includes(dmSearch.toLowerCase())||m.email?.toLowerCase().includes(dmSearch.toLowerCase()))).map(m=>(
-                <div key={m.email} onClick={()=>{setActiveSpace('dm-'+m.email);setShowAddDM(false);setDmSearch('');}} style={{ display:'flex',alignItems:'center',gap:7,padding:'5px 6px',borderRadius:7,cursor:'pointer',fontSize:12,color:c.text }} onMouseEnter={e=>e.currentTarget.style.background='rgba(99,102,241,.1)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                <div key={m.email} onClick={()=>{setActiveSpace('dm-'+m.email);setShowAddDM(false);setDmSearch('');}} style={{ display:'flex',alignItems:'center',gap:7,padding:'5px 6px',borderRadius:7,cursor:'pointer',fontSize:12,color:c.text }} onMouseEnter={e=>e.currentTarget.style.background='rgba(0,112,243,.1)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                   <Av member={m} size={20} url={m.avatar_url}/>
                   <span>{m.name||m.email}</span>
                 </div>
@@ -2169,13 +2202,13 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
             const isActive=activeSpace===dmKey;
             const unread=dmUnread[m.email]||0;
             return(
-              <button key={m.email} onClick={()=>setActiveSpace(dmKey)} style={{ display:'flex',alignItems:'center',gap:9,padding:'7px 10px',borderRadius:9,border:'none',background:isActive?(c.dark?'rgba(99,102,241,.2)':'rgba(99,102,241,.12)'):'transparent',color:isActive?'#818CF8':c.sub,cursor:'pointer',fontSize:13,fontWeight:(isActive||unread)?700:400,textAlign:'left',width:'100%' }}>
+              <button key={m.email} onClick={()=>setActiveSpace(dmKey)} style={{ display:'flex',alignItems:'center',gap:9,padding:'7px 10px',borderRadius:9,border:'none',background:isActive?(c.dark?'rgba(0,112,243,.2)':'rgba(0,112,243,.12)'):'transparent',color:isActive?'#3B9EFF':c.sub,cursor:'pointer',fontSize:13,fontWeight:(isActive||unread)?700:400,textAlign:'left',width:'100%' }}>
                 <div style={{ position:'relative',flexShrink:0 }}>
                   <Av member={m} size={22} url={m.avatar_url}/>
                   <div style={{ position:'absolute',bottom:-1,right:-1,width:7,height:7,borderRadius:'50%',background:'#34D399',border:'1.5px solid '+(c.dark?'#0F0D2A':'#F3F4FF') }}/>
                 </div>
                 <span style={{ flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:unread&&!isActive?c.text:undefined }}>{(m.name||m.email).split(' ')[0]}</span>
-                {unread>0&&<span style={{ flexShrink:0,minWidth:18,height:18,borderRadius:9,background:'#6366F1',color:'#fff',fontSize:11,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 5px' }}>{unread>9?'9+':unread}</span>}
+                {unread>0&&<span style={{ flexShrink:0,minWidth:18,height:18,borderRadius:9,background:'#0070F3',color:'#fff',fontSize:11,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 5px' }}>{unread>9?'9+':unread}</span>}
               </button>
             );
           })}
@@ -2192,7 +2225,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
           {!activeSpace.startsWith('dm-')&&<span style={{ fontSize:12,color:c.mut }}>· {members.length} members</span>}
           <div style={{ flex:1 }}/>
           {pinnedMsgs.length>0&&<button onClick={()=>setShowPinned(!showPinned)} style={{ display:'flex',alignItems:'center',gap:5,padding:'4px 10px',borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',cursor:'pointer',color:c.mut,fontSize:12 }}>📌 {pinnedMsgs.length}</button>}
-          <button onClick={()=>setShowFiles(!showFiles)} title="Files & links" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:showFiles?'rgba(99,102,241,.12)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:showFiles?'#818CF8':c.mut }}>🗂️</button>
+          <button onClick={()=>setShowFiles(!showFiles)} title="Files & links" style={{ width:30,height:30,borderRadius:8,border:`1px solid ${c.bord}`,background:showFiles?'rgba(0,112,243,.12)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:showFiles?'#3B9EFF':c.mut }}>🗂️</button>
         </div>
 
         {/* Pinned messages */}
@@ -2270,7 +2303,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
                     >
                       {/* Avatar column */}
                       <div style={{ width:36,flexShrink:0,marginTop:showAvatar?2:0 }}>
-                        {showAvatar?<Av member={{name:m.sender_name,color:member?.color||'#818CF8'}} size={34} url={avatarUrl}/>:<div style={{ height:20 }}/>}
+                        {showAvatar?<Av member={{name:m.sender_name,color:member?.color||'#3B9EFF'}} size={34} url={avatarUrl}/>:<div style={{ height:20 }}/>}
                       </div>
                       {/* Bubble */}
                       <div style={{ flex:1,minWidth:0 }}>
@@ -2282,8 +2315,8 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
                         )}
                         {/* Reply preview */}
                         {m.reply_to&&(
-                          <div style={{ display:'flex',gap:6,alignItems:'center',marginBottom:4,padding:'4px 8px',borderRadius:6,background:c.surf,borderLeft:`3px solid #818CF8`,maxWidth:320 }}>
-                            <span style={{ fontSize:11,color:'#818CF8',fontWeight:600 }}>{m.reply_to.name}</span>
+                          <div style={{ display:'flex',gap:6,alignItems:'center',marginBottom:4,padding:'4px 8px',borderRadius:6,background:c.surf,borderLeft:`3px solid #3B9EFF`,maxWidth:320 }}>
+                            <span style={{ fontSize:11,color:'#3B9EFF',fontWeight:600 }}>{m.reply_to.name}</span>
                             <span style={{ fontSize:11,color:c.mut,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{m.reply_to.text}</span>
                           </div>
                         )}
@@ -2296,7 +2329,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
                         {Object.keys(msgReactions).length>0&&(
                           <div style={{ display:'flex',flexWrap:'wrap',gap:4,marginTop:5 }}>
                             {Object.entries(msgReactions).map(([emoji,users])=>users.length>0&&(
-                              <button key={emoji} onClick={()=>addReaction(m.id,emoji)} style={{ display:'flex',alignItems:'center',gap:3,padding:'2px 8px',borderRadius:20,background:users.includes(myEmail)?'rgba(99,102,241,.2)':'rgba(255,255,255,.06)',border:`1px solid ${users.includes(myEmail)?'rgba(99,102,241,.4)':c.bord}`,cursor:'pointer',fontSize:13 }}>
+                              <button key={emoji} onClick={()=>addReaction(m.id,emoji)} style={{ display:'flex',alignItems:'center',gap:3,padding:'2px 8px',borderRadius:20,background:users.includes(myEmail)?'rgba(0,112,243,.2)':'rgba(255,255,255,.06)',border:`1px solid ${users.includes(myEmail)?'rgba(0,112,243,.4)':c.bord}`,cursor:'pointer',fontSize:13 }}>
                                 <span>{emoji}</span><span style={{ fontSize:11,color:c.mut,fontWeight:600 }}>{users.length}</span>
                               </button>
                             ))}
@@ -2384,7 +2417,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
           {replyTo&&(
             <div style={{ display:'flex',alignItems:'center',gap:10,padding:'7px 12px',borderRadius:'10px 10px 0 0',background:c.surf,border:`1px solid ${c.bord}`,borderBottom:'none',marginBottom:-1 }}>
               <span style={{ fontSize:12 }}>↩️</span>
-              <span style={{ fontSize:12,color:c.mut,flex:1 }}>Replying to <strong style={{ color:'#818CF8' }}>{replyTo.sender_name}</strong>: {(replyTo.text||'[attachment]').slice(0,60)}</span>
+              <span style={{ fontSize:12,color:c.mut,flex:1 }}>Replying to <strong style={{ color:'#3B9EFF' }}>{replyTo.sender_name}</strong>: {(replyTo.text||'[attachment]').slice(0,60)}</span>
               <button onClick={()=>setReplyTo(null)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:16 }}>✕</button>
             </div>
           )}
@@ -2407,7 +2440,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
             <div style={{ padding:'10px',background:c.dark?'rgba(18,15,50,.98)':'#fff',border:`1px solid ${c.bord}`,borderRadius:'10px 10px 0 0',borderBottom:'none',marginBottom:-1,boxShadow:'0 -4px 20px rgba(0,0,0,.15)' }} onClick={e=>e.stopPropagation()}>
               <div style={{ display:'flex',gap:2,marginBottom:8,borderBottom:`1px solid ${c.bord}`,paddingBottom:6 }}>
                 {Object.keys(EMOJI_GROUPS).map(g=>(
-                  <button key={g} onClick={()=>setEmojiGroup(g)} style={{ padding:'4px 10px',borderRadius:8,border:'none',background:emojiGroup===g?'rgba(99,102,241,.15)':'transparent',color:emojiGroup===g?'#818CF8':c.mut,cursor:'pointer',fontSize:12,fontWeight:emojiGroup===g?700:400 }}>{g}</button>
+                  <button key={g} onClick={()=>setEmojiGroup(g)} style={{ padding:'4px 10px',borderRadius:8,border:'none',background:emojiGroup===g?'rgba(0,112,243,.15)':'transparent',color:emojiGroup===g?'#3B9EFF':c.mut,cursor:'pointer',fontSize:12,fontWeight:emojiGroup===g?700:400 }}>{g}</button>
                 ))}
               </div>
               <div style={{ display:'grid',gridTemplateColumns:'repeat(9,1fr)',gap:2,maxHeight:160,overflowY:'auto' }}>
@@ -2434,7 +2467,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
               ].map(a=>(
                 <button key={a.label} onClick={()=>{a.act();setShowQuick(false);}} style={{ display:'flex',alignItems:'center',gap:11,width:'100%',padding:'9px 10px',background:'transparent',border:'none',borderRadius:9,cursor:'pointer',color:c.text,fontSize:13,textAlign:'left' }}
                   onMouseEnter={e=>e.currentTarget.style.background=c.row} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                  <span style={{ width:30,height:30,borderRadius:8,background:c.row,display:'flex',alignItems:'center',justifyContent:'center',color:'#6366F1',flexShrink:0 }}>{chatIcon(a.ic)}</span>
+                  <span style={{ width:30,height:30,borderRadius:8,background:c.row,display:'flex',alignItems:'center',justifyContent:'center',color:'#0070F3',flexShrink:0 }}>{chatIcon(a.ic)}</span>
                   {a.label}
                 </button>
               ))}
@@ -2458,10 +2491,10 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
           <div style={{ position:'relative',display:'flex',alignItems:'center',gap:5,padding:'8px 12px',background:c.surf,border:`1px solid ${c.bord}`,borderRadius:(replyTo||showGif||showEmoji)?'0 0 12px 12px':'12px',boxShadow:'0 1px 4px rgba(0,0,0,.06)' }}>
             <input ref={fileRef} type="file" accept="image/*,video/*" onChange={handleFile} style={{ display:'none' }}/>
             <input ref={attachRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.mp3,.wav,.ogg,video/*,image/*,application/*" onChange={handleFile} style={{ display:'none' }}/>
-            <button onClick={e=>{e.stopPropagation();setShowQuick(!showQuick);setShowMention(false);setShowEmoji(false);setShowGif(false);}} title="More" style={{ width:34,height:34,borderRadius:9,border:'none',background:showQuick?'rgba(99,102,241,.14)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:showQuick?'#6366F1':c.mut,flexShrink:0,transition:'all .15s' }}>{chatIcon('plus')}</button>
-            <button onClick={e=>{e.stopPropagation();setShowEmoji(!showEmoji);setShowGif(false);setShowQuick(false);}} title="Emoji" style={{ width:34,height:34,borderRadius:9,border:'none',background:showEmoji?'rgba(99,102,241,.14)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:showEmoji?'#6366F1':c.mut,flexShrink:0 }}>{chatIcon('smile')}</button>
+            <button onClick={e=>{e.stopPropagation();setShowQuick(!showQuick);setShowMention(false);setShowEmoji(false);setShowGif(false);}} title="More" style={{ width:34,height:34,borderRadius:9,border:'none',background:showQuick?'rgba(0,112,243,.14)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:showQuick?'#0070F3':c.mut,flexShrink:0,transition:'all .15s' }}>{chatIcon('plus')}</button>
+            <button onClick={e=>{e.stopPropagation();setShowEmoji(!showEmoji);setShowGif(false);setShowQuick(false);}} title="Emoji" style={{ width:34,height:34,borderRadius:9,border:'none',background:showEmoji?'rgba(0,112,243,.14)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:showEmoji?'#0070F3':c.mut,flexShrink:0 }}>{chatIcon('smile')}</button>
             <input ref={inputRef} value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg(msg);}}} placeholder={'Message '+(activeSpace.startsWith('dm-')?'@ ':'# ')+activeLabel} style={{ flex:1,background:'transparent',border:'none',color:c.text,fontSize:14,outline:'none',lineHeight:1.4 }}/>
-            <button onClick={()=>sendMsg(msg)} disabled={!msg.trim()} style={{ width:34,height:34,borderRadius:9,background:msg.trim()?'#6366F1':'transparent',border:msg.trim()?'none':`1px solid ${c.bord}`,color:msg.trim()?'#fff':c.mut,cursor:msg.trim()?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all .15s' }}>{chatIcon('send')}</button>
+            <button onClick={()=>sendMsg(msg)} disabled={!msg.trim()} style={{ width:34,height:34,borderRadius:9,background:msg.trim()?'#0070F3':'transparent',border:msg.trim()?'none':`1px solid ${c.bord}`,color:msg.trim()?'#fff':c.mut,cursor:msg.trim()?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all .15s' }}>{chatIcon('send')}</button>
           </div>
         </div>
       </div>
@@ -2498,7 +2531,7 @@ function RemindersPanel() {
             <div style={{ display:'flex',alignItems:'center',gap:10 }}>
               <div style={{ flex:1 }}><div style={{ fontSize:13,fontWeight:600,color:c.text,marginBottom:2 }}>{r.label}</div><div style={{ fontSize:12,color:c.mut }}>{r.time?`Fires at ${r.time} if pending`:`${r.minutes} minutes before`}</div></div>
               {!r.time&&r.enabled&&<div style={{ display:'flex',alignItems:'center',gap:5 }}><input type="number" value={r.minutes} onChange={e=>updateMins(r.id,e.target.value)} min="5" max="480" style={{ width:56,background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:7,padding:'4px 7px',color:c.text,fontSize:12,outline:'none',textAlign:'center' }}/><span style={{ fontSize:11,color:c.mut }}>min</span></div>}
-              <button onClick={()=>toggle(r.id)} style={{ width:42,height:22,borderRadius:11,border:'none',background:r.enabled?'#6366F1':'rgba(128,128,128,.3)',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0 }}><div style={{ width:16,height:16,borderRadius:'50%',background:'#fff',position:'absolute',top:3,left:r.enabled?23:3,transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,.2)' }}/></button>
+              <button onClick={()=>toggle(r.id)} style={{ width:42,height:22,borderRadius:11,border:'none',background:r.enabled?'#0070F3':'rgba(128,128,128,.3)',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0 }}><div style={{ width:16,height:16,borderRadius:'50%',background:'#fff',position:'absolute',top:3,left:r.enabled?23:3,transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,.2)' }}/></button>
             </div>
           </Card>
         ))}
@@ -2585,7 +2618,7 @@ function ScheduleCalendar({ team, session, members = [], tasks = [], canViewPerf
   for (let h = DAY_START_H; h <= DAY_END_H; h++) hours.push(h);
   const shiftDay = (n) => setDay(d => { const nd = new Date(d); nd.setDate(nd.getDate() + n); return nd; });
 
-  const prioColor = p => p === 'critical' ? '#EF4444' : p === 'high' ? '#F87171' : p === 'medium' ? '#FBBF24' : '#818CF8';
+  const prioColor = p => p === 'critical' ? '#EF4444' : p === 'high' ? '#F87171' : p === 'medium' ? '#FBBF24' : '#3B9EFF';
 
   return (
     <div>
@@ -2624,7 +2657,7 @@ function ScheduleCalendar({ team, session, members = [], tasks = [], canViewPerf
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <Btn onClick={assessWithAI} loading={aiBusy} v="ghost" style={{ fontSize: 12.5 }}>✦ Should I assign work to them?</Btn>
-            {aiNote && <div style={{ flex: 1, minWidth: 220, fontSize: 12.5, color: c.sub, background: dark ? 'rgba(99,102,241,.08)' : 'rgba(99,102,241,.05)', border: '1px solid rgba(99,102,241,.2)', borderRadius: 10, padding: '8px 12px', lineHeight: 1.5 }}>{aiNote}</div>}
+            {aiNote && <div style={{ flex: 1, minWidth: 220, fontSize: 12.5, color: c.sub, background: dark ? 'rgba(0,112,243,.08)' : 'rgba(0,112,243,.05)', border: '1px solid rgba(0,112,243,.2)', borderRadius: 10, padding: '8px 12px', lineHeight: 1.5 }}>{aiNote}</div>}
           </div>
         </div>
       )}
@@ -2961,8 +2994,8 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
   const navNext=()=>navigate(1);
 
   const eventColor=(ev)=>{
-    const colors={'1':'#ac725e','2':'#d06b64','3':'#f83a22','4':'#fa573c','5':'#ff7537','6':'#ffad46','7':'#42d692','8':'#16a765','9':'#7bd148','10':'#b3dc6c','11':'#fbe983','default':'#6366F1'};
-    return colors[ev.colorId]||'#6366F1';
+    const colors={'1':'#ac725e','2':'#d06b64','3':'#f83a22','4':'#fa573c','5':'#ff7537','6':'#ffad46','7':'#42d692','8':'#16a765','9':'#7bd148','10':'#b3dc6c','11':'#fbe983','default':'#0070F3'};
+    return colors[ev.colorId]||'#0070F3';
   };
 
   // ── NOT CONNECTED ──────────────────────────────────────────────────────────
@@ -3000,7 +3033,7 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
         </div>
         {[
           ['09:30','Daily standup','#34D399'],
-          ['11:00','Sprint planning','#818CF8'],
+          ['11:00','Sprint planning','#3B9EFF'],
           ['15:30','1:1 with manager','#FBBF24'],
         ].map(([time,title,col])=>(
           <div key={title} style={{ display:'flex',alignItems:'center',gap:14,padding:'12px 18px',borderBottom:`1px solid ${c.bord}` }}>
@@ -3031,7 +3064,7 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
               <div style={{ fontSize:13,color:c.sub,lineHeight:1.5 }}>{s}</div>
             </div>
           ))}
-          <div style={{ marginTop:14,padding:'10px 14px',background:'rgba(99,102,241,.08)',borderRadius:8,fontSize:12,color:'#818CF8' }}>
+          <div style={{ marginTop:14,padding:'10px 14px',background:'rgba(0,112,243,.08)',borderRadius:8,fontSize:12,color:'#3B9EFF' }}>
             After completing these steps, add REACT_APP_GOOGLE_CLIENT_ID to Vercel and redeploy. The Connect button will then work.
           </div>
         </div>
@@ -3055,7 +3088,7 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
     <div>
       {/* Standup picker banner */}
       {detectedStandups.length>0&&!selectedStandup&&(
-        <div style={{ background:'rgba(99,102,241,.08)',border:'1px solid rgba(99,102,241,.25)',borderRadius:12,padding:'14px 18px',marginBottom:16,display:'flex',alignItems:'center',gap:14,flexWrap:'wrap' }}>
+        <div style={{ background:'rgba(0,112,243,.08)',border:'1px solid rgba(0,112,243,.25)',borderRadius:12,padding:'14px 18px',marginBottom:16,display:'flex',alignItems:'center',gap:14,flexWrap:'wrap' }}>
           <div style={{ flex:1 }}>
             <div style={{ fontSize:14,fontWeight:700,color:c.text,marginBottom:3 }}>📅 Standup meetings detected!</div>
             <div style={{ fontSize:12,color:c.mut }}>Select your standup to link tasks and team to this recurring meeting</div>
@@ -3076,7 +3109,7 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
           <p style={{ fontSize:13,color:c.mut,marginBottom:16 }}>These recurring meetings were detected in your calendar. Select the one that is your daily standup.</p>
           <div style={{ display:'flex',flexDirection:'column',gap:8,marginBottom:20 }}>
             {detectedStandups.map(ev=>(
-              <div key={ev.id} onClick={()=>{setSelectedStandup(ev);setShowStandupPicker(false);}} style={{ padding:'12px 16px',borderRadius:10,border:`1.5px solid ${selectedStandup?.id===ev.id?'#6366F1':c.bord}`,background:selectedStandup?.id===ev.id?'rgba(99,102,241,.1)':c.surf,cursor:'pointer',transition:'all .2s' }}>
+              <div key={ev.id} onClick={()=>{setSelectedStandup(ev);setShowStandupPicker(false);}} style={{ padding:'12px 16px',borderRadius:10,border:`1.5px solid ${selectedStandup?.id===ev.id?'#0070F3':c.bord}`,background:selectedStandup?.id===ev.id?'rgba(0,112,243,.1)':c.surf,cursor:'pointer',transition:'all .2s' }}>
                 <div style={{ display:'flex',alignItems:'center',gap:10 }}>
                   <div style={{ width:10,height:10,borderRadius:'50%',background:eventColor(ev),flexShrink:0 }}/>
                   <div style={{ flex:1 }}>
@@ -3086,7 +3119,7 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
                 </div>
                 {ev.attendees&&ev.attendees.length>0&&(
                   <div style={{ marginTop:8,paddingTop:8,borderTop:`1px solid ${c.bord}`,display:'flex',flexWrap:'wrap',gap:4 }}>
-                    {ev.attendees.slice(0,6).map(a=><span key={a.email} style={{ fontSize:10,background:'rgba(99,102,241,.1)',color:'#818CF8',padding:'2px 7px',borderRadius:20 }}>{a.displayName||a.email}</span>)}
+                    {ev.attendees.slice(0,6).map(a=><span key={a.email} style={{ fontSize:10,background:'rgba(0,112,243,.1)',color:'#3B9EFF',padding:'2px 7px',borderRadius:20 }}>{a.displayName||a.email}</span>)}
                     {ev.attendees.length>6&&<span style={{ fontSize:10,color:c.mut }}>+{ev.attendees.length-6} more</span>}
                   </div>
                 )}
@@ -3107,7 +3140,7 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
         {/* View toggle */}
         <div style={{ display:'flex',gap:4,background:c.surf,borderRadius:10,padding:4,border:`1px solid ${c.bord}` }}>
           {['week','month','agenda'].map(v=>(
-            <button key={v} onClick={()=>setView(v)} style={{ padding:'5px 12px',borderRadius:7,border:'none',background:view===v?'rgba(99,102,241,.2)':'transparent',color:view===v?'#818CF8':c.mut,cursor:'pointer',fontSize:12,fontWeight:view===v?700:400,textTransform:'capitalize' }}>{v}</button>
+            <button key={v} onClick={()=>setView(v)} style={{ padding:'5px 12px',borderRadius:7,border:'none',background:view===v?'rgba(0,112,243,.2)':'transparent',color:view===v?'#3B9EFF':c.mut,cursor:'pointer',fontSize:12,fontWeight:view===v?700:400,textTransform:'capitalize' }}>{v}</button>
           ))}
         </div>
         {/* Nav */}
@@ -3130,9 +3163,9 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
               const isToday=day.toDateString()===today.toDateString();
               const dayEvts=getEventsForDay(day);
               return(
-                <div key={i} style={{ padding:'10px 8px',textAlign:'center',borderLeft:`1px solid ${c.bord}`,background:isToday?'rgba(99,102,241,.04)':'transparent' }}>
-                  <div style={{ fontSize:11,color:isToday?'#6366F1':c.mut,textTransform:'uppercase',letterSpacing:'.06em',fontWeight:600,marginBottom:5 }}>{DAYS[i]}</div>
-                  <div style={{ display:'inline-flex',alignItems:'center',justifyContent:'center',width:32,height:32,borderRadius:'50%',background:isToday?'#6366F1':'transparent',fontSize:14,fontWeight:isToday?700:400,color:isToday?'#fff':c.text }}>{day.getDate()}</div>
+                <div key={i} style={{ padding:'10px 8px',textAlign:'center',borderLeft:`1px solid ${c.bord}`,background:isToday?'rgba(0,112,243,.04)':'transparent' }}>
+                  <div style={{ fontSize:11,color:isToday?'#0070F3':c.mut,textTransform:'uppercase',letterSpacing:'.06em',fontWeight:600,marginBottom:5 }}>{DAYS[i]}</div>
+                  <div style={{ display:'inline-flex',alignItems:'center',justifyContent:'center',width:32,height:32,borderRadius:'50%',background:isToday?'#0070F3':'transparent',fontSize:14,fontWeight:isToday?700:400,color:isToday?'#fff':c.text }}>{day.getDate()}</div>
                   {dayEvts.length>0&&<div style={{ fontSize:9,color:c.mut,marginTop:3 }}>{dayEvts.length} event{dayEvts.length!==1?'s':''}</div>}
                 </div>
               );
@@ -3153,7 +3186,7 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
               const dayEvts=getEventsForDay(day);
               const isToday=day.toDateString()===today.toDateString();
               return(
-                <div key={i} style={{ borderLeft:`1px solid ${c.bord}`,position:'relative',background:isToday?'rgba(99,102,241,.02)':'transparent' }}>
+                <div key={i} style={{ borderLeft:`1px solid ${c.bord}`,position:'relative',background:isToday?'rgba(0,112,243,.02)':'transparent' }}>
                   {/* Hour lines */}
                   {Array.from({length:24},(_,h)=>(
                     <div key={h} style={{ height:48,borderBottom:`1px solid ${c.bord}22` }}/>
@@ -3205,8 +3238,8 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
               const dayEvts=day?getEventsForDay(day):[];
               const isToday=day&&day.toDateString()===today.toDateString();
               return(
-                <div key={i} style={{ minHeight:80,padding:'6px',borderRight:(i+1)%7!==0?`1px solid ${c.bord}`:'none',borderBottom:`1px solid ${c.bord}`,background:isToday?'rgba(99,102,241,.05)':'transparent' }}>
-                  {day&&<div style={{ fontSize:12,fontWeight:isToday?700:400,color:isToday?'#818CF8':c.sub,width:22,height:22,borderRadius:'50%',background:isToday?'rgba(99,102,241,.15)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:4 }}>{day.getDate()}</div>}
+                <div key={i} style={{ minHeight:80,padding:'6px',borderRight:(i+1)%7!==0?`1px solid ${c.bord}`:'none',borderBottom:`1px solid ${c.bord}`,background:isToday?'rgba(0,112,243,.05)':'transparent' }}>
+                  {day&&<div style={{ fontSize:12,fontWeight:isToday?700:400,color:isToday?'#3B9EFF':c.sub,width:22,height:22,borderRadius:'50%',background:isToday?'rgba(0,112,243,.15)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:4 }}>{day.getDate()}</div>}
                   {dayEvts.slice(0,2).map(ev=>(
                     <div key={ev.id} onClick={()=>setSelectedEvent(ev)} style={{ padding:'2px 5px',borderRadius:4,background:eventColor(ev)+'22',color:eventColor(ev),fontSize:10,fontWeight:600,marginBottom:2,cursor:'pointer',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{ev.summary}</div>
                   ))}
@@ -3236,7 +3269,7 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
                   <div style={{ fontSize:14,fontWeight:600,color:c.text,marginBottom:2 }}>{ev.summary||'(No title)'}</div>
                   {ev.location&&<div style={{ fontSize:11,color:c.mut,marginBottom:2 }}>📍 {ev.location}</div>}
                   {ev.description&&<div style={{ fontSize:11,color:c.mut,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:400 }}>{ev.description.replace(/<[^>]+>/g,'')}</div>}
-                  {ev.attendees&&<div style={{ fontSize:11,color:'#818CF8',marginTop:4 }}>{ev.attendees.length} attendees</div>}
+                  {ev.attendees&&<div style={{ fontSize:11,color:'#3B9EFF',marginTop:4 }}>{ev.attendees.length} attendees</div>}
                 </div>
               </div>
             );
@@ -3263,7 +3296,7 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
                 <div style={{ display:'flex',flexDirection:'column',gap:6,maxHeight:180,overflowY:'auto' }}>
                   {selectedEvent.attendees.map(a=>(
                     <div key={a.email} style={{ display:'flex',alignItems:'center',gap:10,padding:'7px 0',borderBottom:`1px solid ${c.bord}` }}>
-                      <Av member={{name:a.displayName||a.email,color:'#818CF8'}} size={28}/>
+                      <Av member={{name:a.displayName||a.email,color:'#3B9EFF'}} size={28}/>
                       <div style={{ flex:1 }}><div style={{ fontSize:13,color:c.text }}>{a.displayName||a.email}</div><div style={{ fontSize:11,color:c.mut }}>{a.email}</div></div>
                       <span style={{ fontSize:11,color:a.responseStatus==='accepted'?'#34D399':a.responseStatus==='declined'?'#F87171':'#F59E0B',background:a.responseStatus==='accepted'?'rgba(52,211,153,.1)':a.responseStatus==='declined'?'rgba(239,68,68,.1)':'rgba(245,158,11,.1)',padding:'2px 8px',borderRadius:20,textTransform:'capitalize' }}>{a.responseStatus||'invited'}</span>
                     </div>
@@ -3276,7 +3309,7 @@ function CalendarPanel({ team, session, members, onInviteMember }) {
                 }} style={{ marginTop:12 }}>Import attendees to team</Btn>
               </div>
             )}
-            {selectedEvent.htmlLink&&<a href={selectedEvent.htmlLink} target="_blank" rel="noreferrer" style={{ fontSize:13,color:'#818CF8',textDecoration:'none' }}>Open in Google Calendar →</a>}
+            {selectedEvent.htmlLink&&<a href={selectedEvent.htmlLink} target="_blank" rel="noreferrer" style={{ fontSize:13,color:'#3B9EFF',textDecoration:'none' }}>Open in Google Calendar →</a>}
           </div>
         </Modal>
       )}
@@ -3297,12 +3330,12 @@ function AvatarAdjustModal({ url, posX=50, posY=50, zoom=1, onClose, onSave }) {
   return (
     <Modal onClose={onClose} title="Adjust photo" width={360}>
       <p style={{ fontSize:12.5,color:c.mut,marginBottom:14,textAlign:'center' }}>Drag the image to reposition · use the slider to zoom</p>
-      <div ref={dragRef} onMouseDown={onDown} onTouchStart={onDown} style={{ width:220,height:220,borderRadius:'50%',overflow:'hidden',margin:'0 auto 16px',border:`3px solid #818CF8`,cursor:'grab',background:c.row,touchAction:'none' }}>
+      <div ref={dragRef} onMouseDown={onDown} onTouchStart={onDown} style={{ width:220,height:220,borderRadius:'50%',overflow:'hidden',margin:'0 auto 16px',border:`3px solid #3B9EFF`,cursor:'grab',background:c.row,touchAction:'none' }}>
         <img src={url} alt="adjust" draggable={false} style={{ width:'100%',height:'100%',objectFit:'cover',objectPosition:`${x}% ${y}%`,transform:`scale(${z})`,transition:'none',userSelect:'none',pointerEvents:'none' }}/>
       </div>
       <div style={{ marginBottom:18 }}>
         <div style={{ fontSize:11,color:c.mut,marginBottom:5 }}>Zoom</div>
-        <input type="range" min="1" max="2.5" step="0.05" value={z} onChange={e=>setZ(parseFloat(e.target.value))} style={{ width:'100%',accentColor:'#6366F1' }}/>
+        <input type="range" min="1" max="2.5" step="0.05" value={z} onChange={e=>setZ(parseFloat(e.target.value))} style={{ width:'100%',accentColor:'#0070F3' }}/>
       </div>
       <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}>
         <Btn v="ghost" onClick={onClose}>Cancel</Btn>
@@ -3357,23 +3390,23 @@ function SettingsPage({ session, onBack, onSaved, team, members = [], setMembers
       <div style={{ maxWidth:900,margin:'0 auto',padding:'32px 24px 60px',display:'grid',gridTemplateColumns:'190px 1fr',gap:24 }}>
         <div>
           <div style={{ fontSize:18,fontWeight:700,color:c.text,marginBottom:20 }}>Settings</div>
-          {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{ width:'100%',display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,border:'none',background:tab===t.id?'rgba(99,102,241,.15)':'transparent',color:tab===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:13,fontWeight:tab===t.id?700:400,marginBottom:4,textAlign:'left',transition:'all .15s' }}><span style={{ display:'flex' }}>{tabIcon(t.id)}</span>{t.l}</button>)}
+          {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{ width:'100%',display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,border:'none',background:tab===t.id?'rgba(0,112,243,.15)':'transparent',color:tab===t.id?'#3B9EFF':c.mut,cursor:'pointer',fontSize:13,fontWeight:tab===t.id?700:400,marginBottom:4,textAlign:'left',transition:'all .15s' }}><span style={{ display:'flex' }}>{tabIcon(t.id)}</span>{t.l}</button>)}
         </div>
         <div style={{ animation:'fadeIn .3s ease' }}>
-          {tab==='profile'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>Profile</h2><div style={{ display:'flex',alignItems:'center',gap:16,marginBottom:16 }}><div style={{ position:'relative' }}>{avatarUrl?<div style={{ width:80,height:80,borderRadius:'50%',overflow:'hidden',border:'3px solid #818CF8',background:c.row }}><img src={avatarUrl} alt="av" style={{ width:'100%',height:'100%',objectFit:avatarFit==='contain'?'contain':'cover',objectPosition:avatarFit==='manual'?`${avatarPosX}% ${avatarPos}%`:'center',transform:avatarFit==='manual'?`scale(${avatarZoom})`:'none' }}/></div>:<div style={{ width:80,height:80,borderRadius:'50%',background:'rgba(99,102,241,.2)',border:'3px solid #818CF8',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'#818CF8' }}>{name?name[0].toUpperCase():'?'}</div>}<button onClick={()=>fileRef.current.click()} style={{ position:'absolute',bottom:0,right:0,width:26,height:26,borderRadius:'50%',background:'#6366F1',border:'2px solid #fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13 }}>✏️</button><input ref={fileRef} type="file" accept="image/*" onChange={handleAvatar} style={{ display:'none' }}/></div><div><div style={{ fontSize:16,fontWeight:700,color:c.text }}>{name||session?.user?.email}</div><div style={{ fontSize:13,color:c.mut }}>{session?.user?.email}</div><div style={{ display:'flex',gap:12,marginTop:6 }}><button onClick={()=>fileRef.current.click()} style={{ fontSize:12,color:'#818CF8',background:'none',border:'none',cursor:'pointer',padding:0 }}>Change photo</button>{avatarUrl&&<button onClick={()=>{setAvatarUrl('');setAvatarFit('cover');}} style={{ fontSize:12,color:'#F87171',background:'none',border:'none',cursor:'pointer',padding:0 }}>Delete photo</button>}</div></div></div>
+          {tab==='profile'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>Profile</h2><div style={{ display:'flex',alignItems:'center',gap:16,marginBottom:16 }}><div style={{ position:'relative' }}>{avatarUrl?<div style={{ width:80,height:80,borderRadius:'50%',overflow:'hidden',border:'3px solid #3B9EFF',background:c.row }}><img src={avatarUrl} alt="av" style={{ width:'100%',height:'100%',objectFit:avatarFit==='contain'?'contain':'cover',objectPosition:avatarFit==='manual'?`${avatarPosX}% ${avatarPos}%`:'center',transform:avatarFit==='manual'?`scale(${avatarZoom})`:'none' }}/></div>:<div style={{ width:80,height:80,borderRadius:'50%',background:'rgba(0,112,243,.2)',border:'3px solid #3B9EFF',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'#3B9EFF' }}>{name?name[0].toUpperCase():'?'}</div>}<button onClick={()=>fileRef.current.click()} style={{ position:'absolute',bottom:0,right:0,width:26,height:26,borderRadius:'50%',background:'#0070F3',border:'2px solid #fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13 }}>✏️</button><input ref={fileRef} type="file" accept="image/*" onChange={handleAvatar} style={{ display:'none' }}/></div><div><div style={{ fontSize:16,fontWeight:700,color:c.text }}>{name||session?.user?.email}</div><div style={{ fontSize:13,color:c.mut }}>{session?.user?.email}</div><div style={{ display:'flex',gap:12,marginTop:6 }}><button onClick={()=>fileRef.current.click()} style={{ fontSize:12,color:'#3B9EFF',background:'none',border:'none',cursor:'pointer',padding:0 }}>Change photo</button>{avatarUrl&&<button onClick={()=>{setAvatarUrl('');setAvatarFit('cover');}} style={{ fontSize:12,color:'#F87171',background:'none',border:'none',cursor:'pointer',padding:0 }}>Delete photo</button>}</div></div></div>
             {avatarUrl&&(<div style={{ marginBottom:24,padding:'14px 16px',background:c.row,borderRadius:12 }}>
               <div style={{ fontSize:12,fontWeight:600,color:c.sub,marginBottom:8 }}>Adjust image</div>
               <div style={{ display:'flex',gap:8 }}>
                 {[['cover','Fill space'],['contain','Fit whole'],['manual','Manual']].map(([v,l])=>(
-                  <button key={v} onClick={()=>{ setAvatarFit(v); if(v==='manual')setShowAdjust(true); }} style={{ flex:1,padding:'7px 6px',borderRadius:8,border:`1px solid ${avatarFit===v?'#6366F1':c.bord}`,background:avatarFit===v?'rgba(99,102,241,.1)':'transparent',color:avatarFit===v?'#6366F1':c.sub,cursor:'pointer',fontSize:12,fontWeight:600 }}>{l}</button>
+                  <button key={v} onClick={()=>{ setAvatarFit(v); if(v==='manual')setShowAdjust(true); }} style={{ flex:1,padding:'7px 6px',borderRadius:8,border:`1px solid ${avatarFit===v?'#0070F3':c.bord}`,background:avatarFit===v?'rgba(0,112,243,.1)':'transparent',color:avatarFit===v?'#0070F3':c.sub,cursor:'pointer',fontSize:12,fontWeight:600 }}>{l}</button>
                 ))}
               </div>
-              {avatarFit==='manual'&&<button onClick={()=>setShowAdjust(true)} style={{ marginTop:10,fontSize:12,color:'#818CF8',background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.25)',borderRadius:8,cursor:'pointer',padding:'6px 12px',fontWeight:600 }}>↔ Drag to adjust</button>}
+              {avatarFit==='manual'&&<button onClick={()=>setShowAdjust(true)} style={{ marginTop:10,fontSize:12,color:'#3B9EFF',background:'rgba(0,112,243,.1)',border:'1px solid rgba(0,112,243,.25)',borderRadius:8,cursor:'pointer',padding:'6px 12px',fontWeight:600 }}>↔ Drag to adjust</button>}
             </div>)}
             {showAdjust&&<AvatarAdjustModal url={avatarUrl} posX={avatarPosX} posY={avatarPos} zoom={avatarZoom} onClose={()=>setShowAdjust(false)} onSave={(x,y,z)=>{setAvatarPosX(x);setAvatarPos(y);setAvatarZoom(z);setAvatarFit('manual');setShowAdjust(false);}}/>}
             <Inp label="Display name" value={name} onChange={e=>setName(e.target.value)} style={{ marginBottom:16 }}/><Inp label="Email" value={session?.user?.email||''} disabled style={{ marginBottom:20,opacity:.6 }}/><Btn onClick={save} loading={saving}>Save changes</Btn></Card>)}
           {tab==='security'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>Security</h2><Lbl>Change password</Lbl><Inp label="New password" type="password" value={newPw} onChange={e=>setNewPw(e.target.value)} placeholder="At least 6 characters" error={pwErr} style={{ marginBottom:16 }}/>{pwOk&&<div style={{ background:'rgba(52,211,153,.12)',border:'1px solid rgba(52,211,153,.3)',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#34D399',marginBottom:14 }}>✅ Password updated</div>}<Btn onClick={changePw} loading={saving} disabled={!newPw}>Update password</Btn></Card>)}
-          {tab==='appearance'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>Appearance</h2><div style={{ display:'flex',gap:14 }}>{[{l:'Dark',i:'🌙',d:true},{l:'Light',i:'☀️',d:false}].map(opt=><div key={opt.l} onClick={()=>opt.d!==dark&&toggle()} style={{ flex:1,padding:'20px',borderRadius:14,border:`2px solid ${dark===opt.d?'#6366F1':c.bord}`,background:dark===opt.d?'rgba(99,102,241,.12)':c.surf,cursor:'pointer',textAlign:'center',transition:'all .2s' }}><div style={{ fontSize:32,marginBottom:10 }}>{opt.i}</div><div style={{ fontSize:14,fontWeight:600,color:c.text }}>{opt.l} mode</div>{dark===opt.d&&<div style={{ fontSize:11,color:'#818CF8',marginTop:4 }}>✓ Active</div>}</div>)}</div></Card>)}
+          {tab==='appearance'&&(<Card style={{ padding:'28px' }}><h2 style={{ fontSize:16,fontWeight:700,color:c.text,marginBottom:20 }}>Appearance</h2><div style={{ display:'flex',gap:14 }}>{[{l:'Dark',i:'🌙',d:true},{l:'Light',i:'☀️',d:false}].map(opt=><div key={opt.l} onClick={()=>opt.d!==dark&&toggle()} style={{ flex:1,padding:'20px',borderRadius:14,border:`2px solid ${dark===opt.d?'#0070F3':c.bord}`,background:dark===opt.d?'rgba(0,112,243,.12)':c.surf,cursor:'pointer',textAlign:'center',transition:'all .2s' }}><div style={{ fontSize:32,marginBottom:10 }}>{opt.i}</div><div style={{ fontSize:14,fontWeight:600,color:c.text }}>{opt.l} mode</div>{dark===opt.d&&<div style={{ fontSize:11,color:'#3B9EFF',marginTop:4 }}>✓ Active</div>}</div>)}</div></Card>)}
           {tab==='notifications'&&(
             <div>
               <Card style={{ padding:'28px',marginBottom:14 }}>
@@ -3388,7 +3421,7 @@ function SettingsPage({ session, onBack, onSaved, team, members = [], setMembers
                       <div style={{ fontSize:14,fontWeight:600,color:c.text,marginBottom:2 }}>{n.label}</div>
                       <div style={{ fontSize:12,color:c.mut }}>{n.sub}</div>
                     </div>
-                    <button onClick={()=>n.set(!n.val)} style={{ width:44,height:24,borderRadius:12,border:'none',background:n.val?'#6366F1':'rgba(128,128,128,.25)',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0 }}>
+                    <button onClick={()=>n.set(!n.val)} style={{ width:44,height:24,borderRadius:12,border:'none',background:n.val?'#0070F3':'rgba(128,128,128,.25)',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0 }}>
                       <div style={{ width:18,height:18,borderRadius:'50%',background:'#fff',position:'absolute',top:3,left:n.val?23:3,transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,.2)' }}/>
                     </button>
                   </div>
@@ -3403,7 +3436,7 @@ function SettingsPage({ session, onBack, onSaved, team, members = [], setMembers
                 ) : notifPerm==='unsupported' ? (
                   <div style={{ marginTop:14,fontSize:13,color:c.mut,background:c.row,borderRadius:8,padding:'10px 14px' }}>This browser doesn't support desktop notifications.</div>
                 ) : (
-                  <button onClick={requestNotif} style={{ marginTop:14,fontSize:13,color:'#818CF8',background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.25)',borderRadius:8,cursor:'pointer',padding:'8px 14px',fontWeight:600 }}>Enable desktop notifications</button>
+                  <button onClick={requestNotif} style={{ marginTop:14,fontSize:13,color:'#3B9EFF',background:'rgba(0,112,243,.1)',border:'1px solid rgba(0,112,243,.25)',borderRadius:8,cursor:'pointer',padding:'8px 14px',fontWeight:600 }}>Enable desktop notifications</button>
                 )}
               </Card>
               <RemindersPanel/>
@@ -3433,7 +3466,7 @@ function MemberTaskCard({ task, user, onStatus, onBlocker }) {
             <div style={{ display:'flex',flexWrap:'wrap',gap:5 }}><PBadge priority={task.priority}/><SBadge status={task.status}/>{task.timeline&&<span style={{ fontSize:10,color:c.mut,background:'rgba(128,128,128,.1)',padding:'3px 8px',borderRadius:20 }}>🕐 {task.timeline}</span>}</div>
           </div>
         </div>
-        {task.manager_note&&<div style={{ padding:'8px 12px',background:'rgba(129,140,248,.1)',border:'1px solid rgba(129,140,248,.2)',borderRadius:8,fontSize:12,color:c.sub,marginTop:8 }}><span style={{ color:'#818CF8',fontWeight:700 }}>📌 Note: </span>{task.manager_note}</div>}
+        {task.manager_note&&<div style={{ padding:'8px 12px',background:'rgba(129,140,248,.1)',border:'1px solid rgba(129,140,248,.2)',borderRadius:8,fontSize:12,color:c.sub,marginTop:8 }}><span style={{ color:'#3B9EFF',fontWeight:700 }}>📌 Note: </span>{task.manager_note}</div>}
         {task.blocker&&<div style={{ padding:'8px 12px',background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:8,fontSize:12,color:'#F87171',marginTop:8 }}><span style={{ fontWeight:700 }}>⚠️ Blocker: </span>{task.blocker}</div>}
       </div>
       <div style={{ padding:'0 16px 12px',display:'flex',gap:6,flexWrap:'wrap' }}>
@@ -3455,7 +3488,7 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
   const TL=['Today noon (12 PM)','Today 3 PM','Today EOD (6 PM)','Tomorrow morning','Tomorrow EOD','This week','Custom...'];
   const [title,setTitle]=useState(''); const [priority,setPriority]=useState('medium'); const [tl,setTl]=useState('Today EOD (6 PM)'); const [custom,setCustom]=useState(''); const [showCustom,setShowCustom]=useState(false); const [notes,setNotes]=useState('');
   const [activeTab,setActiveTab]=useState('tasks');
-  const color=myMember?.color||'#818CF8';
+  const color=myMember?.color||'#3B9EFF';
   const submit=()=>{ if(!title.trim())return; onAdd({title:title.trim(),assignee_email:user.email,assignee_name:user.name||user.email,priority,status:'todo',timeline:showCustom?custom:tl,notes,manager_note:'',blocker:''}); setTitle('');setPriority('medium');setTl('Today EOD (6 PM)');setNotes('');setShowCustom(false);setCustom(''); };
   const hTl=v=>{ if(v==='Custom...'){setShowCustom(true);setTl('');}else{setShowCustom(false);setTl(v);}};
   const TABS=[
@@ -3487,7 +3520,7 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
               return(
                 <button key={t.id} onClick={()=>setActiveTab(t.id)}
                   className="ss-tip" data-tip={t.l}
-                  style={{ padding:'6px 8px',borderRadius:9,border:'none',background:isA?'rgba(124,110,245,.16)':'transparent',color:isA?'#C4B5FD':c.mut,cursor:'pointer',fontWeight:isA?600:400,display:'flex',alignItems:'center',gap:5,transition:'all .15s',whiteSpace:'nowrap',flexShrink:0,position:'relative' }}>
+                  style={{ padding:'6px 8px',borderRadius:9,border:'none',background:isA?'rgba(0,112,243,.16)':'transparent',color:isA?'#C4B5FD':c.mut,cursor:'pointer',fontWeight:isA?600:400,display:'flex',alignItems:'center',gap:5,transition:'all .15s',whiteSpace:'nowrap',flexShrink:0,position:'relative' }}>
                   <span style={{ fontSize:16,lineHeight:1,transition:'transform .15s' }}>{t.ic}</span>
                   {isA&&<span style={{ fontSize:11 }}>{t.l}</span>}
                 </button>
@@ -3508,7 +3541,7 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
             </div>
             {mine.length>0&&(<>
               <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:16 }}>
-                <StatCard label="Total" value={mine.length} color="#818CF8"/><StatCard label="In progress" value={mine.filter(t=>t.status==='in-progress').length} color="#38BDF8"/><StatCard label="Done" value={done} color="#34D399"/><StatCard label="Blocked" value={mine.filter(t=>t.status==='blocked').length} color={mine.some(t=>t.status==='blocked')?'#EF4444':'#34D399'}/>
+                <StatCard label="Total" value={mine.length} color="#3B9EFF"/><StatCard label="In progress" value={mine.filter(t=>t.status==='in-progress').length} color="#38BDF8"/><StatCard label="Done" value={done} color="#34D399"/><StatCard label="Blocked" value={mine.filter(t=>t.status==='blocked').length} color={mine.some(t=>t.status==='blocked')?'#EF4444':'#34D399'}/>
               </div>
               <Card style={{ padding:'14px 18px',marginBottom:20 }}>
                 <div style={{ display:'flex',justifyContent:'space-between',marginBottom:8 }}><span style={{ fontSize:13,color:c.mut }}>Today's progress</span><span style={{ fontSize:13,fontWeight:700,color }}>{pct}% · {done}/{mine.length}</span></div>
@@ -3557,7 +3590,7 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
               <Card key={t.id} style={{ padding:'12px 16px',marginBottom:8,display:'flex',alignItems:'center',gap:12,opacity:t.done?.65:1 }}>
                 <button onClick={()=>toggleSelf(t.id)} style={{ width:22,height:22,borderRadius:'50%',flexShrink:0,border:`2px solid ${t.done?'#34D399':'rgba(128,128,128,.35)'}`,background:t.done?'#34D399':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center' }}>{t.done&&<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}</button>
                 <span style={{ flex:1,fontSize:13,color:t.done?c.mut:c.text,textDecoration:t.done?'line-through':'none' }}>{t.title}</span>
-                <span style={{ fontSize:10,padding:'2px 8px',borderRadius:20,background:'rgba(99,102,241,.1)',color:'#818CF8' }}>{t.priority}</span>
+                <span style={{ fontSize:10,padding:'2px 8px',borderRadius:20,background:'rgba(0,112,243,.1)',color:'#3B9EFF' }}>{t.priority}</span>
                 <button onClick={()=>deleteSelf(t.id)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:14,opacity:.5 }}>🗑</button>
               </Card>
             ))}
@@ -3577,7 +3610,7 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
               <h2 style={{ fontSize:18,fontWeight:700,color:c.text,marginBottom:16 }}>📊 My overview</h2>
               {/* Progress ring area */}
               <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:16 }}>
-                {[{l:'Total',v:total,c:'#818CF8',i:'📋'},{l:'Done',v:doneCnt,c:'#34D399',i:'✅'},{l:'In progress',v:inProg,c:'#38BDF8',i:'⚡'},{l:'Blocked',v:blkd,c:blkd>0?'#EF4444':'#34D399',i:blkd>0?'⚠️':'✓'}].map(s=>(
+                {[{l:'Total',v:total,c:'#3B9EFF',i:'📋'},{l:'Done',v:doneCnt,c:'#34D399',i:'✅'},{l:'In progress',v:inProg,c:'#38BDF8',i:'⚡'},{l:'Blocked',v:blkd,c:blkd>0?'#EF4444':'#34D399',i:blkd>0?'⚠️':'✓'}].map(s=>(
                   <Card key={s.l} style={{ padding:'16px',textAlign:'center' }}>
                     <div style={{ fontSize:24,marginBottom:6 }}>{s.i}</div>
                     <div style={{ fontSize:28,fontWeight:800,color:s.c,marginBottom:4 }}>{s.v}</div>
@@ -3589,21 +3622,21 @@ function MemberView({ user, myMember, tasks, onAdd, onStatus, onBlocker, onBack,
               <Card style={{ padding:'16px 20px',marginBottom:16 }}>
                 <div style={{ display:'flex',justifyContent:'space-between',marginBottom:8 }}>
                   <span style={{ fontSize:13,fontWeight:600,color:c.text }}>Today's completion</span>
-                  <span style={{ fontSize:13,fontWeight:700,color:pctDone>=80?'#34D399':pctDone>=50?'#818CF8':'#F97316' }}>{pctDone}%</span>
+                  <span style={{ fontSize:13,fontWeight:700,color:pctDone>=80?'#34D399':pctDone>=50?'#3B9EFF':'#F97316' }}>{pctDone}%</span>
                 </div>
-                <Bar pct={pctDone} h={10} color="linear-gradient(90deg,#6366F1,#34D399)"/>
+                <Bar pct={pctDone} h={10} color="linear-gradient(90deg,#0070F3,#34D399)"/>
                 <div style={{ display:'flex',gap:16,marginTop:12 }}>
-                  {Object.entries(byPri).map(([p,v])=>v>0&&<div key={p} style={{ fontSize:12,color:c.mut }}><span style={{ fontSize:11,padding:'1px 7px',borderRadius:20,background:'rgba(99,102,241,.1)',color:'#818CF8',marginRight:4 }}>{p}</span>{v}</div>)}
+                  {Object.entries(byPri).map(([p,v])=>v>0&&<div key={p} style={{ fontSize:12,color:c.mut }}><span style={{ fontSize:11,padding:'1px 7px',borderRadius:20,background:'rgba(0,112,243,.1)',color:'#3B9EFF',marginRight:4 }}>{p}</span>{v}</div>)}
                 </div>
               </Card>
               {/* Self tasks summary */}
               <Card style={{ padding:'16px 20px',marginBottom:16 }}>
                 <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8 }}>
                   <span style={{ fontSize:13,fontWeight:600,color:c.text }}>✨ Personal tasks</span>
-                  <button onClick={()=>setActiveTab('self')} style={{ fontSize:12,color:'#818CF8',background:'none',border:'none',cursor:'pointer' }}>Manage →</button>
+                  <button onClick={()=>setActiveTab('self')} style={{ fontSize:12,color:'#3B9EFF',background:'none',border:'none',cursor:'pointer' }}>Manage →</button>
                 </div>
-                <div style={{ fontSize:24,fontWeight:800,color:'#818CF8',marginBottom:4 }}>{selfDone}/{selfTasks.length}</div>
-                <Bar pct={selfTasks.length?Math.round(selfDone/selfTasks.length*100):0} h={6} color="#818CF8"/>
+                <div style={{ fontSize:24,fontWeight:800,color:'#3B9EFF',marginBottom:4 }}>{selfDone}/{selfTasks.length}</div>
+                <Bar pct={selfTasks.length?Math.round(selfDone/selfTasks.length*100):0} h={6} color="#3B9EFF"/>
               </Card>
               {/* Task list split by status */}
               {blkd>0&&<Card style={{ padding:'14px 18px',marginBottom:12,border:'1px solid rgba(239,68,68,.25)',background:'rgba(239,68,68,.04)' }}>
@@ -3635,16 +3668,16 @@ function LiveTab({ tasks: allTasks, members, onStatus, onPriority, onNote, onAdd
   return (
     <div>
       <div style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:20 }}>
-        <StatCard label="Total" value={total} color="#818CF8" icon="📋"/><StatCard label="To do" value={todo} color="#94A3B8" icon="⭕"/><StatCard label="In progress" value={inProg} color="#38BDF8" icon="⚡"/><StatCard label="Done" value={done} color="#34D399" icon="✅"/><StatCard label="Blocked" value={blocked} color={blocked>0?'#EF4444':'#34D399'} icon="⚠️" sub={blocked>0?'needs attention':'all clear'}/>
+        <StatCard label="Total" value={total} color="#3B9EFF" icon="📋"/><StatCard label="To do" value={todo} color="#94A3B8" icon="⭕"/><StatCard label="In progress" value={inProg} color="#38BDF8" icon="⚡"/><StatCard label="Done" value={done} color="#34D399" icon="✅"/><StatCard label="Blocked" value={blocked} color={blocked>0?'#EF4444':'#34D399'} icon="⚠️" sub={blocked>0?'needs attention':'all clear'}/>
       </div>
-      {total>0&&<Card style={{ padding:'14px 18px',marginBottom:16 }}><div style={{ display:'flex',justifyContent:'space-between',marginBottom:8 }}><span style={{ fontSize:13,color:c.mut }}>Team progress{!isManager?<span style={{ color:c.mut }}> · you: {myDone}/{tasks.length} done</span>:''}</span><span style={{ fontSize:13,fontWeight:700,color:'#818CF8' }}>{pct}% · {done}/{total}</span></div><Bar pct={pct} h={8} color="linear-gradient(90deg,#6366F1,#34D399)"/></Card>}
+      {total>0&&<Card style={{ padding:'14px 18px',marginBottom:16 }}><div style={{ display:'flex',justifyContent:'space-between',marginBottom:8 }}><span style={{ fontSize:13,color:c.mut }}>Team progress{!isManager?<span style={{ color:c.mut }}> · you: {myDone}/{tasks.length} done</span>:''}</span><span style={{ fontSize:13,fontWeight:700,color:'#3B9EFF' }}>{pct}% · {done}/{total}</span></div><Bar pct={pct} h={8} color="linear-gradient(90deg,#0070F3,#34D399)"/></Card>}
       <Card style={{ overflow:'hidden' }}>
         <div style={{ padding:'12px 16px',borderBottom:`1px solid ${c.bord}`,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center' }}>
-          <div style={{ display:'flex',gap:5,flex:1,flexWrap:'wrap',alignItems:'center' }}>{!isManager&&<span style={{ fontSize:12.5,fontWeight:700,color:c.text,marginRight:4 }}>My tasks</span>}{(isManager?[{v:'all',l:'All'},...members.map(m=>({v:m.email,l:(m.name||m.email).split(' ')[0]}))]:[]).map(f=><button key={f.v} onClick={()=>setFu(f.v)} style={{ fontSize:12,padding:'5px 12px',borderRadius:20,border:`1px solid ${c.bord}`,background:fu===f.v?'rgba(129,140,248,.2)':'transparent',color:fu===f.v?'#818CF8':c.mut,cursor:'pointer',fontWeight:fu===f.v?700:400,transition:'all .15s' }}>{f.l}</button>)}</div>
+          <div style={{ display:'flex',gap:5,flex:1,flexWrap:'wrap',alignItems:'center' }}>{!isManager&&<span style={{ fontSize:12.5,fontWeight:700,color:c.text,marginRight:4 }}>My tasks</span>}{(isManager?[{v:'all',l:'All'},...members.map(m=>({v:m.email,l:(m.name||m.email).split(' ')[0]}))]:[]).map(f=><button key={f.v} onClick={()=>setFu(f.v)} style={{ fontSize:12,padding:'5px 12px',borderRadius:20,border:`1px solid ${c.bord}`,background:fu===f.v?'rgba(129,140,248,.2)':'transparent',color:fu===f.v?'#3B9EFF':c.mut,cursor:'pointer',fontWeight:fu===f.v?700:400,transition:'all .15s' }}>{f.l}</button>)}</div>
           <div style={{ display:'flex',gap:5 }}>{['all','todo','in-progress','done','blocked'].map(s=><button key={s} onClick={()=>setFs(s)} style={{ fontSize:11,padding:'4px 10px',borderRadius:20,border:`1px solid ${c.bord}`,background:fs===s?'rgba(128,128,128,.12)':'transparent',color:c.mut,cursor:'pointer',fontWeight:fs===s?700:400,textTransform:'capitalize' }}>{s==='all'?'All':s.replace('-',' ')}</button>)}</div>
           {isManager
-            ? <Btn onClick={()=>setShowModal(true)} style={{ padding:'7px 14px',fontSize:12,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',flexShrink:0 }}>+ Assign task</Btn>
-            : <Btn onClick={()=>setShowModal(true)} style={{ padding:'7px 14px',fontSize:12,background:'linear-gradient(135deg,#6366F1,#818CF8)',border:'none',flexShrink:0 }}>+ Add my task</Btn>}
+            ? <Btn onClick={()=>setShowModal(true)} style={{ padding:'7px 14px',fontSize:12,background:'linear-gradient(135deg,#0070F3,#3B9EFF)',border:'none',flexShrink:0 }}>+ Assign task</Btn>
+            : <Btn onClick={()=>setShowModal(true)} style={{ padding:'7px 14px',fontSize:12,background:'linear-gradient(135deg,#0070F3,#3B9EFF)',border:'none',flexShrink:0 }}>+ Add my task</Btn>}
         </div>
         {filtered.length===0?<div style={{ padding:'40px',textAlign:'center',color:c.mut,fontSize:14 }}>{(isManager?total:tasks.length)===0?(isManager?'⏳ Waiting for team to add tasks...':'You have no tasks yet — add one above.'):'No tasks match this filter'}</div>
           :filtered.map(t=><MgrRow key={t.id} task={t} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onDelete={onDelete} session={session} isManager={isManager}/>)}
@@ -3670,7 +3703,7 @@ function MgrRow({ task, members, onStatus, onPriority, onNote, onDelete, session
         </button>
         <div style={{ width:7,height:7,borderRadius:'50%',background:p.color,flexShrink:0 }}/>
         <span style={{ flex:1,fontSize:13,color:task.status==='done'?c.mut:c.text,textDecoration:task.status==='done'?'line-through':'none',lineHeight:1.4 }}>{task.title}</span>
-        {task.label&&<span style={{ fontSize:10,fontWeight:700,color:task.label_color||'#6366F1',background:(task.label_color||'#6366F1')+'1f',border:`1px solid ${(task.label_color||'#6366F1')}44`,padding:'2px 8px',borderRadius:6,whiteSpace:'nowrap' }}>{task.label}</span>}
+        {task.label&&<span style={{ fontSize:10,fontWeight:700,color:task.label_color||'#0070F3',background:(task.label_color||'#0070F3')+'1f',border:`1px solid ${(task.label_color||'#0070F3')}44`,padding:'2px 8px',borderRadius:6,whiteSpace:'nowrap' }}>{task.label}</span>}
         {task._carriedOver&&<span className="ss-tip" data-tip={'Carried over from '+(task._standupDate||'a previous day')+' — still unfinished'} style={{ fontSize:10,fontWeight:700,color:'#DC2626',background:'rgba(220,38,38,.12)',border:'1px solid rgba(220,38,38,.3)',padding:'2px 7px',borderRadius:6,whiteSpace:'nowrap',display:'inline-flex',alignItems:'center',gap:3 }}>⚠️ Backlog</span>}
         {task.blocker&&<span style={{ fontSize:10,color:'#F87171',background:'rgba(239,68,68,.12)',border:'1px solid rgba(239,68,68,.25)',padding:'2px 7px',borderRadius:6,whiteSpace:'nowrap' }}>⚠️ Blocked</span>}
         {task.timeline&&<span style={{ fontSize:11,color:c.mut,whiteSpace:'nowrap' }}>🕐 {task.timeline}</span>}
@@ -3688,7 +3721,7 @@ function MgrRow({ task, members, onStatus, onPriority, onNote, onDelete, session
         <select value={task.priority} onChange={e=>onPriority(task.id,e.target.value)} style={{ background:'transparent',border:'none',color:p.color,fontSize:10,cursor:'pointer',outline:'none',fontWeight:700,letterSpacing:'.05em',textTransform:'uppercase' }}>
           {['critical','high','medium','low'].map(v=><option key={v} value={v} style={{ background:c.dark?'#0D0B24':'#fff',color:c.text }}>{v}</option>)}
         </select>
-        <button onClick={()=>setShowN(!showN)} style={{ background:task.manager_note?'rgba(129,140,248,.15)':'transparent',border:task.manager_note?'1px solid rgba(129,140,248,.3)':`1px solid ${c.bord}`,borderRadius:6,cursor:'pointer',padding:'3px 6px',color:task.manager_note?'#818CF8':c.mut,fontSize:12 }}>📌</button>
+        <button onClick={()=>setShowN(!showN)} style={{ background:task.manager_note?'rgba(129,140,248,.15)':'transparent',border:task.manager_note?'1px solid rgba(129,140,248,.3)':`1px solid ${c.bord}`,borderRadius:6,cursor:'pointer',padding:'3px 6px',color:task.manager_note?'#3B9EFF':c.mut,fontSize:12 }}>📌</button>
         {onDelete&&<button onClick={()=>{ if(window.confirm('Delete this task?')) onDelete(task.id); }} title="Delete task" style={{ background:'transparent',border:`1px solid ${c.bord}`,borderRadius:6,cursor:'pointer',padding:'3px 7px',color:c.mut,fontSize:12 }} onMouseEnter={e=>{e.currentTarget.style.color='#F87171';e.currentTarget.style.borderColor='rgba(239,68,68,.3)';}} onMouseLeave={e=>{e.currentTarget.style.color=c.mut;e.currentTarget.style.borderColor=c.bord;}}>🗑</button>}
       </div>
       {task.blocker&&<div style={{ padding:'0 16px 10px 54px' }}><div style={{ fontSize:12,color:'#F87171',background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.2)',borderRadius:8,padding:'8px 12px' }}>⚠️ {task.blocker}</div></div>}
@@ -3704,7 +3737,7 @@ function AssignModal({ members, onClose, onAdd, isManager = true, session }) {
   const [title,setTitle]=useState(''); const [assignee,setAssignee]=useState(isManager?(members[0]?.email||''):myEmail); const [priority,setPriority]=useState('medium'); const [timeline,setTimeline]=useState('Today EOD (6 PM)'); const [note,setNote]=useState('');
   const [schedOn,setSchedOn]=useState(false); const [sDate,setSDate]=useState(()=>new Date().toISOString().slice(0,10)); const [sStart,setSStart]=useState('10:00'); const [sEnd,setSEnd]=useState('12:00');
   const [schedTouched,setSchedTouched]=useState(false); // once the user hand-edits, stop auto-deriving
-  const [labelId,setLabelId]=useState(''); const [customLabel,setCustomLabel]=useState(''); const [customColor,setCustomColor]=useState('#6366F1');
+  const [labelId,setLabelId]=useState(''); const [customLabel,setCustomLabel]=useState(''); const [customColor,setCustomColor]=useState('#0070F3');
 
   // Translate the chosen timeline into a concrete date + start/end window.
   // Start = now (when the task is assigned); End = the deadline the timeline implies.
@@ -3754,7 +3787,7 @@ function AssignModal({ members, onClose, onAdd, isManager = true, session }) {
     </div>
     <div style={{ marginBottom:14 }}>
       <label style={{ display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontSize:13,color:c.sub }}>
-        <input type="checkbox" checked={schedOn} onChange={e=>enableSched(e.target.checked)} style={{ accentColor:'#6366F1' }}/>
+        <input type="checkbox" checked={schedOn} onChange={e=>enableSched(e.target.checked)} style={{ accentColor:'#0070F3' }}/>
         Add a time block to the calendar
       </label>
       {schedOn&&<>
@@ -3811,7 +3844,7 @@ function MemberCard({ member, tasks = [], teamId = 'demo', isManager, session, o
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-        {[{ l: 'Completed', v: done, col: '#34D399' }, { l: 'Open', v: open.length, col: '#818CF8' }, { l: 'Blocked', v: blocked, col: blocked ? '#EF4444' : '#94A3B8' }].map(s => (
+        {[{ l: 'Completed', v: done, col: '#34D399' }, { l: 'Open', v: open.length, col: '#3B9EFF' }, { l: 'Blocked', v: blocked, col: blocked ? '#EF4444' : '#94A3B8' }].map(s => (
           <div key={s.l} style={{ flex: 1, textAlign: 'center', padding: '12px 8px', borderRadius: 12, background: c.row }}>
             <div style={{ fontSize: 20, fontWeight: 800, color: s.col }}>{s.v}</div>
             <div style={{ fontSize: 10.5, color: c.mut, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>{s.l}</div>
@@ -3827,7 +3860,7 @@ function MemberCard({ member, tasks = [], teamId = 'demo', isManager, session, o
               <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: c.sub, padding: '7px 11px', borderRadius: 9, background: c.row }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: getPriority(t.priority).color, flexShrink: 0 }}/>
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title || t.text}</span>
-                {t.label && <span style={{ fontSize: 9.5, fontWeight: 700, color: t.label_color || '#6366F1' }}>{t.label}</span>}
+                {t.label && <span style={{ fontSize: 9.5, fontWeight: 700, color: t.label_color || '#0070F3' }}>{t.label}</span>}
               </div>
             ))}
           </div>
@@ -3843,7 +3876,7 @@ function MemberCard({ member, tasks = [], teamId = 'demo', isManager, session, o
               <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Role</div>
               <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
                 {[['member', 'Member'], ['team_lead', 'Team Lead'], ['manager', 'Manager']].map(([v, l]) => (
-                  <button key={v} onClick={() => setRoleVal(v)} style={{ flex: 1, padding: '8px 6px', borderRadius: 9, border: `1px solid ${roleVal === v ? '#6366F1' : c.bord}`, background: roleVal === v ? 'rgba(99,102,241,.1)' : 'transparent', color: roleVal === v ? '#6366F1' : c.sub, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>{l}</button>
+                  <button key={v} onClick={() => setRoleVal(v)} style={{ flex: 1, padding: '8px 6px', borderRadius: 9, border: `1px solid ${roleVal === v ? '#0070F3' : c.bord}`, background: roleVal === v ? 'rgba(0,112,243,.1)' : 'transparent', color: roleVal === v ? '#0070F3' : c.sub, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>{l}</button>
                 ))}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -3907,7 +3940,7 @@ function TeamTab({ tasks, members, isManager = true, teamId = 'demo', session, o
       {/* Team summary strip — composition & availability (NOT task metrics) */}
       <div style={{ display:'flex',gap:12,flexWrap:'wrap',marginBottom:18 }}>
         {[
-          {l:'Members',v:members.length,col:'#818CF8'},
+          {l:'Members',v:members.length,col:'#3B9EFF'},
           {l:'Managers',v:managers.length,col:'#A78BFA'},
           {l:'Team leads',v:leads.length,col:'#38BDF8'},
           {l:'Online now',v:members.filter(m=>presence(m.email).label==='Online').length,col:'#34D399'},
@@ -4235,7 +4268,7 @@ function MemberReportThread({ teamId, myEmail, myName, today }) {
   };
 
   return (
-    <div style={{ marginTop: 16, borderRadius: 14, background: c.surf, border: '1px solid rgba(99,102,241,.25)', overflow: 'hidden' }}>
+    <div style={{ marginTop: 16, borderRadius: 14, background: c.surf, border: '1px solid rgba(0,112,243,.25)', overflow: 'hidden' }}>
       <div style={{ padding: '12px 18px', borderBottom: `1px solid ${c.bord}`, fontSize: 13, fontWeight: 700, color: c.text }}>💬 Questions from your manager</div>
       <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         {entry.questions.map(q => (
@@ -4339,9 +4372,9 @@ function ReportsTab({ team, members = [], session }) {
 
           {/* Day filter */}
           <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-            <button onClick={() => setDayFilter('all')} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 20, border: `1px solid ${c.bord}`, background: dayFilter === 'all' ? 'rgba(99,102,241,.15)' : 'transparent', color: dayFilter === 'all' ? '#818CF8' : c.mut, cursor: 'pointer', fontWeight: dayFilter === 'all' ? 700 : 400 }}>All</button>
+            <button onClick={() => setDayFilter('all')} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 20, border: `1px solid ${c.bord}`, background: dayFilter === 'all' ? 'rgba(0,112,243,.15)' : 'transparent', color: dayFilter === 'all' ? '#3B9EFF' : c.mut, cursor: 'pointer', fontWeight: dayFilter === 'all' ? 700 : 400 }}>All</button>
             {days.map(d => (
-              <button key={d} onClick={() => setDayFilter(d)} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 20, border: `1px solid ${c.bord}`, background: dayFilter === d ? 'rgba(99,102,241,.15)' : 'transparent', color: dayFilter === d ? '#818CF8' : c.mut, cursor: 'pointer', fontWeight: dayFilter === d ? 700 : 400 }}>{new Date(d + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</button>
+              <button key={d} onClick={() => setDayFilter(d)} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 20, border: `1px solid ${c.bord}`, background: dayFilter === d ? 'rgba(0,112,243,.15)' : 'transparent', color: dayFilter === d ? '#3B9EFF' : c.mut, cursor: 'pointer', fontWeight: dayFilter === d ? 700 : 400 }}>{new Date(d + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</button>
             ))}
           </div>
 
@@ -4401,9 +4434,9 @@ function ReportsTab({ team, members = [], session }) {
 
 function PerfTab({ tasks, history, members }) {
   const c=useC(); const allDays=useMemo(()=>[...history,{id:'today',date:TODAY(),tasks}],[history,tasks]);
-  const stats=useMemo(()=>members.map(member=>{ const all=allDays.flatMap(d=>(d.tasks||[]).filter(t=>t.assignee_email===member.email)); const total=all.length,done=all.filter(t=>t.status==='done').length,blocked=all.filter(t=>t.status==='blocked'||t.blocker).length; const rate=total?Math.round(done/total*100):0,activeDays=allDays.filter(d=>(d.tasks||[]).some(t=>t.assignee_email===member.email)).length,avg=activeDays?+(total/activeDays).toFixed(1):0; const week=history.slice(0,7).map(d=>{const dt=(d.tasks||[]).filter(t=>t.assignee_email===member.email);if(!dt.length)return null;return{date:d.date,pct:Math.round(dt.filter(x=>x.status==='done').length/dt.length*100)};}).filter(Boolean).reverse(); const bscore=total?Math.round((total-blocked)/total*100):100,consist=Math.min(100,Math.round(activeDays/Math.max(allDays.length,1)*100)),score=Math.round(rate*.6+consist*.2+bscore*.2); const grade=score>=90?'A':score>=75?'B':score>=60?'C':score>=40?'D':'F',gc=score>=90?'#34D399':score>=75?'#818CF8':score>=60?'#F59E0B':'#EF4444'; const tod=tasks.filter(t=>t.assignee_email===member.email),tdone=tod.filter(t=>t.status==='done').length; return{member,total,done,blocked,rate,avg,week,score,grade,gc,tod,tdone,todPct:tod.length?Math.round(tdone/tod.length*100):0}; }),[allDays,members,tasks,history]);
+  const stats=useMemo(()=>members.map(member=>{ const all=allDays.flatMap(d=>(d.tasks||[]).filter(t=>t.assignee_email===member.email)); const total=all.length,done=all.filter(t=>t.status==='done').length,blocked=all.filter(t=>t.status==='blocked'||t.blocker).length; const rate=total?Math.round(done/total*100):0,activeDays=allDays.filter(d=>(d.tasks||[]).some(t=>t.assignee_email===member.email)).length,avg=activeDays?+(total/activeDays).toFixed(1):0; const week=history.slice(0,7).map(d=>{const dt=(d.tasks||[]).filter(t=>t.assignee_email===member.email);if(!dt.length)return null;return{date:d.date,pct:Math.round(dt.filter(x=>x.status==='done').length/dt.length*100)};}).filter(Boolean).reverse(); const bscore=total?Math.round((total-blocked)/total*100):100,consist=Math.min(100,Math.round(activeDays/Math.max(allDays.length,1)*100)),score=Math.round(rate*.6+consist*.2+bscore*.2); const grade=score>=90?'A':score>=75?'B':score>=60?'C':score>=40?'D':'F',gc=score>=90?'#34D399':score>=75?'#3B9EFF':score>=60?'#F59E0B':'#EF4444'; const tod=tasks.filter(t=>t.assignee_email===member.email),tdone=tod.filter(t=>t.status==='done').length; return{member,total,done,blocked,rate,avg,week,score,grade,gc,tod,tdone,todPct:tod.length?Math.round(tdone/tod.length*100):0}; }),[allDays,members,tasks,history]);
   const sorted=[...stats].sort((a,b)=>b.score-a.score),top=sorted[0]; const totDone=stats.reduce((a,s)=>a+s.done,0),avgRate=stats.length?Math.round(stats.reduce((a,s)=>a+s.rate,0)/stats.length):0;
-  return(<div><div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20 }}><StatCard label="Days tracked" value={allDays.length} color="#818CF8" icon="📅"/><StatCard label="Total done" value={totDone} color="#34D399" icon="✅"/><StatCard label="Avg completion" value={avgRate+'%'} color="#F472B6" icon="🎯"/><StatCard label="Top performer" value={top?.member.name?.split(' ')[0]||'—'} color={top?.gc||'#818CF8'} sub={top?`Score: ${top.score}`:''} icon="🏆"/></div><Card style={{ padding:'18px 20px',marginBottom:20 }}><Lbl>Leaderboard</Lbl><div style={{ display:'flex',flexDirection:'column',gap:10 }}>{sorted.map((s,i)=><div key={s.member.id||s.member.email} style={{ display:'flex',alignItems:'center',gap:12 }}><div style={{ width:22,fontSize:13,fontWeight:700,color:i===0?'#FCD34D':i===1?'#94A3B8':i===2?'#CD7C2E':c.mut,textAlign:'center',flexShrink:0 }}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}`}</div><Av member={s.member} size={30} url={s.member.avatar_url}/><span style={{ fontSize:13,fontWeight:500,color:c.text,flex:1 }}>{s.member.name||s.member.email}</span><div style={{ width:120 }}><Bar pct={s.rate} color={s.gc} h={4}/></div><span style={{ fontSize:12,fontWeight:700,color:s.gc,width:36,textAlign:'right' }}>{s.rate}%</span><div style={{ width:28,height:28,borderRadius:8,background:s.gc+'20',border:`1px solid ${s.gc}40`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:800,color:s.gc }}>{s.grade}</div></div>)}</div></Card><div style={{ display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:14 }}>{stats.map(s=><Card key={s.member.id||s.member.email} style={{ padding:'20px 22px' }}><div style={{ display:'flex',alignItems:'center',gap:12,marginBottom:14 }}><Av member={s.member} size={44} url={s.member.avatar_url}/><div style={{ flex:1 }}><div style={{ fontSize:14,fontWeight:700,color:c.text }}>{s.member.name||s.member.email}</div></div><div style={{ position:'relative',width:56,height:56,flexShrink:0 }}><svg width="56" height="56" style={{ transform:'rotate(-90deg)' }}><circle cx="28" cy="28" r="20" fill="none" stroke="rgba(128,128,128,.15)" strokeWidth="4"/><circle cx="28" cy="28" r="20" fill="none" stroke={s.gc} strokeWidth="4" strokeLinecap="round" strokeDasharray={`${(s.score/100)*2*Math.PI*20} ${2*Math.PI*20}`}/></svg><div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center' }}><div style={{ fontSize:16,fontWeight:800,color:s.gc,lineHeight:1 }}>{s.grade}</div><div style={{ fontSize:9,color:c.mut,lineHeight:1 }}>{s.score}</div></div></div></div>{s.tod.length>0&&<div style={{ marginBottom:12 }}><div style={{ display:'flex',justifyContent:'space-between',marginBottom:5 }}><Lbl style={{ margin:0 }}>Today</Lbl><span style={{ fontSize:11,color:s.member.color||'#818CF8',fontWeight:700 }}>{s.tdone}/{s.tod.length}</span></div><Bar pct={s.todPct} color={s.member.color||'#818CF8'} h={4}/></div>}<div style={{ marginBottom:12 }}><div style={{ display:'flex',justifyContent:'space-between',marginBottom:5 }}><Lbl style={{ margin:0 }}>Overall</Lbl><span style={{ fontSize:11,color:s.gc,fontWeight:700 }}>{s.rate}%</span></div><Bar pct={s.rate} color={s.gc} h={4}/></div><div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8 }}>{[{l:'Done',v:s.done,col:'#34D399'},{l:'Avg/day',v:s.avg,col:'#818CF8'},{l:'Blockers',v:s.blocked,col:s.blocked>0?'#EF4444':'#34D399'}].map(x=><div key={x.l} style={{ background:'rgba(128,128,128,.07)',borderRadius:10,padding:10,textAlign:'center',border:`1px solid ${c.bord}` }}><div style={{ fontSize:18,fontWeight:800,color:x.col }}>{x.v}</div><div style={{ fontSize:9,color:c.mut,textTransform:'uppercase',letterSpacing:'.06em',marginTop:2 }}>{x.l}</div></div>)}</div>{s.week.length>0&&<><Lbl style={{ marginTop:12 }}>7-day trend</Lbl><div style={{ display:'flex',alignItems:'flex-end',gap:4,height:44 }}>{s.week.map((d,i)=><div key={i} style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3 }}><div style={{ width:'100%',height:Math.max(3,d.pct/100*36),borderRadius:3,background:d.pct===100?'#34D399':d.pct>=60?'#818CF8':'#F97316' }}/><div style={{ fontSize:9,color:c.mut }}>{new Date(d.date+'T12:00').toLocaleDateString('en',{weekday:'narrow'})}</div></div>)}</div></>}</Card>)}</div></div>);
+  return(<div><div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20 }}><StatCard label="Days tracked" value={allDays.length} color="#3B9EFF" icon="📅"/><StatCard label="Total done" value={totDone} color="#34D399" icon="✅"/><StatCard label="Avg completion" value={avgRate+'%'} color="#F472B6" icon="🎯"/><StatCard label="Top performer" value={top?.member.name?.split(' ')[0]||'—'} color={top?.gc||'#3B9EFF'} sub={top?`Score: ${top.score}`:''} icon="🏆"/></div><Card style={{ padding:'18px 20px',marginBottom:20 }}><Lbl>Leaderboard</Lbl><div style={{ display:'flex',flexDirection:'column',gap:10 }}>{sorted.map((s,i)=><div key={s.member.id||s.member.email} style={{ display:'flex',alignItems:'center',gap:12 }}><div style={{ width:22,fontSize:13,fontWeight:700,color:i===0?'#FCD34D':i===1?'#94A3B8':i===2?'#CD7C2E':c.mut,textAlign:'center',flexShrink:0 }}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}`}</div><Av member={s.member} size={30} url={s.member.avatar_url}/><span style={{ fontSize:13,fontWeight:500,color:c.text,flex:1 }}>{s.member.name||s.member.email}</span><div style={{ width:120 }}><Bar pct={s.rate} color={s.gc} h={4}/></div><span style={{ fontSize:12,fontWeight:700,color:s.gc,width:36,textAlign:'right' }}>{s.rate}%</span><div style={{ width:28,height:28,borderRadius:8,background:s.gc+'20',border:`1px solid ${s.gc}40`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:800,color:s.gc }}>{s.grade}</div></div>)}</div></Card><div style={{ display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:14 }}>{stats.map(s=><Card key={s.member.id||s.member.email} style={{ padding:'20px 22px' }}><div style={{ display:'flex',alignItems:'center',gap:12,marginBottom:14 }}><Av member={s.member} size={44} url={s.member.avatar_url}/><div style={{ flex:1 }}><div style={{ fontSize:14,fontWeight:700,color:c.text }}>{s.member.name||s.member.email}</div></div><div style={{ position:'relative',width:56,height:56,flexShrink:0 }}><svg width="56" height="56" style={{ transform:'rotate(-90deg)' }}><circle cx="28" cy="28" r="20" fill="none" stroke="rgba(128,128,128,.15)" strokeWidth="4"/><circle cx="28" cy="28" r="20" fill="none" stroke={s.gc} strokeWidth="4" strokeLinecap="round" strokeDasharray={`${(s.score/100)*2*Math.PI*20} ${2*Math.PI*20}`}/></svg><div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center' }}><div style={{ fontSize:16,fontWeight:800,color:s.gc,lineHeight:1 }}>{s.grade}</div><div style={{ fontSize:9,color:c.mut,lineHeight:1 }}>{s.score}</div></div></div></div>{s.tod.length>0&&<div style={{ marginBottom:12 }}><div style={{ display:'flex',justifyContent:'space-between',marginBottom:5 }}><Lbl style={{ margin:0 }}>Today</Lbl><span style={{ fontSize:11,color:s.member.color||'#3B9EFF',fontWeight:700 }}>{s.tdone}/{s.tod.length}</span></div><Bar pct={s.todPct} color={s.member.color||'#3B9EFF'} h={4}/></div>}<div style={{ marginBottom:12 }}><div style={{ display:'flex',justifyContent:'space-between',marginBottom:5 }}><Lbl style={{ margin:0 }}>Overall</Lbl><span style={{ fontSize:11,color:s.gc,fontWeight:700 }}>{s.rate}%</span></div><Bar pct={s.rate} color={s.gc} h={4}/></div><div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8 }}>{[{l:'Done',v:s.done,col:'#34D399'},{l:'Avg/day',v:s.avg,col:'#3B9EFF'},{l:'Blockers',v:s.blocked,col:s.blocked>0?'#EF4444':'#34D399'}].map(x=><div key={x.l} style={{ background:'rgba(128,128,128,.07)',borderRadius:10,padding:10,textAlign:'center',border:`1px solid ${c.bord}` }}><div style={{ fontSize:18,fontWeight:800,color:x.col }}>{x.v}</div><div style={{ fontSize:9,color:c.mut,textTransform:'uppercase',letterSpacing:'.06em',marginTop:2 }}>{x.l}</div></div>)}</div>{s.week.length>0&&<><Lbl style={{ marginTop:12 }}>7-day trend</Lbl><div style={{ display:'flex',alignItems:'flex-end',gap:4,height:44 }}>{s.week.map((d,i)=><div key={i} style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3 }}><div style={{ width:'100%',height:Math.max(3,d.pct/100*36),borderRadius:3,background:d.pct===100?'#34D399':d.pct>=60?'#3B9EFF':'#F97316' }}/><div style={{ fontSize:9,color:c.mut }}>{new Date(d.date+'T12:00').toLocaleDateString('en',{weekday:'narrow'})}</div></div>)}</div></>}</Card>)}</div></div>);
 }
 
 // ─── COMMITMENT TRACKING / RELIABILITY ───────────────────────────────────────
@@ -4682,7 +4715,7 @@ function ReliabilityTab({ tasks, members, history, team }) {
       <div style={{ marginBottom: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 5 }}>
           <h2 style={{ fontSize: 19, fontWeight: 800, color: c.text, margin: 0, letterSpacing: '-.01em' }}>Execution Reliability Engine</h2>
-          <span style={{ fontSize: 9.5, fontWeight: 800, color: '#6366F1', background: 'rgba(99,102,241,.12)', padding: '3px 8px', borderRadius: 6, letterSpacing: '.04em', textTransform: 'uppercase' }}>Signature</span>
+          <span style={{ fontSize: 9.5, fontWeight: 800, color: '#0070F3', background: 'rgba(0,112,243,.12)', padding: '3px 8px', borderRadius: 6, letterSpacing: '.04em', textTransform: 'uppercase' }}>Signature</span>
         </div>
         <p style={{ fontSize: 12.5, color: c.mut, lineHeight: 1.6, maxWidth: 720 }}>Who said they would do what, by when — and how often they actually deliver. Most tools track tasks; this tracks <strong>commitments, trust, and execution reliability</strong> across the team. Every owned task with a deadline becomes a commitment, scored when its deadline passes.</p>
       </div>
@@ -4696,7 +4729,7 @@ function ReliabilityTab({ tasks, members, history, team }) {
       ) : (
         <>
           {/* HERO — team trust score */}
-          <div style={{ borderRadius: 18, background: 'linear-gradient(135deg, rgba(99,102,241,.1), rgba(129,140,248,.03))', border: '1px solid rgba(99,102,241,.22)', padding: '24px 26px', marginBottom: 16, display: 'flex', gap: 28, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ borderRadius: 18, background: 'linear-gradient(135deg, rgba(0,112,243,.1), rgba(129,140,248,.03))', border: '1px solid rgba(0,112,243,.22)', padding: '24px 26px', marginBottom: 16, display: 'flex', gap: 28, alignItems: 'center', flexWrap: 'wrap' }}>
             <svg width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`} style={{ flexShrink: 0 }}>
               <circle cx={ringSize/2} cy={ringSize/2} r={r} fill="none" stroke="rgba(128,128,128,.15)" strokeWidth="11"/>
               <circle cx={ringSize/2} cy={ringSize/2} r={r} fill="none" stroke={scoreColor(teamScore)} strokeWidth="11" strokeLinecap="round"
@@ -4843,7 +4876,7 @@ function WeeklyExecSummary({ tasks, members, history, team }) {
       </div>
 
       {/* AI narrative */}
-      <div style={{ borderRadius: 16, background: 'linear-gradient(135deg, rgba(99,102,241,.1), rgba(129,140,248,.04))', border: '1px solid rgba(99,102,241,.22)', padding: '20px 22px', marginBottom: 16 }}>
+      <div style={{ borderRadius: 16, background: 'linear-gradient(135deg, rgba(0,112,243,.1), rgba(129,140,248,.04))', border: '1px solid rgba(0,112,243,.22)', padding: '20px 22px', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <span style={{ fontSize: 15 }}>✦</span>
           <span style={{ fontSize: 12, color: c.mut, textTransform: 'uppercase', letterSpacing: '.06em' }}>This week at {team?.name || 'your team'}</span>
@@ -5030,7 +5063,7 @@ function ElevateTab({ tasks, members, history, team }) {
                           </div>
                         </div>
                         <button onClick={() => { try { navigator.clipboard.writeText(`Recommended for ${m.name || m.email}: ${cat.course} (${cat.path}). Detected: ${r.cause}.`); } catch {} }}
-                          style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: '#6366F1', background: 'rgba(99,102,241,.1)', border: '1px solid rgba(99,102,241,.25)', borderRadius: 8, padding: '7px 14px', cursor: 'pointer' }}>
+                          style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: '#0070F3', background: 'rgba(0,112,243,.1)', border: '1px solid rgba(0,112,243,.25)', borderRadius: 8, padding: '7px 14px', cursor: 'pointer' }}>
                           Share recommendation
                         </button>
                       </div>
@@ -5079,9 +5112,9 @@ function TimeSavedTab({ tasks, members, history, team }) {
       </div>
 
       {/* Hero hours-saved */}
-      <div style={{ borderRadius: 18, background: 'linear-gradient(135deg, rgba(99,102,241,.12), rgba(129,140,248,.06))', border: '1px solid rgba(99,102,241,.25)', padding: '26px', marginBottom: 18, textAlign: 'center' }}>
+      <div style={{ borderRadius: 18, background: 'linear-gradient(135deg, rgba(0,112,243,.12), rgba(129,140,248,.06))', border: '1px solid rgba(0,112,243,.25)', padding: '26px', marginBottom: 18, textAlign: 'center' }}>
         <div style={{ fontSize: 12, color: c.mut, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 6 }}>Estimated time saved</div>
-        <div style={{ fontSize: 46, fontWeight: 800, color: '#6366F1', lineHeight: 1 }}>{hours} <span style={{ fontSize: 22 }}>hours</span></div>
+        <div style={{ fontSize: 46, fontWeight: 800, color: '#0070F3', lineHeight: 1 }}>{hours} <span style={{ fontSize: 22 }}>hours</span></div>
         <div style={{ fontSize: 12.5, color: c.sub, marginTop: 8 }}>≈ {Math.round(hours * 60)} minutes of manager overhead avoided</div>
       </div>
 
@@ -5116,7 +5149,7 @@ function TimeSavedTab({ tasks, members, history, team }) {
 
 function HistTab({ history, members }) {
   const c=useC(); const [open,setOpen]=useState(null); const fmt=d=>new Date(d+'T12:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  return(<div><div style={{ marginBottom:18 }}><h2 style={{ fontSize:18,fontWeight:700,color:c.text,marginBottom:4 }}>🕓 Standup history</h2><p style={{ fontSize:12.5,color:c.mut }}>A day-by-day archive of past standups. Open any day to see exactly what each person committed to and whether it was completed — your audit trail and time machine, distinct from Overview (today) and Performance (cumulative scores).</p></div>{history.length===0?<Card style={{ padding:'40px',textAlign:'center' }}><div style={{ fontSize:36,marginBottom:12 }}>📅</div><div style={{ color:c.mut,fontSize:14 }}>History appears after your first standup</div></Card>:history.map(s=>{ const t=s.tasks||[],d=t.filter(x=>x.status==='done').length,b=t.filter(x=>x.status==='blocked').length,pct=t.length?Math.round(d/t.length*100):0,isOpen=open===s.id; return(<Card key={s.id} style={{ marginBottom:10,overflow:'hidden' }}><button onClick={()=>setOpen(isOpen?null:s.id)} style={{ width:'100%',display:'flex',alignItems:'center',gap:12,padding:'14px 18px',background:'transparent',border:'none',cursor:'pointer',color:c.text }}><div style={{ width:7,height:7,borderRadius:'50%',background:pct===100?'#34D399':'#818CF8',flexShrink:0 }}/><span style={{ flex:1,fontSize:14,fontWeight:500,textAlign:'left' }}>{fmt(s.date)}</span>{b>0&&<span style={{ fontSize:11,color:'#F87171',background:'rgba(239,68,68,.12)',padding:'2px 8px',borderRadius:20 }}>⚠️ {b}</span>}<span style={{ fontSize:11,color:c.mut,background:'rgba(128,128,128,.1)',padding:'2px 10px',borderRadius:20 }}>{d}/{t.length} · {pct}%</span><span style={{ color:c.mut,transform:isOpen?'rotate(180deg)':'none',transition:'transform .2s',fontSize:16 }}>⌃</span></button>{isOpen&&<div style={{ borderTop:`1px solid ${c.bord}` }}>{t.map(task=>{ const m=members.find(x=>x.email===task.assignee_email); return(<div key={task.id} style={{ display:'flex',alignItems:'center',gap:10,padding:'9px 18px',borderBottom:`1px solid ${c.bord}` }}><div style={{ width:6,height:6,borderRadius:'50%',background:getPriority(task.priority).color,flexShrink:0 }}/><span style={{ flex:1,fontSize:12,color:task.status==='done'?c.mut:c.sub,textDecoration:task.status==='done'?'line-through':'none' }}>{task.title}</span>{task.timeline&&<span style={{ fontSize:10,color:c.mut }}>{task.timeline}</span>}{m&&<Av member={m} size={22}/>}<SBadge status={task.status}/></div>); })}</div>}</Card>); })}</div>);
+  return(<div><div style={{ marginBottom:18 }}><h2 style={{ fontSize:18,fontWeight:700,color:c.text,marginBottom:4 }}>🕓 Standup history</h2><p style={{ fontSize:12.5,color:c.mut }}>A day-by-day archive of past standups. Open any day to see exactly what each person committed to and whether it was completed — your audit trail and time machine, distinct from Overview (today) and Performance (cumulative scores).</p></div>{history.length===0?<Card style={{ padding:'40px',textAlign:'center' }}><div style={{ fontSize:36,marginBottom:12 }}>📅</div><div style={{ color:c.mut,fontSize:14 }}>History appears after your first standup</div></Card>:history.map(s=>{ const t=s.tasks||[],d=t.filter(x=>x.status==='done').length,b=t.filter(x=>x.status==='blocked').length,pct=t.length?Math.round(d/t.length*100):0,isOpen=open===s.id; return(<Card key={s.id} style={{ marginBottom:10,overflow:'hidden' }}><button onClick={()=>setOpen(isOpen?null:s.id)} style={{ width:'100%',display:'flex',alignItems:'center',gap:12,padding:'14px 18px',background:'transparent',border:'none',cursor:'pointer',color:c.text }}><div style={{ width:7,height:7,borderRadius:'50%',background:pct===100?'#34D399':'#3B9EFF',flexShrink:0 }}/><span style={{ flex:1,fontSize:14,fontWeight:500,textAlign:'left' }}>{fmt(s.date)}</span>{b>0&&<span style={{ fontSize:11,color:'#F87171',background:'rgba(239,68,68,.12)',padding:'2px 8px',borderRadius:20 }}>⚠️ {b}</span>}<span style={{ fontSize:11,color:c.mut,background:'rgba(128,128,128,.1)',padding:'2px 10px',borderRadius:20 }}>{d}/{t.length} · {pct}%</span><span style={{ color:c.mut,transform:isOpen?'rotate(180deg)':'none',transition:'transform .2s',fontSize:16 }}>⌃</span></button>{isOpen&&<div style={{ borderTop:`1px solid ${c.bord}` }}>{t.map(task=>{ const m=members.find(x=>x.email===task.assignee_email); return(<div key={task.id} style={{ display:'flex',alignItems:'center',gap:10,padding:'9px 18px',borderBottom:`1px solid ${c.bord}` }}><div style={{ width:6,height:6,borderRadius:'50%',background:getPriority(task.priority).color,flexShrink:0 }}/><span style={{ flex:1,fontSize:12,color:task.status==='done'?c.mut:c.sub,textDecoration:task.status==='done'?'line-through':'none' }}>{task.title}</span>{task.timeline&&<span style={{ fontSize:10,color:c.mut }}>{task.timeline}</span>}{m&&<Av member={m} size={22}/>}<SBadge status={task.status}/></div>); })}</div>}</Card>); })}</div>);
 }
 
 function TeamSettingsTab({ team, members, session, onMembersUpdate, hideMembers = false }) {
@@ -5224,7 +5257,7 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate, hideMembers 
         </Modal>
       )}
       <div style={{ display:'flex',gap:6,marginBottom:20 }}>
-        {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{ padding:'7px 14px',borderRadius:8,border:`1px solid ${tab===t.id?'#6366F1':c.bord}`,background:tab===t.id?'rgba(99,102,241,.15)':'transparent',color:tab===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:13,fontWeight:tab===t.id?700:400,display:'flex',alignItems:'center',gap:6 }}><span>{t.i}</span>{t.l}</button>)}
+        {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{ padding:'7px 14px',borderRadius:8,border:`1px solid ${tab===t.id?'#0070F3':c.bord}`,background:tab===t.id?'rgba(0,112,243,.15)':'transparent',color:tab===t.id?'#3B9EFF':c.mut,cursor:'pointer',fontSize:13,fontWeight:tab===t.id?700:400,display:'flex',alignItems:'center',gap:6 }}><span>{t.i}</span>{t.l}</button>)}
       </div>
 
       {/* ── MEMBERS TAB ── */}
@@ -5238,15 +5271,15 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate, hideMembers 
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:13,fontWeight:600,color:c.text }}>{m.name||m.email}</div>
                   <div style={{ fontSize:11,color:c.mut }}>{m.email}</div>
-                  <div style={{ fontSize:11,color:'#818CF8',marginTop:2 }}>{m.designation||m.role}</div>
+                  <div style={{ fontSize:11,color:'#3B9EFF',marginTop:2 }}>{m.designation||m.role}</div>
                 </div>
-                <span style={{ fontSize:11,color:m.role==='manager'?'#818CF8':'#34D399',background:m.role==='manager'?'rgba(129,140,248,.12)':'rgba(52,211,153,.12)',padding:'3px 9px',borderRadius:20,textTransform:'capitalize' }}>{m.role}</span>
+                <span style={{ fontSize:11,color:m.role==='manager'?'#3B9EFF':'#34D399',background:m.role==='manager'?'rgba(129,140,248,.12)':'rgba(52,211,153,.12)',padding:'3px 9px',borderRadius:20,textTransform:'capitalize' }}>{m.role}</span>
                 {session?.user?.id!==m.user_id&&(
                   <button onClick={()=>{setEditMember(m);setEditDesg(m.designation||'');setEditRole(m.role||'member');}} style={{ fontSize:12,color:c.mut,background:c.surf,border:`1px solid ${c.bord}`,borderRadius:7,cursor:'pointer',padding:'4px 10px' }}>Edit</button>
                 )}
               </div>
               {editMember?.id===m.id&&(
-                <div style={{ padding:'14px',background:'rgba(99,102,241,.06)',borderRadius:10,margin:'8px 0',display:'flex',flexDirection:'column',gap:10 }}>
+                <div style={{ padding:'14px',background:'rgba(0,112,243,.06)',borderRadius:10,margin:'8px 0',display:'flex',flexDirection:'column',gap:10 }}>
                   <Inp label="Designation" value={editDesg} onChange={e=>setEditDesg(e.target.value)} placeholder="e.g. Frontend Developer, QA Lead..."/>
                   <Sel label="Role" value={editRole} onChange={e=>setEditRole(e.target.value)}>
                     <option value="member">Member</option>
@@ -5284,9 +5317,9 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate, hideMembers 
                   <div style={{ flex:1 }}>
                     <div style={{ fontSize:14,fontWeight:700,color:c.text,marginBottom:6 }}>{room.name}</div>
                     <div style={{ display:'flex',gap:10,flexWrap:'wrap' }}>
-                      <div style={{ background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.25)',borderRadius:8,padding:'6px 12px',textAlign:'center' }}>
-                        <div style={{ fontSize:9,color:'#818CF8',fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:3 }}>Room ID</div>
-                        <div style={{ fontSize:16,fontWeight:800,color:'#818CF8',letterSpacing:'.12em',fontFamily:'monospace' }}>{room.room_id}</div>
+                      <div style={{ background:'rgba(0,112,243,.1)',border:'1px solid rgba(0,112,243,.25)',borderRadius:8,padding:'6px 12px',textAlign:'center' }}>
+                        <div style={{ fontSize:9,color:'#3B9EFF',fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:3 }}>Room ID</div>
+                        <div style={{ fontSize:16,fontWeight:800,color:'#3B9EFF',letterSpacing:'.12em',fontFamily:'monospace' }}>{room.room_id}</div>
                       </div>
                       <div style={{ background:'rgba(52,211,153,.08)',border:'1px solid rgba(52,211,153,.2)',borderRadius:8,padding:'6px 12px',textAlign:'center' }}>
                         <div style={{ fontSize:9,color:'#34D399',fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:3 }}>Password</div>
@@ -5314,30 +5347,30 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate, hideMembers 
               <Btn onClick={sendInv} loading={sending} disabled={!invEmail.trim()} style={{ flexShrink:0 }}>{sent?'✓ Created!':'Create invite'}</Btn>
             </div>
             {lastInviteLink&&(
-              <div style={{ padding:'12px 14px',background:'rgba(99,102,241,.08)',border:'1px solid rgba(99,102,241,.25)',borderRadius:10 }}>
-                <div style={{ fontSize:11,fontWeight:700,color:'#818CF8',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em' }}>Share this link</div>
+              <div style={{ padding:'12px 14px',background:'rgba(0,112,243,.08)',border:'1px solid rgba(0,112,243,.25)',borderRadius:10 }}>
+                <div style={{ fontSize:11,fontWeight:700,color:'#3B9EFF',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em' }}>Share this link</div>
                 <div style={{ fontSize:11,color:c.text,wordBreak:'break-all',marginBottom:8,fontFamily:'monospace',background:c.surf,padding:'8px 10px',borderRadius:6,border:`1px solid ${c.bord}` }}>{lastInviteLink}</div>
-                <button onClick={()=>{navigator.clipboard&&navigator.clipboard.writeText(lastInviteLink);setCopied(true);setTimeout(()=>setCopied(false),2000);}} style={{ fontSize:12,color:'#818CF8',background:'rgba(99,102,241,.12)',border:'1px solid rgba(99,102,241,.25)',borderRadius:7,cursor:'pointer',padding:'5px 12px',fontWeight:600 }}>{copied?'✓ Copied!':'Copy link'}</button>
+                <button onClick={()=>{navigator.clipboard&&navigator.clipboard.writeText(lastInviteLink);setCopied(true);setTimeout(()=>setCopied(false),2000);}} style={{ fontSize:12,color:'#3B9EFF',background:'rgba(0,112,243,.12)',border:'1px solid rgba(0,112,243,.25)',borderRadius:7,cursor:'pointer',padding:'5px 12px',fontWeight:600 }}>{copied?'✓ Copied!':'Copy link'}</button>
                 <div style={{ fontSize:11,color:c.mut,marginTop:6 }}>They click this link, create an account, and join your team automatically.</div>
                 {inviteRoom&&(
                   <div style={{ marginTop:10,paddingTop:10,borderTop:`1px solid ${c.bord}` }}>
-                    <div style={{ fontSize:11,fontWeight:700,color:'#818CF8',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em' }}>Or share a room code</div>
+                    <div style={{ fontSize:11,fontWeight:700,color:'#3B9EFF',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em' }}>Or share a room code</div>
                     <div style={{ display:'flex',gap:8,flexWrap:'wrap' }}>
                       <span style={{ fontSize:12,color:c.text,fontFamily:'monospace',background:c.surf,padding:'6px 10px',borderRadius:6,border:`1px solid ${c.bord}` }}>Room: <strong>{inviteRoom.roomId}</strong></span>
                       <span style={{ fontSize:12,color:c.text,fontFamily:'monospace',background:c.surf,padding:'6px 10px',borderRadius:6,border:`1px solid ${c.bord}` }}>Password: <strong>{inviteRoom.password}</strong></span>
                     </div>
-                    <button onClick={()=>{const txt=`Join ${team.name} on StandSync\nLink: ${lastInviteLink}\nRoom: ${inviteRoom.roomId}  Password: ${inviteRoom.password}`;navigator.clipboard&&navigator.clipboard.writeText(txt);setCopied(true);setTimeout(()=>setCopied(false),2000);}} style={{ marginTop:8,fontSize:12,color:'#818CF8',background:'rgba(99,102,241,.12)',border:'1px solid rgba(99,102,241,.25)',borderRadius:7,cursor:'pointer',padding:'5px 12px',fontWeight:600 }}>{copied?'✓ Copied!':'Copy link + code'}</button>
+                    <button onClick={()=>{const txt=`Join ${team.name} on StandSync\nLink: ${lastInviteLink}\nRoom: ${inviteRoom.roomId}  Password: ${inviteRoom.password}`;navigator.clipboard&&navigator.clipboard.writeText(txt);setCopied(true);setTimeout(()=>setCopied(false),2000);}} style={{ marginTop:8,fontSize:12,color:'#3B9EFF',background:'rgba(0,112,243,.12)',border:'1px solid rgba(0,112,243,.25)',borderRadius:7,cursor:'pointer',padding:'5px 12px',fontWeight:600 }}>{copied?'✓ Copied!':'Copy link + code'}</button>
                   </div>
                 )}
               </div>
             )}
-            <div style={{ marginTop:10,padding:'9px 12px',background:'rgba(99,102,241,.07)',border:'1px solid rgba(99,102,241,.2)',borderRadius:8,fontSize:12,color:c.sub }}>
-              ✉️ The invite is emailed automatically when <code style={{color:'#818CF8'}}>RESEND_API_KEY</code> is set in Vercel. You can always copy the link above to share it directly.
+            <div style={{ marginTop:10,padding:'9px 12px',background:'rgba(0,112,243,.07)',border:'1px solid rgba(0,112,243,.2)',borderRadius:8,fontSize:12,color:c.sub }}>
+              ✉️ The invite is emailed automatically when <code style={{color:'#3B9EFF'}}>RESEND_API_KEY</code> is set in Vercel. You can always copy the link above to share it directly.
             </div>
           </Card>
           <Card style={{ padding:'14px 20px' }}>
             <div style={{ fontSize:13,color:c.sub,fontWeight:600,marginBottom:3 }}>Faster option</div>
-            <div style={{ fontSize:13,color:c.mut }}>Share the Room ID + password from the <strong style={{ color:'#818CF8' }}>Rooms tab</strong> — members join instantly without any link.</div>
+            <div style={{ fontSize:13,color:c.mut }}>Share the Room ID + password from the <strong style={{ color:'#3B9EFF' }}>Rooms tab</strong> — members join instantly without any link.</div>
           </Card>
         </div>
       )}
@@ -5409,12 +5442,12 @@ Instructions:
   const QUICK = ['Summarize this project', 'What SOPs are documented?', 'What are the key processes?', 'What files are uploaded?'];
 
   return (
-    <div style={{ borderRadius: 14, border: `1px solid rgba(124,110,245,.25)`, background: dark ? 'rgba(99,102,241,.06)' : 'rgba(99,102,241,.04)', overflow: 'hidden' }}>
+    <div style={{ borderRadius: 14, border: `1px solid rgba(0,112,243,.25)`, background: dark ? 'rgba(0,112,243,.06)' : 'rgba(0,112,243,.04)', overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ padding: '12px 18px', borderBottom: `1px solid rgba(124,110,245,.15)`, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <div style={{ padding: '12px 18px', borderBottom: `1px solid rgba(0,112,243,.15)`, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z" fill="#A78BFA"/></svg>
         <span style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Ask AI about this project</span>
-        <span style={{ fontSize: 11, color: '#818CF8', background: 'rgba(99,102,241,.1)', padding: '2px 8px', borderRadius: 20 }}>Gemini · Free</span>
+        <span style={{ fontSize: 11, color: '#3B9EFF', background: 'rgba(0,112,243,.1)', padding: '2px 8px', borderRadius: 20 }}>Gemini · Free</span>
         {history.length > 0 && (
           <button onClick={() => setHistory([])} style={{ marginLeft: 'auto', fontSize: 11, color: c.mut, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 8px' }}>Clear chat</button>
         )}
@@ -5426,7 +5459,7 @@ Instructions:
           {history.map((msg, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, flexDirection: msg.role === 'user' ? 'row-reverse' : 'row', alignItems: 'flex-start' }}>
               {msg.role === 'assistant' && (
-                <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(124,110,245,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 13 }}>✦</div>
+                <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,112,243,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 13 }}>✦</div>
               )}
               <div style={{ maxWidth: '82%', padding: '9px 13px', borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '4px 14px 14px 14px',
                 background: msg.role === 'user' ? 'linear-gradient(135deg,#6B5FE4,#9B8AFB)' : (dark ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.95)'),
@@ -5438,9 +5471,9 @@ Instructions:
           ))}
           {loading && (
             <div style={{ display: 'flex', gap: 8 }}>
-              <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(124,110,245,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>✦</div>
+              <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,112,243,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>✦</div>
               <div style={{ padding: '10px 14px', background: dark ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.95)', borderRadius: '4px 14px 14px 14px', border: `1px solid ${c.bord}`, display: 'flex', gap: 5, alignItems: 'center' }}>
-                {[0,1,2].map(i => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#818CF8', animation: `bounce .8s ease ${i*.18}s infinite` }}/>)}
+                {[0,1,2].map(i => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#3B9EFF', animation: `bounce .8s ease ${i*.18}s infinite` }}/>)}
               </div>
             </div>
           )}
@@ -5452,13 +5485,13 @@ Instructions:
       {history.length === 0 && (
         <div style={{ padding: '10px 16px 4px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {QUICK.map(q => (
-            <button key={q} onClick={() => ask(q)} style={{ fontSize: 11, padding: '5px 12px', borderRadius: 20, border: `1px solid rgba(124,110,245,.28)`, background: 'rgba(99,102,241,.07)', color: '#818CF8', cursor: 'pointer' }}>{q}</button>
+            <button key={q} onClick={() => ask(q)} style={{ fontSize: 11, padding: '5px 12px', borderRadius: 20, border: `1px solid rgba(0,112,243,.28)`, background: 'rgba(0,112,243,.07)', color: '#3B9EFF', cursor: 'pointer' }}>{q}</button>
           ))}
         </div>
       )}
 
       {/* Input — ALWAYS mounted, never remounts */}
-      <div style={{ padding: '10px 14px', display: 'flex', gap: 8, borderTop: history.length ? `1px solid rgba(124,110,245,.1)` : 'none', alignItems: 'center' }}>
+      <div style={{ padding: '10px 14px', display: 'flex', gap: 8, borderTop: history.length ? `1px solid rgba(0,112,243,.1)` : 'none', alignItems: 'center' }}>
         <input
           ref={inputRef}
           value={query}
@@ -5650,7 +5683,7 @@ function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, pr
           <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.ppt,.pptx,.doc,.docx,.txt,.csv,.json,.xlsx,.xls,.md"
             onChange={e => handleFiles(e.target.files)} style={{ display: 'none' }}/>
           <button onClick={() => fileInputRef.current?.click()} disabled={extracting}
-            style={{ padding: '6px 16px', borderRadius: 8, background: extracting ? 'rgba(99,102,241,.3)' : 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: extracting ? 'wait' : 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+            style={{ padding: '6px 16px', borderRadius: 8, background: extracting ? 'rgba(0,112,243,.3)' : 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: extracting ? 'wait' : 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
             {extracting ? <><div style={{ width: 11, height: 11, borderRadius: '50%', border: '2px solid rgba(255,255,255,.3)', borderTop: '2px solid #fff', animation: 'spin .75s linear infinite' }}/> Extracting…</> : '+ Browse files'}
           </button>
         </div>
@@ -5662,7 +5695,7 @@ function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, pr
             <div style={{ fontSize: 11, color: c.mut, marginBottom: 14 }}>PDFs: text extracted automatically · AI reads everything</div>
             <div style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
               {['📄 PDF (text extracted)','📊 PPT/PPTX','📝 DOC/DOCX','🖼️ Images','📃 TXT/CSV/MD'].map(t => (
-                <span key={t} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: dark ? 'rgba(255,255,255,.06)' : 'rgba(99,102,241,.08)', color: c.mut, border: `1px solid ${c.bord}` }}>{t}</span>
+                <span key={t} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: dark ? 'rgba(255,255,255,.06)' : 'rgba(0,112,243,.08)', color: c.mut, border: `1px solid ${c.bord}` }}>{t}</span>
               ))}
             </div>
           </div>
@@ -5671,7 +5704,7 @@ function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, pr
             {files.map(f => (
               <div key={f.id} style={{ padding: '12px 14px', borderRadius: 10, background: dark ? 'rgba(255,255,255,.05)' : 'rgba(255,255,255,.9)', border: `1px solid ${c.bord}`, position: 'relative', cursor: 'pointer', transition: 'border-color .15s' }}
                 onClick={() => openFile(f)}
-                onMouseEnter={e => e.currentTarget.style.borderColor = '#818CF8'}
+                onMouseEnter={e => e.currentTarget.style.borderColor = '#3B9EFF'}
                 onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
                 {f.type?.startsWith('image/') && f.dataUrl
                   ? <img src={f.dataUrl} alt={f.name} style={{ width: '100%', height: 72, objectFit: 'cover', borderRadius: 6, marginBottom: 8 }}/>
@@ -5679,12 +5712,12 @@ function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, pr
                 }
                 <div style={{ fontSize: 12, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }} title={f.name}>{f.name}</div>
                 <div style={{ fontSize: 10, color: c.mut, marginBottom: 3 }}>{Math.round(f.size/1024)}KB · {new Date(f.uploadedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
-                <div style={{ fontSize: 10, color: textExtracted(f) ? '#34D399' : '#818CF8' }}>
+                <div style={{ fontSize: 10, color: textExtracted(f) ? '#34D399' : '#3B9EFF' }}>
                   {textExtracted(f) ? '✓ Text extracted · AI readable' : (f.dataUrl ? '👁 Click to view · AI reference' : '📎 AI reference')}
                 </div>
                 <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
                   <button onClick={e => { e.stopPropagation(); openFile(f); }}
-                    style={{ flex: 1, padding: '4px 0', borderRadius: 6, background: dark ? 'rgba(255,255,255,.07)' : 'rgba(99,102,241,.08)', border: 'none', color: c.text, cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>👁 View</button>
+                    style={{ flex: 1, padding: '4px 0', borderRadius: 6, background: dark ? 'rgba(255,255,255,.07)' : 'rgba(0,112,243,.08)', border: 'none', color: c.text, cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>👁 View</button>
                   <button onClick={e => { e.stopPropagation(); removeFile(f.id); }}
                     style={{ width: 28, padding: '4px 0', borderRadius: 6, background: 'rgba(239,68,68,.08)', border: 'none', color: '#F87171', cursor: 'pointer', fontSize: 11 }}>×</button>
                 </div>
@@ -5692,7 +5725,7 @@ function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, pr
             ))}
             <div onClick={() => fileInputRef.current?.click()}
               style={{ padding: 12, borderRadius: 10, border: `1.5px dashed ${c.bord}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer', minHeight: 80 }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = '#818CF8'}
+              onMouseEnter={e => e.currentTarget.style.borderColor = '#3B9EFF'}
               onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
               <div style={{ fontSize: 22, color: c.mut }}>+</div>
               <div style={{ fontSize: 11, color: c.mut }}>Add more</div>
@@ -5752,7 +5785,7 @@ function WikiOverview({ curProject, projPages, pinnedPages, projectId, projectFi
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px,1fr))', gap: 10 }}>
             {pinnedPages.map(pg => (
               <div key={pg.id} onClick={() => onOpenPage(pg.id)} style={{ padding: '14px 16px', borderRadius: 12, background: dark?'rgba(255,255,255,.05)':'rgba(255,255,255,.8)', border: `1px solid ${c.bord}`, cursor: 'pointer', transition: 'all .15s' }}
-                onMouseEnter={e=>e.currentTarget.style.borderColor='#818CF8'} onMouseLeave={e=>e.currentTarget.style.borderColor=c.bord}>
+                onMouseEnter={e=>e.currentTarget.style.borderColor='#3B9EFF'} onMouseLeave={e=>e.currentTarget.style.borderColor=c.bord}>
                 <div style={{ fontSize: 22, marginBottom: 6 }}>{pg.emoji}</div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 4 }}>{pg.title}</div>
                 <div style={{ fontSize: 11, color: c.mut }}>{new Date(pg.updatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
@@ -5776,7 +5809,7 @@ function WikiOverview({ curProject, projPages, pinnedPages, projectId, projectFi
             {projPages.map(pg => (
               <div key={pg.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', border: '1px solid transparent', transition: 'all .12s' }}
                 onClick={() => onOpenPage(pg.id)}
-                onMouseEnter={e=>{e.currentTarget.style.background=dark?'rgba(255,255,255,.04)':'rgba(99,102,241,.05)';e.currentTarget.style.borderColor=c.bord;}}
+                onMouseEnter={e=>{e.currentTarget.style.background=dark?'rgba(255,255,255,.04)':'rgba(0,112,243,.05)';e.currentTarget.style.borderColor=c.bord;}}
                 onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.borderColor='transparent';}}>
                 <span style={{ fontSize: 18, flexShrink: 0 }}>{pg.emoji}</span>
                 <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: c.text }}>{pg.title}</span>
@@ -5812,7 +5845,7 @@ function ProjectWiki({ team, session, members = [] }) {
   // new project form
   const [npName, setNpName]   = useState('');
   const [npEmoji, setNpEmoji] = useState('📁');
-  const [npColor, setNpColor] = useState('#6366F1');
+  const [npColor, setNpColor] = useState('#0070F3');
   const [npDesc, setNpDesc]   = useState('');
 
   // new page form
@@ -5820,7 +5853,7 @@ function ProjectWiki({ team, session, members = [] }) {
   const [pgEmoji, setPgEmoji] = useState('📄');
 
   const EMOJI_PRESETS = ['📁','🚀','⚡','🎯','🔥','💡','🏗️','🎨','🔬','📱','📊','🔧','📋','🌟','🛡️','🤖','💬','📅','🔑','🌐'];
-  const COLOR_PRESETS = ['#6366F1','#34D399','#F87171','#FBBF24','#60A5FA','#F472B6','#A78BFA','#14B8A6','#F97316','#8B5CF6'];
+  const COLOR_PRESETS = ['#0070F3','#34D399','#F87171','#FBBF24','#60A5FA','#F472B6','#A78BFA','#14B8A6','#F97316','#8B5CF6'];
 
   // ── Load ──
   useEffect(() => {
@@ -5833,7 +5866,7 @@ function ProjectWiki({ team, session, members = [] }) {
         if (d.projectFiles) setProjectFiles(d.projectFiles);
         if (d.projects?.length) setSelProject(d.projects[0].id);
       } else {
-        const dp = { id:'p1', name:'Getting Started', emoji:'🚀', color:'#6366F1', desc:'Team knowledge base', createdAt:Date.now() };
+        const dp = { id:'p1', name:'Getting Started', emoji:'🚀', color:'#0070F3', desc:'Team knowledge base', createdAt:Date.now() };
         const dpg = { id:'pg1', projectId:'p1', title:'Welcome to Project Wiki', emoji:'👋', pinned:true, updatedAt:Date.now(),
           blocks:[
             {id:'b1',type:'heading1',content:'Welcome to Project Wiki 👋'},
@@ -5901,7 +5934,7 @@ function ProjectWiki({ team, session, members = [] }) {
     const p = { id:'p'+Date.now(), name:npName.trim(), emoji:npEmoji, color:npColor, desc:npDesc.trim(), createdAt:Date.now() };
     const np = [...projects, p];
     setProjects(np); setSelProject(p.id); setView('overview');
-    setNpName(''); setNpDesc(''); setNpEmoji('📁'); setNpColor('#6366F1');
+    setNpName(''); setNpDesc(''); setNpEmoji('📁'); setNpColor('#0070F3');
     autoSave(np, pages);
   };
 
@@ -5962,7 +5995,7 @@ function ProjectWiki({ team, session, members = [] }) {
       {!sideCollapsed && (
         <>
           <div style={{ padding:'8px 10px', borderBottom:`1px solid ${c.bord}`, flexShrink:0, position:'relative' }}>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Search docs..." style={{ width:'100%', background:dark?'rgba(255,255,255,.06)':'rgba(99,102,241,.07)', border:`1px solid ${c.bord}`, borderRadius:8, padding:'6px 10px', color:c.text, fontSize:12, outline:'none', boxSizing:'border-box' }}/>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Search docs..." style={{ width:'100%', background:dark?'rgba(255,255,255,.06)':'rgba(0,112,243,.07)', border:`1px solid ${c.bord}`, borderRadius:8, padding:'6px 10px', color:c.text, fontSize:12, outline:'none', boxSizing:'border-box' }}/>
             {search && searchResults.length > 0 && (
               <div style={{ position:'absolute', zIndex:100, width:220, background:dark?'#12103A':'#fff', border:`1px solid ${c.bord}`, borderRadius:10, marginTop:4, boxShadow:'0 8px 24px rgba(0,0,0,.2)', maxHeight:240, overflowY:'auto', left:10 }}>
                 {searchResults.map(pg => {
@@ -5970,7 +6003,7 @@ function ProjectWiki({ team, session, members = [] }) {
                   return (
                     <div key={pg.id} onClick={() => { setSelProject(pg.projectId); setSelPage(pg.id); setView('page'); setSearch(''); }}
                       style={{ padding:'9px 12px', cursor:'pointer', borderBottom:`1px solid ${c.bord}` }}
-                      onMouseEnter={e=>e.currentTarget.style.background='rgba(99,102,241,.08)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                      onMouseEnter={e=>e.currentTarget.style.background='rgba(0,112,243,.08)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                       <div style={{ fontSize:12, fontWeight:600, color:c.text }}>{pg.emoji} {pg.title}</div>
                       <div style={{ fontSize:10, color:c.mut }}>{proj?.emoji} {proj?.name}</div>
                     </div>
@@ -5983,26 +6016,26 @@ function ProjectWiki({ team, session, members = [] }) {
             {projects.map(proj => (
               <div key={proj.id}>
                 <div onClick={() => { setSelProject(proj.id); setView('overview'); setSelPage(null); }}
-                  style={{ display:'flex', alignItems:'center', gap:7, padding:'7px 8px', borderRadius:8, cursor:'pointer', background:selProject===proj.id?(dark?'rgba(99,102,241,.18)':'rgba(99,102,241,.12)'):'transparent', marginBottom:2, transition:'background .12s' }}
-                  onMouseEnter={e=>{if(selProject!==proj.id)e.currentTarget.style.background=dark?'rgba(255,255,255,.05)':'rgba(99,102,241,.06)';}}
+                  style={{ display:'flex', alignItems:'center', gap:7, padding:'7px 8px', borderRadius:8, cursor:'pointer', background:selProject===proj.id?(dark?'rgba(0,112,243,.18)':'rgba(0,112,243,.12)'):'transparent', marginBottom:2, transition:'background .12s' }}
+                  onMouseEnter={e=>{if(selProject!==proj.id)e.currentTarget.style.background=dark?'rgba(255,255,255,.05)':'rgba(0,112,243,.06)';}}
                   onMouseLeave={e=>{if(selProject!==proj.id)e.currentTarget.style.background='transparent';}}>
                   <span style={{ fontSize:15, flexShrink:0 }}>{proj.emoji}</span>
-                  <span style={{ fontSize:13, fontWeight:selProject===proj.id?700:500, color:selProject===proj.id?'#818CF8':c.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>{proj.name}</span>
+                  <span style={{ fontSize:13, fontWeight:selProject===proj.id?700:500, color:selProject===proj.id?'#3B9EFF':c.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>{proj.name}</span>
                   <div style={{ width:8, height:8, borderRadius:'50%', background:proj.color, flexShrink:0, opacity:.7 }}/>
                 </div>
                 {selProject===proj.id && (
                   <div style={{ paddingLeft:16, marginBottom:4 }}>
                     {pages.filter(p=>p.projectId===proj.id).map(pg=>(
                       <div key={pg.id} onClick={()=>{setSelPage(pg.id);setView('page');}}
-                        style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', borderRadius:7, cursor:'pointer', background:selPage===pg.id?(dark?'rgba(99,102,241,.14)':'rgba(99,102,241,.09)'):'transparent', marginBottom:1, transition:'background .1s' }}
-                        onMouseEnter={e=>{if(selPage!==pg.id)e.currentTarget.style.background=dark?'rgba(255,255,255,.04)':'rgba(99,102,241,.05)';}}
+                        style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', borderRadius:7, cursor:'pointer', background:selPage===pg.id?(dark?'rgba(0,112,243,.14)':'rgba(0,112,243,.09)'):'transparent', marginBottom:1, transition:'background .1s' }}
+                        onMouseEnter={e=>{if(selPage!==pg.id)e.currentTarget.style.background=dark?'rgba(255,255,255,.04)':'rgba(0,112,243,.05)';}}
                         onMouseLeave={e=>{if(selPage!==pg.id)e.currentTarget.style.background='transparent';}}>
                         <span style={{ fontSize:12 }}>{pg.pinned?'📌':pg.emoji}</span>
-                        <span style={{ fontSize:12, color:selPage===pg.id?'#818CF8':c.sub, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight:selPage===pg.id?600:400 }}>{pg.title}</span>
+                        <span style={{ fontSize:12, color:selPage===pg.id?'#3B9EFF':c.sub, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight:selPage===pg.id?600:400 }}>{pg.title}</span>
                       </div>
                     ))}
                     <button onClick={()=>setView('newPage')} style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 8px', width:'100%', background:'transparent', border:'none', color:c.mut, cursor:'pointer', fontSize:11, borderRadius:6, marginTop:2 }}
-                      onMouseEnter={e=>e.currentTarget.style.background=dark?'rgba(255,255,255,.04)':'rgba(99,102,241,.06)'}
+                      onMouseEnter={e=>e.currentTarget.style.background=dark?'rgba(255,255,255,.04)':'rgba(0,112,243,.06)'}
                       onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                       <span style={{ fontSize:14, fontWeight:700 }}>+</span> New page
                     </button>
@@ -6020,7 +6053,7 @@ function ProjectWiki({ team, session, members = [] }) {
         <div style={{ flex:1, overflowY:'auto', padding:'6px 0', display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
           {projects.map(proj=>(
             <button key={proj.id} onClick={()=>{setSelProject(proj.id);setView('overview');setSideCollapsed(false);}} title={proj.name}
-              style={{ width:32, height:32, borderRadius:8, background:selProject===proj.id?'rgba(99,102,241,.2)':'transparent', border:selProject===proj.id?'1.5px solid #818CF8':'1.5px solid transparent', cursor:'pointer', fontSize:18, display:'flex', alignItems:'center', justifyContent:'center' }}>
+              style={{ width:32, height:32, borderRadius:8, background:selProject===proj.id?'rgba(0,112,243,.2)':'transparent', border:selProject===proj.id?'1.5px solid #3B9EFF':'1.5px solid transparent', cursor:'pointer', fontSize:18, display:'flex', alignItems:'center', justifyContent:'center' }}>
               {proj.emoji}
             </button>
           ))}
@@ -6086,7 +6119,7 @@ function ProjectWiki({ team, session, members = [] }) {
       if (type==='heading2') return {...base, fontSize:22, fontWeight:700};
       if (type==='heading3') return {...base, fontSize:17, fontWeight:700};
       if (type==='code')     return {...base, fontFamily:'monospace', fontSize:13, background:'rgba(0,0,0,.05)', padding:'12px 14px', borderRadius:8, color:'#c7254e'};
-      if (type==='quote')    return {...base, fontStyle:'italic', borderLeft:'4px solid #818CF8', paddingLeft:16, color:'#374151'};
+      if (type==='quote')    return {...base, fontStyle:'italic', borderLeft:'4px solid #3B9EFF', paddingLeft:16, color:'#374151'};
       return base;
     };
 
@@ -6101,7 +6134,7 @@ function ProjectWiki({ team, session, members = [] }) {
       );
 
       if (block.type==='callout') {
-        const ts = {info:{bg:'rgba(99,102,241,.08)',border:'rgba(99,102,241,.25)',icon:'ℹ️'},warning:{bg:'rgba(245,158,11,.08)',border:'rgba(245,158,11,.25)',icon:'⚠️'},success:{bg:'rgba(52,211,153,.08)',border:'rgba(52,211,153,.25)',icon:'✅'},danger:{bg:'rgba(239,68,68,.08)',border:'rgba(239,68,68,.25)',icon:'🚨'}};
+        const ts = {info:{bg:'rgba(0,112,243,.08)',border:'rgba(0,112,243,.25)',icon:'ℹ️'},warning:{bg:'rgba(245,158,11,.08)',border:'rgba(245,158,11,.25)',icon:'⚠️'},success:{bg:'rgba(52,211,153,.08)',border:'rgba(52,211,153,.25)',icon:'✅'},danger:{bg:'rgba(239,68,68,.08)',border:'rgba(239,68,68,.25)',icon:'🚨'}};
         const t = ts[block.calloutType||'info'];
         return (
           <div key={block.id} style={{ display:'flex', gap:12, padding:'12px 16px', background:t.bg, border:`1px solid ${t.border}`, borderRadius:10, margin:'4px 0', position:'relative' }}
@@ -6163,7 +6196,7 @@ function ProjectWiki({ team, session, members = [] }) {
           <div style={{ flex:1 }}/>
           <span style={{ fontSize:11, color:'#94A3B8' }}>{saving?'Saving…':'Auto-saved'}</span>
           <button onClick={()=>togglePin(page.id)} style={{ padding:'4px 10px', borderRadius:7, background:page.pinned?'rgba(251,191,36,.12)':'transparent', border:`1px solid ${page.pinned?'rgba(251,191,36,.3)':'rgba(0,0,0,.1)'}`, color:page.pinned?'#D97706':'#94A3B8', cursor:'pointer', fontSize:12 }}>{page.pinned?'📌 Pinned':'📍 Pin'}</button>
-          <button onClick={()=>setShowAI(s=>!s)} style={{ padding:'4px 12px', borderRadius:7, background:showAI?'rgba(99,102,241,.12)':'transparent', border:`1px solid ${showAI?'rgba(99,102,241,.3)':'rgba(0,0,0,.1)'}`, color:showAI?'#6366F1':'#94A3B8', cursor:'pointer', fontSize:12, fontWeight:600 }}>✦ Ask AI</button>
+          <button onClick={()=>setShowAI(s=>!s)} style={{ padding:'4px 12px', borderRadius:7, background:showAI?'rgba(0,112,243,.12)':'transparent', border:`1px solid ${showAI?'rgba(0,112,243,.3)':'rgba(0,0,0,.1)'}`, color:showAI?'#0070F3':'#94A3B8', cursor:'pointer', fontSize:12, fontWeight:600 }}>✦ Ask AI</button>
           <button onClick={()=>deletePage(page.id)} style={{ padding:'4px 10px', borderRadius:7, background:'rgba(239,68,68,.06)', border:'1px solid rgba(239,68,68,.15)', color:'#EF4444', cursor:'pointer', fontSize:12 }}>🗑 Delete</button>
         </div>
 
@@ -6187,7 +6220,7 @@ function ProjectWiki({ team, session, members = [] }) {
               {blocks.map((block, idx) => renderBlock(block, idx))}
             </div>
             <button onClick={()=>insertBlock(blocks.length-1)} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 0', color:'#9CA3AF', background:'none', border:'none', cursor:'pointer', fontSize:13, marginTop:16 }}
-              onMouseEnter={e=>e.currentTarget.style.color='#6366F1'} onMouseLeave={e=>e.currentTarget.style.color='#9CA3AF'}>
+              onMouseEnter={e=>e.currentTarget.style.color='#0070F3'} onMouseLeave={e=>e.currentTarget.style.color='#9CA3AF'}>
               <span style={{ width:22, height:22, borderRadius:'50%', border:'1.5px solid currentColor', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:300 }}>+</span>
               Add block
             </button>
@@ -6225,7 +6258,7 @@ function ProjectWiki({ team, session, members = [] }) {
         <p style={{ color:c.mut, fontSize:13, marginBottom:28 }}>Projects group pages, SOPs, and docs together.</p>
         <div style={{ display:'flex', gap:10, marginBottom:16 }}>
           <div style={{ position:'relative' }}>
-            <div style={{ width:52, height:52, borderRadius:12, background:dark?'rgba(255,255,255,.06)':'rgba(99,102,241,.07)', border:`1.5px solid ${c.bord}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:28, cursor:'pointer' }}>{npEmoji}</div>
+            <div style={{ width:52, height:52, borderRadius:12, background:dark?'rgba(255,255,255,.06)':'rgba(0,112,243,.07)', border:`1.5px solid ${c.bord}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:28, cursor:'pointer' }}>{npEmoji}</div>
             <select value={npEmoji} onChange={e=>setNpEmoji(e.target.value)} style={{ position:'absolute', inset:0, opacity:0, cursor:'pointer' }}>
               {EMOJI_PRESETS.map(em=><option key={em} value={em}>{em}</option>)}
             </select>
@@ -6260,7 +6293,7 @@ function ProjectWiki({ team, session, members = [] }) {
         <p style={{ color:c.mut, fontSize:13, marginBottom:24 }}>in <strong>{curProject?.emoji} {curProject?.name}</strong></p>
         <div style={{ display:'flex', gap:10, marginBottom:20 }}>
           <div style={{ position:'relative' }}>
-            <div style={{ width:48, height:48, borderRadius:10, background:dark?'rgba(255,255,255,.06)':'rgba(99,102,241,.07)', border:`1.5px solid ${c.bord}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:26, cursor:'pointer' }}>{pgEmoji}</div>
+            <div style={{ width:48, height:48, borderRadius:10, background:dark?'rgba(255,255,255,.06)':'rgba(0,112,243,.07)', border:`1.5px solid ${c.bord}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:26, cursor:'pointer' }}>{pgEmoji}</div>
             <select value={pgEmoji} onChange={e=>setPgEmoji(e.target.value)} style={{ position:'absolute', inset:0, opacity:0, cursor:'pointer' }}>
               {EMOJI_PRESETS.map(em=><option key={em} value={em}>{em}</option>)}
             </select>
@@ -6326,7 +6359,7 @@ const BS_TEMPLATES = [
     ]},
   { id:'okr', cat:'Strategy & Planning', name:'OKR Planning', icon:'📈', desc:'Objective with measurable key results',
     nodes:[
-      {k:'o',type:'shape',shape:'pill',x:180,y:0,w:300,h:70,text:'OBJECTIVE\nWhat we want to achieve',fill:'#6366F1',color:'#fff',fontSize:13,fontWeight:700,textAlign:'center'},
+      {k:'o',type:'shape',shape:'pill',x:180,y:0,w:300,h:70,text:'OBJECTIVE\nWhat we want to achieve',fill:'#0070F3',color:'#fff',fontSize:13,fontWeight:700,textAlign:'center'},
       {k:'k1',type:'sticky',x:40,y:160,w:200,h:130,text:'Key Result 1\n\nMeasure: ',color:'#BFDBFE'},
       {k:'k2',type:'sticky',x:260,y:160,w:200,h:130,text:'Key Result 2\n\nMeasure: ',color:'#BFDBFE'},
       {k:'k3',type:'sticky',x:480,y:160,w:200,h:130,text:'Key Result 3\n\nMeasure: ',color:'#BFDBFE'},
@@ -6349,7 +6382,7 @@ const BS_TEMPLATES = [
     ],connections:[{from:'s1',to:'s2',type:'straight'},{from:'s2',to:'s3',type:'straight'},{from:'s3',to:'s4',type:'straight'}]},
   { id:'userflow', cat:'Product & UX', name:'User Flow', icon:'🔀', desc:'Screen-to-screen navigation flow',
     nodes:[
-      {k:'a',type:'shape',shape:'rect',x:40,y:80,w:140,h:70,text:'Landing',fill:'#818CF8',color:'#fff',textAlign:'center'},
+      {k:'a',type:'shape',shape:'rect',x:40,y:80,w:140,h:70,text:'Landing',fill:'#3B9EFF',color:'#fff',textAlign:'center'},
       {k:'b',type:'shape',shape:'diamond',x:240,y:70,w:150,h:90,text:'Signed in?',fill:'#FBBF24',color:'#1a1a1a',textAlign:'center'},
       {k:'c',type:'shape',shape:'rect',x:450,y:20,w:140,h:70,text:'Dashboard',fill:'#34D399',color:'#fff',textAlign:'center'},
       {k:'d',type:'shape',shape:'rect',x:450,y:140,w:140,h:70,text:'Login',fill:'#F87171',color:'#fff',textAlign:'center'},
@@ -6379,7 +6412,7 @@ const BS_TEMPLATES = [
   // Brainstorming
   { id:'mindmap', cat:'Brainstorming', name:'Mind Map', icon:'🧠', desc:'Central idea with branches',
     nodes:[
-      {k:'c',type:'shape',shape:'circle',x:300,y:160,w:140,h:140,text:'CENTRAL\nIDEA',fill:'#6366F1',color:'#fff',fontWeight:700,textAlign:'center'},
+      {k:'c',type:'shape',shape:'circle',x:300,y:160,w:140,h:140,text:'CENTRAL\nIDEA',fill:'#0070F3',color:'#fff',fontWeight:700,textAlign:'center'},
       {k:'b1',type:'sticky',x:60,y:40,w:150,h:90,text:'Branch 1',color:'#BFDBFE'},
       {k:'b2',type:'sticky',x:540,y:40,w:150,h:90,text:'Branch 2',color:'#BBF7D0'},
       {k:'b3',type:'sticky',x:60,y:340,w:150,h:90,text:'Branch 3',color:'#FDE68A'},
@@ -6413,8 +6446,8 @@ const BS_TEMPLATES = [
   { id:'process', cat:'Team & Operations', name:'Process Map', icon:'🔧', desc:'Step-by-step workflow',
     nodes:[
       {k:'s',type:'shape',shape:'pill',x:20,y:120,w:130,h:60,text:'Start',fill:'#34D399',color:'#fff',textAlign:'center'},
-      {k:'a',type:'shape',shape:'rect',x:190,y:115,w:140,h:70,text:'Step 1',fill:'#818CF8',color:'#fff',textAlign:'center'},
-      {k:'b',type:'shape',shape:'rect',x:370,y:115,w:140,h:70,text:'Step 2',fill:'#818CF8',color:'#fff',textAlign:'center'},
+      {k:'a',type:'shape',shape:'rect',x:190,y:115,w:140,h:70,text:'Step 1',fill:'#3B9EFF',color:'#fff',textAlign:'center'},
+      {k:'b',type:'shape',shape:'rect',x:370,y:115,w:140,h:70,text:'Step 2',fill:'#3B9EFF',color:'#fff',textAlign:'center'},
       {k:'e',type:'shape',shape:'pill',x:550,y:120,w:130,h:60,text:'End',fill:'#F87171',color:'#fff',textAlign:'center'},
     ],connections:[{from:'s',to:'a',type:'straight'},{from:'a',to:'b',type:'straight'},{from:'b',to:'e',type:'straight'}]},
 ];
@@ -6427,7 +6460,7 @@ function BrainstormWelcome({ c, dark, onPick }) {
   }
   const Card3 = ({ icon, title, lines, badge, badgeCol, onClick }) => (
     <button onClick={onClick} style={{ flex:'1 1 240px',minWidth:240,textAlign:'left',background:c.surf,border:`1px solid ${c.bord}`,borderRadius:16,padding:'22px 22px 20px',cursor:'pointer',transition:'all .15s' }}
-      onMouseEnter={e=>{e.currentTarget.style.borderColor='#6366F1';e.currentTarget.style.transform='translateY(-3px)';}}
+      onMouseEnter={e=>{e.currentTarget.style.borderColor='#0070F3';e.currentTarget.style.transform='translateY(-3px)';}}
       onMouseLeave={e=>{e.currentTarget.style.borderColor=c.bord;e.currentTarget.style.transform='none';}}>
       <div style={{ fontSize:34,marginBottom:12 }}>{icon}</div>
       <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:8 }}>
@@ -6439,7 +6472,7 @@ function BrainstormWelcome({ c, dark, onPick }) {
   );
   return (
     <div style={{ height:'calc(100vh - 62px)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',borderRadius:14,border:`1px solid ${c.bord}`,background:dark?c.bg:'#fff',padding:24 }}>
-      <div style={{ fontSize:13,fontWeight:600,color:'#6366F1',letterSpacing:'.08em',textTransform:'uppercase',marginBottom:8 }}>Brainstorm</div>
+      <div style={{ fontSize:13,fontWeight:600,color:'#0070F3',letterSpacing:'.08em',textTransform:'uppercase',marginBottom:8 }}>Brainstorm</div>
       <h2 style={{ fontSize:26,fontWeight:800,color:c.text,marginBottom:6,textAlign:'center' }}>What would you like to work on today?</h2>
       <p style={{ fontSize:13.5,color:c.mut,marginBottom:28,textAlign:'center' }}>Pick a workspace to get started. You can switch any time.</p>
       <div style={{ display:'flex',gap:16,flexWrap:'wrap',maxWidth:840,justifyContent:'center' }}>
@@ -6449,7 +6482,7 @@ function BrainstormWelcome({ c, dark, onPick }) {
         <Card3 icon="👥" title="Shared" badge="Team" badgeCol="#34D399"
           lines={['Team & project collaboration','Visible to authorized members','Activity tracking enabled']}
           onClick={()=>onPick({ mode:'shared' })}/>
-        <Card3 icon="▦" title="Start from template" badge="Shared only" badgeCol="#6366F1"
+        <Card3 icon="▦" title="Start from template" badge="Shared only" badgeCol="#0070F3"
           lines={['Structured frameworks','SWOT, OKR, retros & more','Team collaboration ready']}
           onClick={()=>setPicking('template')}/>
       </div>
@@ -6497,7 +6530,7 @@ function TplRow({ title, list, c, dark, favs, toggleFav, onApply }) {
       <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(210px,1fr))',gap:12 }}>
         {list.map(t=>(
           <div key={t.id} style={{ position:'relative',border:`1px solid ${c.bord}`,borderRadius:14,overflow:'hidden',background:c.surf,transition:'all .15s' }}
-            onMouseEnter={e=>e.currentTarget.style.borderColor='#6366F1'} onMouseLeave={e=>e.currentTarget.style.borderColor=c.bord}>
+            onMouseEnter={e=>e.currentTarget.style.borderColor='#0070F3'} onMouseLeave={e=>e.currentTarget.style.borderColor=c.bord}>
             <button onClick={()=>toggleFav(t.id)} title="Favorite" style={{ position:'absolute',top:8,right:8,zIndex:2,background:'rgba(0,0,0,.25)',border:'none',borderRadius:'50%',width:26,height:26,cursor:'pointer',fontSize:13,color:favs.includes(t.id)?'#FCD34D':'#fff' }}>{favs.includes(t.id)?'★':'☆'}</button>
             <button onClick={()=>onApply(t)} style={{ display:'block',width:'100%',textAlign:'left',border:'none',background:'transparent',cursor:'pointer',padding:0 }}>
               <div style={{ height:84,background:`linear-gradient(135deg, ${dark?'#1B2236':'#EEF1FF'}, ${dark?'#141A2B':'#F8FAFF'})`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:34 }}>{t.icon}</div>
@@ -6520,9 +6553,9 @@ function TplRow({ title, list, c, dark, favs, toggleFav, onApply }) {
 // color picker, text formatting, mini-map, undo/redo, fit view, zoom.
 
 const BS_STICKY_COLORS = ['#FDE68A','#FCA5A5','#6EE7B7','#93C5FD','#C4B5FD','#FBB6CE','#FED7AA','#D9F99D','#fff','#1e1b4b'];
-const BS_DRAW_COLORS   = ['#818CF8','#34D399','#F87171','#FBBF24','#60A5FA','#F472B6','#A78BFA','#000','#fff'];
+const BS_DRAW_COLORS   = ['#3B9EFF','#34D399','#F87171','#FBBF24','#60A5FA','#F472B6','#A78BFA','#000','#fff'];
 const BS_SHAPE_COLORS  = [
-  {fill:'rgba(99,102,241,.15)',  stroke:'#6366F1'},
+  {fill:'rgba(0,112,243,.15)',  stroke:'#0070F3'},
   {fill:'rgba(52,211,153,.15)', stroke:'#34D399'},
   {fill:'rgba(248,113,113,.15)',stroke:'#F87171'},
   {fill:'rgba(251,191,36,.18)', stroke:'#FBBF24'},
@@ -6911,8 +6944,8 @@ function BrainstormSpace({ team, session, members=[] }) {
       h: type==='sticky'?160:type==='text'?56:type==='pill'?52:90,
       text: type==='sticky'?'':(type==='text'?'Type here...':(type==='shape'||type==='pill'?'Label':'')),
       color: type==='sticky'?stickyColor:undefined,
-      fill: (type==='shape'||type==='pill')?(BS_SHAPE_COLORS[shapeColorIdx]?.fill||'rgba(99,102,241,.15)'):undefined,
-      stroke: (type==='shape'||type==='pill')?(BS_SHAPE_COLORS[shapeColorIdx]?.stroke||'#6366F1'):undefined,
+      fill: (type==='shape'||type==='pill')?(BS_SHAPE_COLORS[shapeColorIdx]?.fill||'rgba(0,112,243,.15)'):undefined,
+      stroke: (type==='shape'||type==='pill')?(BS_SHAPE_COLORS[shapeColorIdx]?.stroke||'#0070F3'):undefined,
       fontSize: type==='text'?16:13, fontWeight:(type==='shape'||type==='pill')?700:400,
       fontStyle:'normal', textAlign:(type==='shape'||type==='pill')?'center':'left',
       ...extra
@@ -6964,7 +6997,7 @@ function BrainstormSpace({ team, session, members=[] }) {
 
   const renderShapeSvg = (node) => {
     const {w,h,shapeType:st,fill,stroke}=node;
-    const f=fill||'rgba(99,102,241,.15)', s=stroke||'#6366F1';
+    const f=fill||'rgba(0,112,243,.15)', s=stroke||'#0070F3';
     if (st==='circle')  return <ellipse cx={w/2} cy={h/2} rx={w/2-2} ry={h/2-2} fill={f} stroke={s} strokeWidth={2}/>;
     if (st==='diamond') return <polygon points={`${w/2},2 ${w-2},${h/2} ${w/2},${h-2} 2,${h/2}`} fill={f} stroke={s} strokeWidth={2}/>;
     if (st==='pill')    return <rect x={1} y={1} width={w-2} height={h-2} rx={Math.min(h/2-1,28)} fill={f} stroke={s} strokeWidth={2}/>;
@@ -7110,7 +7143,7 @@ function BrainstormSpace({ team, session, members=[] }) {
 
         <div style={{display:'flex',borderRadius:8,overflow:'hidden',border:`1px solid ${c.bord}`,flexShrink:0}}>
           {['personal','shared'].map(m=>(
-            <button key={m} onClick={()=>setMode(m)} style={{padding:'5px 12px',fontSize:11,fontWeight:600,border:'none',cursor:'pointer',background:mode===m?'#6366F1':'transparent',color:mode===m?'#fff':c.mut,transition:'all .15s'}}>
+            <button key={m} onClick={()=>setMode(m)} style={{padding:'5px 12px',fontSize:11,fontWeight:600,border:'none',cursor:'pointer',background:mode===m?'#0070F3':'transparent',color:mode===m?'#fff':c.mut,transition:'all .15s'}}>
               {m==='personal'?'🔒 Personal':'👥 Shared'}
             </button>
           ))}
@@ -7118,19 +7151,19 @@ function BrainstormSpace({ team, session, members=[] }) {
 
         <div style={{width:1,height:24,background:c.bord,flexShrink:0}}/>
 
-        <div style={{display:'flex',gap:2,background:dark?'rgba(255,255,255,.04)':'rgba(99,102,241,.05)',borderRadius:10,padding:3,border:`1px solid ${c.bord}`}}>
+        <div style={{display:'flex',gap:2,background:dark?'rgba(255,255,255,.04)':'rgba(0,112,243,.05)',borderRadius:10,padding:3,border:`1px solid ${c.bord}`}}>
           {TOOLS.map(t=>(
             <button key={t.id} onClick={()=>{setTool(t.id);toolRef.current=t.id;if(t.id!=='connect'){setConnectFrom(null);connectFromRef.current=null;setConnPreviewPt(null);}}} title={t.label}
-              style={{width:34,height:32,borderRadius:7,border:'none',background:tool===t.id?(dark?'rgba(99,102,241,.28)':'rgba(99,102,241,.18)'):'transparent',color:tool===t.id?'#818CF8':c.mut,cursor:'pointer',fontSize:t.id==='text'?13:17,fontWeight:tool===t.id?700:400,transition:'all .12s',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              style={{width:34,height:32,borderRadius:7,border:'none',background:tool===t.id?(dark?'rgba(0,112,243,.28)':'rgba(0,112,243,.18)'):'transparent',color:tool===t.id?'#3B9EFF':c.mut,cursor:'pointer',fontSize:t.id==='text'?13:17,fontWeight:tool===t.id?700:400,transition:'all .12s',display:'flex',alignItems:'center',justifyContent:'center'}}>
               {t.ico}
             </button>
           ))}
         </div>
 
         {tool==='shape'&&(
-          <div style={{display:'flex',gap:2,background:dark?'rgba(255,255,255,.04)':'rgba(99,102,241,.05)',borderRadius:10,padding:3,border:`1px solid ${c.bord}`}}>
+          <div style={{display:'flex',gap:2,background:dark?'rgba(255,255,255,.04)':'rgba(0,112,243,.05)',borderRadius:10,padding:3,border:`1px solid ${c.bord}`}}>
             {[['rect','▭'],['circle','○'],['diamond','◇'],['pill','⬭']].map(([st,ic])=>(
-              <button key={st} onClick={()=>setShapeType(st)} style={{width:32,height:32,borderRadius:7,border:'none',background:shapeType===st?'rgba(99,102,241,.22)':'transparent',color:shapeType===st?'#818CF8':c.mut,cursor:'pointer',fontSize:16}}>{ic}</button>
+              <button key={st} onClick={()=>setShapeType(st)} style={{width:32,height:32,borderRadius:7,border:'none',background:shapeType===st?'rgba(0,112,243,.22)':'transparent',color:shapeType===st?'#3B9EFF':c.mut,cursor:'pointer',fontSize:16}}>{ic}</button>
             ))}
           </div>
         )}
@@ -7138,7 +7171,7 @@ function BrainstormSpace({ team, session, members=[] }) {
         {tool==='sticky'&&(
           <div style={{display:'flex',gap:3,alignItems:'center'}}>
             {BS_STICKY_COLORS.map(col=>(
-              <button key={col} onClick={()=>setStickyColor(col)} style={{width:20,height:20,borderRadius:'50%',background:col,border:stickyColor===col?'2.5px solid #818CF8':`1.5px solid ${c.bord}`,cursor:'pointer',flexShrink:0}}/>
+              <button key={col} onClick={()=>setStickyColor(col)} style={{width:20,height:20,borderRadius:'50%',background:col,border:stickyColor===col?'2.5px solid #3B9EFF':`1.5px solid ${c.bord}`,cursor:'pointer',flexShrink:0}}/>
             ))}
           </div>
         )}
@@ -7146,15 +7179,15 @@ function BrainstormSpace({ team, session, members=[] }) {
         {tool==='draw'&&(
           <div style={{display:'flex',gap:6,alignItems:'center'}}>
             <div style={{display:'flex',gap:3}}>
-              {['#000000','#333333','#818CF8','#34D399','#F87171','#FBBF24','#60A5FA','#F472B6','#A78BFA'].map(col=>(
+              {['#000000','#333333','#3B9EFF','#34D399','#F87171','#FBBF24','#60A5FA','#F472B6','#A78BFA'].map(col=>(
                 <button key={col} onClick={()=>{setDrawColor(col);drawColorRef.current=col;}}
-                  style={{width:22,height:22,borderRadius:'50%',background:col,border:drawColor===col?'3px solid #818CF8':`2px solid rgba(0,0,0,.2)`,cursor:'pointer',flexShrink:0,boxShadow:drawColor===col?'0 0 0 1px #fff inset':''}}/>
+                  style={{width:22,height:22,borderRadius:'50%',background:col,border:drawColor===col?'3px solid #3B9EFF':`2px solid rgba(0,0,0,.2)`,cursor:'pointer',flexShrink:0,boxShadow:drawColor===col?'0 0 0 1px #fff inset':''}}/>
               ))}
             </div>
             <div style={{width:1,height:22,background:c.bord}}/>
             {[1,3,6,12].map(w=>(
               <button key={w} onClick={()=>{setDrawWidth(w);drawWidthRef.current=w;}}
-                style={{width:32,height:32,borderRadius:7,background:drawWidth===w?'rgba(99,102,241,.2)':'transparent',border:`1px solid ${c.bord}`,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                style={{width:32,height:32,borderRadius:7,background:drawWidth===w?'rgba(0,112,243,.2)':'transparent',border:`1px solid ${c.bord}`,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
                 <div style={{width:Math.min(w*2,20),height:Math.min(w,10),borderRadius:w,background:drawColor,maxWidth:20}}/>
               </button>
             ))}
@@ -7163,15 +7196,15 @@ function BrainstormSpace({ team, session, members=[] }) {
 
         {tool==='connect'&&(
           <div style={{display:'flex',gap:6,alignItems:'center'}}>
-            <div style={{display:'flex',gap:2,background:dark?'rgba(255,255,255,.04)':'rgba(99,102,241,.05)',borderRadius:10,padding:3,border:`1px solid ${c.bord}`}}>
+            <div style={{display:'flex',gap:2,background:dark?'rgba(255,255,255,.04)':'rgba(0,112,243,.05)',borderRadius:10,padding:3,border:`1px solid ${c.bord}`}}>
               {[['curve','⌒ Curve'],['straight','→ Straight'],['elbow','⌐ Elbow']].map(([ct,lbl])=>(
-                <button key={ct} onClick={()=>{setConnType(ct);connTypeRef.current=ct;}} style={{padding:'4px 10px',borderRadius:7,border:'none',background:connType===ct?'rgba(99,102,241,.22)':'transparent',color:connType===ct?'#818CF8':c.mut,cursor:'pointer',fontSize:11,fontWeight:connType===ct?700:400}}>{lbl}</button>
+                <button key={ct} onClick={()=>{setConnType(ct);connTypeRef.current=ct;}} style={{padding:'4px 10px',borderRadius:7,border:'none',background:connType===ct?'rgba(0,112,243,.22)':'transparent',color:connType===ct?'#3B9EFF':c.mut,cursor:'pointer',fontSize:11,fontWeight:connType===ct?700:400}}>{lbl}</button>
               ))}
             </div>
             <div style={{display:'flex',gap:3}}>
-              {['#000000','#333333','#818CF8','#34D399','#F87171','#FBBF24','#60A5FA'].map(col=>(
+              {['#000000','#333333','#3B9EFF','#34D399','#F87171','#FBBF24','#60A5FA'].map(col=>(
                 <button key={col} onClick={()=>{setConnColor(col);connColorRef.current=col;}}
-                  style={{width:20,height:20,borderRadius:'50%',background:col,border:connColor===col?'2.5px solid #818CF8':`1.5px solid ${c.bord}`,cursor:'pointer'}}/>
+                  style={{width:20,height:20,borderRadius:'50%',background:col,border:connColor===col?'2.5px solid #3B9EFF':`1.5px solid ${c.bord}`,cursor:'pointer'}}/>
               ))}
             </div>
           </div>
@@ -7181,16 +7214,16 @@ function BrainstormSpace({ team, session, members=[] }) {
           <div style={{display:'flex',gap:4,alignItems:'center',borderLeft:`1px solid ${c.bord}`,paddingLeft:8,flexWrap:'wrap'}}>
             {[10,12,14,16,20,24].map(fs=>(
               <button key={fs} onClick={()=>updateNodeSave(selNode.id,{fontSize:fs})}
-                style={{padding:'1px 6px',borderRadius:5,border:`1px solid ${c.bord}`,background:selNode.fontSize===fs?'rgba(99,102,241,.2)':'transparent',color:c.text,cursor:'pointer',fontSize:11}}>{fs}</button>
+                style={{padding:'1px 6px',borderRadius:5,border:`1px solid ${c.bord}`,background:selNode.fontSize===fs?'rgba(0,112,243,.2)':'transparent',color:c.text,cursor:'pointer',fontSize:11}}>{fs}</button>
             ))}
             <div style={{width:1,height:20,background:c.bord}}/>
             <button onClick={()=>updateNodeSave(selNode.id,{fontWeight:selNode.fontWeight>=700?400:700})}
-              style={{width:28,height:28,borderRadius:6,border:`1px solid ${c.bord}`,background:selNode.fontWeight>=700?'rgba(99,102,241,.2)':'transparent',color:c.text,cursor:'pointer',fontWeight:700,fontSize:13}}>B</button>
+              style={{width:28,height:28,borderRadius:6,border:`1px solid ${c.bord}`,background:selNode.fontWeight>=700?'rgba(0,112,243,.2)':'transparent',color:c.text,cursor:'pointer',fontWeight:700,fontSize:13}}>B</button>
             <button onClick={()=>updateNodeSave(selNode.id,{fontStyle:selNode.fontStyle==='italic'?'normal':'italic'})}
-              style={{width:28,height:28,borderRadius:6,border:`1px solid ${c.bord}`,background:selNode.fontStyle==='italic'?'rgba(99,102,241,.2)':'transparent',color:c.text,cursor:'pointer',fontStyle:'italic',fontSize:13}}>I</button>
+              style={{width:28,height:28,borderRadius:6,border:`1px solid ${c.bord}`,background:selNode.fontStyle==='italic'?'rgba(0,112,243,.2)':'transparent',color:c.text,cursor:'pointer',fontStyle:'italic',fontSize:13}}>I</button>
             {selNode.type==='sticky'&&BS_STICKY_COLORS.map(col=>(
               <button key={col} onClick={()=>updateNodeSave(selNode.id,{color:col})}
-                style={{width:18,height:18,borderRadius:'50%',background:col,border:selNode.color===col?'2.5px solid #818CF8':`1px solid ${c.bord}`,cursor:'pointer',flexShrink:0}}/>
+                style={{width:18,height:18,borderRadius:'50%',background:col,border:selNode.color===col?'2.5px solid #3B9EFF':`1px solid ${c.bord}`,cursor:'pointer',flexShrink:0}}/>
             ))}
             {selNode.type==='shape'&&BS_SHAPE_COLORS.map((sc,i)=>(
               <button key={i} onClick={()=>updateNodeSave(selNode.id,{fill:sc.fill,stroke:sc.stroke})}
@@ -7209,11 +7242,11 @@ function BrainstormSpace({ team, session, members=[] }) {
           <div style={{display:'flex',gap:4,alignItems:'center',borderLeft:`1px solid ${c.bord}`,paddingLeft:8}}>
             {[['curve','⌒'],['straight','→'],['elbow','⌐']].map(([ct,ic])=>(
               <button key={ct} onClick={()=>{const nc=connectionsRef.current.map(cc=>cc.id===selConn.id?{...cc,type:ct}:cc);setConnections(nc);connectionsRef.current=nc;saveToStorage(nodesRef.current,nc,drawPathsRef.current);}}
-                style={{width:28,height:28,borderRadius:6,border:`1px solid ${c.bord}`,background:selConn.type===ct?'rgba(99,102,241,.2)':'transparent',color:c.text,cursor:'pointer',fontSize:13}}>{ic}</button>
+                style={{width:28,height:28,borderRadius:6,border:`1px solid ${c.bord}`,background:selConn.type===ct?'rgba(0,112,243,.2)':'transparent',color:c.text,cursor:'pointer',fontSize:13}}>{ic}</button>
             ))}
-            {['#000000','#818CF8','#34D399','#F87171','#FBBF24'].map(col=>(
+            {['#000000','#3B9EFF','#34D399','#F87171','#FBBF24'].map(col=>(
               <button key={col} onClick={()=>{const nc=connectionsRef.current.map(cc=>cc.id===selConn.id?{...cc,color:col}:cc);setConnections(nc);connectionsRef.current=nc;saveToStorage(nodesRef.current,nc,drawPathsRef.current);}}
-                style={{width:18,height:18,borderRadius:'50%',background:col,border:selConn.color===col?'2.5px solid #818CF8':`1px solid ${c.bord}`,cursor:'pointer'}}/>
+                style={{width:18,height:18,borderRadius:'50%',background:col,border:selConn.color===col?'2.5px solid #3B9EFF':`1px solid ${c.bord}`,cursor:'pointer'}}/>
             ))}
             <button onClick={()=>{const nc=connectionsRef.current.filter(c2=>c2.id!==selConn.id);setConnections(nc);connectionsRef.current=nc;setSelected(new Set());pushHist(nodesRef.current,nc,drawPathsRef.current);}}
               style={{padding:'3px 10px',borderRadius:6,background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.22)',color:'#F87171',cursor:'pointer',fontSize:11}}>🗑</button>
@@ -7227,24 +7260,24 @@ function BrainstormSpace({ team, session, members=[] }) {
           <button onClick={()=>setShowTemplates(true)} style={{padding:'5px 11px',borderRadius:7,border:`1px solid ${c.bord}`,background:'transparent',color:c.sub,cursor:'pointer',fontSize:11.5,fontWeight:600,display:'flex',alignItems:'center',gap:5}}>▦ Templates</button>
         </div>
         <div style={{position:'relative',flexShrink:0}}>
-          <button onClick={()=>setShowSens(s=>!s)} title="Board sensitivity" style={{width:30,height:30,borderRadius:7,border:`1px solid ${showSens?'#6366F1':c.bord}`,background:showSens?'rgba(99,102,241,.1)':'transparent',color:showSens?'#6366F1':c.mut,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>⚙</button>
+          <button onClick={()=>setShowSens(s=>!s)} title="Board sensitivity" style={{width:30,height:30,borderRadius:7,border:`1px solid ${showSens?'#0070F3':c.bord}`,background:showSens?'rgba(0,112,243,.1)':'transparent',color:showSens?'#0070F3':c.mut,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>⚙</button>
           {showSens&&(
             <div onMouseDown={e=>e.stopPropagation()} style={{position:'absolute',top:38,right:0,zIndex:60,width:260,background:dark?'#161B2E':'#fff',border:`1px solid ${c.bord}`,borderRadius:14,boxShadow:'0 14px 44px rgba(0,0,0,.3)',padding:16}}>
               <div style={{fontSize:13,fontWeight:700,color:c.text,marginBottom:14}}>Board sensitivity</div>
               <div style={{marginBottom:14}}>
                 <div style={{display:'flex',justifyContent:'space-between',fontSize:11.5,color:c.sub,marginBottom:6}}><span>Zoom speed</span><span style={{color:c.mut}}>{zoomSens<=0.0015?'Slow':zoomSens>=0.0035?'Fast':'Balanced'}</span></div>
-                <input type="range" min="0.0008" max="0.005" step="0.0002" value={zoomSens} onChange={e=>setZoomSens(parseFloat(e.target.value))} style={{width:'100%',accentColor:'#6366F1'}}/>
+                <input type="range" min="0.0008" max="0.005" step="0.0002" value={zoomSens} onChange={e=>setZoomSens(parseFloat(e.target.value))} style={{width:'100%',accentColor:'#0070F3'}}/>
               </div>
               <div style={{marginBottom:14}}>
                 <div style={{display:'flex',justifyContent:'space-between',fontSize:11.5,color:c.sub,marginBottom:6}}><span>Pan speed</span><span style={{color:c.mut}}>{panSens<=0.7?'Slow':panSens>=1.4?'Fast':'Balanced'}</span></div>
-                <input type="range" min="0.4" max="2" step="0.1" value={panSens} onChange={e=>setPanSens(parseFloat(e.target.value))} style={{width:'100%',accentColor:'#6366F1'}}/>
+                <input type="range" min="0.4" max="2" step="0.1" value={panSens} onChange={e=>setPanSens(parseFloat(e.target.value))} style={{width:'100%',accentColor:'#0070F3'}}/>
               </div>
               <div style={{display:'flex',gap:6}}>
                 {[['Precision',{z:0.0012,p:0.6}],['Balanced',{z:0.0022,p:1}],['Fast',{z:0.004,p:1.6}]].map(([l,v])=>(
                   <button key={l} onClick={()=>{setZoomSens(v.z);setPanSens(v.p);}} style={{flex:1,padding:'7px 4px',borderRadius:8,border:`1px solid ${c.bord}`,background:'transparent',color:c.sub,cursor:'pointer',fontSize:11,fontWeight:600}}>{l}</button>
                 ))}
               </div>
-              <button onClick={()=>setShowSens(false)} style={{width:'100%',marginTop:12,padding:'7px',borderRadius:8,border:'none',background:'#6366F1',color:'#fff',cursor:'pointer',fontSize:12,fontWeight:600}}>Done</button>
+              <button onClick={()=>setShowSens(false)} style={{width:'100%',marginTop:12,padding:'7px',borderRadius:8,border:'none',background:'#0070F3',color:'#fff',cursor:'pointer',fontSize:12,fontWeight:600}}>Done</button>
             </div>
           )}
         </div>
@@ -7293,7 +7326,7 @@ function BrainstormSpace({ team, session, members=[] }) {
             style={{position:'absolute',left:-20000,top:-20000,overflow:'visible',pointerEvents:'none'}}>
             <defs>
               <marker id="bsarr-black"   markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto"><path d="M0,0 L0,8 L10,4 z" fill="#000"/></marker>
-              <marker id="bsarr-indigo"  markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto"><path d="M0,0 L0,8 L10,4 z" fill="#818CF8"/></marker>
+              <marker id="bsarr-indigo"  markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto"><path d="M0,0 L0,8 L10,4 z" fill="#3B9EFF"/></marker>
               <marker id="bsarr-green"   markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto"><path d="M0,0 L0,8 L10,4 z" fill="#34D399"/></marker>
               <marker id="bsarr-red"     markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto"><path d="M0,0 L0,8 L10,4 z" fill="#F87171"/></marker>
               <marker id="bsarr-yellow"  markerWidth="10" markerHeight="10" refX="9" refY="4" orient="auto"><path d="M0,0 L0,8 L10,4 z" fill="#FBBF24"/></marker>
@@ -7307,7 +7340,7 @@ function BrainstormSpace({ team, session, members=[] }) {
               if (!f||!t) return null;
               const isSel=selected.has(conn.id);
               const col=conn.color||'#000000';
-              const markId=col==='#818CF8'?'bsarr-indigo':col==='#34D399'?'bsarr-green':col==='#F87171'?'bsarr-red':col==='#FBBF24'?'bsarr-yellow':col==='#60A5FA'?'bsarr-blue':'bsarr-black';
+              const markId=col==='#3B9EFF'?'bsarr-indigo':col==='#34D399'?'bsarr-green':col==='#F87171'?'bsarr-red':col==='#FBBF24'?'bsarr-yellow':col==='#60A5FA'?'bsarr-blue':'bsarr-black';
               return(
                 <g key={conn.id} style={{pointerEvents:'all'}}>
                   <path d={connPath(f.x,f.y,t.x,t.y,conn.type||'curve')} fill="none" stroke="transparent" strokeWidth={14} style={{cursor:'pointer'}}
@@ -7365,7 +7398,7 @@ function BrainstormSpace({ team, session, members=[] }) {
                 {/* STICKY */}
                 {node.type==='sticky'&&(
                   <div style={{width:'100%',height:'100%',background:node.color||'#FDE68A',borderRadius:3,display:'flex',flexDirection:'column',overflow:'hidden',
-                    boxShadow:isSel?'0 0 0 2.5px #6366F1,0 10px 32px rgba(0,0,0,.22)':'2px 3px 10px rgba(0,0,0,.13),1px 1px 0 rgba(0,0,0,.06)'}}>
+                    boxShadow:isSel?'0 0 0 2.5px #0070F3,0 10px 32px rgba(0,0,0,.22)':'2px 3px 10px rgba(0,0,0,.13),1px 1px 0 rgba(0,0,0,.06)'}}>
                     <div style={{height:26,background:'rgba(0,0,0,.09)',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 9px'}}>
                       <div style={{display:'flex',gap:4}}>{['0.5','0.3','0.2'].map((o,i)=><div key={i} style={{width:8,height:8,borderRadius:'50%',background:`rgba(0,0,0,${o})`}}/>)}</div>
                       {isSel&&<div style={{fontSize:9,color:'rgba(0,0,0,.35)',fontWeight:600}}>DBL-CLICK TO EDIT</div>}
@@ -7382,8 +7415,8 @@ function BrainstormSpace({ team, session, members=[] }) {
                 {/* TEXT */}
                 {node.type==='text'&&(
                   <div style={{width:'100%',height:'100%',display:'flex',alignItems:'flex-start',padding:'4px 6px',overflow:'hidden',
-                    border:isSel?'1.5px solid #6366F1':isEdit?'1.5px solid #6366F1':'1.5px dashed rgba(100,90,60,.25)',
-                    borderRadius:5,background:isSel?'rgba(99,102,241,.04)':'transparent',boxShadow:isSel?'0 0 0 3px rgba(99,102,241,.15)':'none'}}>
+                    border:isSel?'1.5px solid #0070F3':isEdit?'1.5px solid #0070F3':'1.5px dashed rgba(100,90,60,.25)',
+                    borderRadius:5,background:isSel?'rgba(0,112,243,.04)':'transparent',boxShadow:isSel?'0 0 0 3px rgba(0,112,243,.15)':'none'}}>
                     {isEdit?<textarea autoFocus value={node.text} onChange={e=>updateNode(node.id,{text:e.target.value})} onBlur={commitEdit} onMouseDown={e=>e.stopPropagation()} style={{...textBase,color:'#1a1a1a'}}/>
                       :<div style={{fontSize:node.fontSize||16,fontWeight:node.fontWeight||400,fontStyle:node.fontStyle||'normal',color:node.text?'#1a1a1a':'rgba(100,90,60,.35)',whiteSpace:'pre-wrap',wordBreak:'break-word',userSelect:'none',textAlign:node.textAlign||'left',lineHeight:1.5,width:'100%'}}>
                         {node.text||'Type here…'}
@@ -7393,7 +7426,7 @@ function BrainstormSpace({ team, session, members=[] }) {
 
                 {/* SHAPE */}
                 {node.type==='shape'&&(
-                  <div style={{width:'100%',height:'100%',position:'relative',boxShadow:isSel?'0 0 0 2.5px #6366F1,0 6px 20px rgba(0,0,0,.1)':'0 2px 8px rgba(0,0,0,.08)',borderRadius:node.shapeType==='rect'?10:0}}>
+                  <div style={{width:'100%',height:'100%',position:'relative',boxShadow:isSel?'0 0 0 2.5px #0070F3,0 6px 20px rgba(0,0,0,.1)':'0 2px 8px rgba(0,0,0,.08)',borderRadius:node.shapeType==='rect'?10:0}}>
                     <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',overflow:'visible'}}>{renderShapeSvg(node)}</svg>
                     <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',padding:8}}>
                       {isEdit?<textarea autoFocus value={node.text} onChange={e=>updateNode(node.id,{text:e.target.value})} onBlur={commitEdit} onMouseDown={e=>e.stopPropagation()} style={{background:'transparent',border:'none',outline:'none',resize:'none',textAlign:node.textAlign||'center',fontFamily:'Inter,sans-serif',fontSize:node.fontSize||13,fontWeight:node.fontWeight||700,color:'#1a1a1a',width:'90%',lineHeight:1.4,boxSizing:'border-box'}}/>
@@ -7405,7 +7438,7 @@ function BrainstormSpace({ team, session, members=[] }) {
                 {/* Resize handle */}
                 {isSel&&!isEdit&&(
                   <div onMouseDown={e=>onResizeMouseDown(e,node)}
-                    style={{position:'absolute',right:-5,bottom:-5,width:12,height:12,borderRadius:3,background:'#6366F1',border:'2px solid #fff',cursor:'se-resize',zIndex:30,boxShadow:'0 1px 4px rgba(0,0,0,.2)'}}/>
+                    style={{position:'absolute',right:-5,bottom:-5,width:12,height:12,borderRadius:3,background:'#0070F3',border:'2px solid #fff',cursor:'se-resize',zIndex:30,boxShadow:'0 1px 4px rgba(0,0,0,.2)'}}/>
                 )}
 
                 {/* Port dots — visible when selected, draggable to connect */}
@@ -7435,7 +7468,7 @@ function BrainstormSpace({ team, session, members=[] }) {
           {selBox&&(()=>{
             const sx=Math.min(selBox.x1,selBox.x2),sy=Math.min(selBox.y1,selBox.y2);
             const sw=Math.abs(selBox.x2-selBox.x1),sh=Math.abs(selBox.y2-selBox.y1);
-            return <div style={{position:'absolute',left:sx,top:sy,width:sw,height:sh,border:'1.5px solid #6366F1',background:'rgba(99,102,241,.06)',pointerEvents:'none',borderRadius:4}}/>;
+            return <div style={{position:'absolute',left:sx,top:sy,width:sw,height:sh,border:'1.5px solid #0070F3',background:'rgba(0,112,243,.06)',pointerEvents:'none',borderRadius:4}}/>;
           })()}
         </div>
 
@@ -7461,7 +7494,7 @@ function BrainstormSpace({ team, session, members=[] }) {
         {/* Mini-map */}
         <div style={{position:'absolute',bottom:12,right:12,width:130,height:88,background:'rgba(245,244,240,.92)',border:'1px solid rgba(0,0,0,.1)',borderRadius:8,overflow:'hidden',boxShadow:'0 2px 10px rgba(0,0,0,.1)'}}>
           <svg width="130" height="88">
-            {nodes.map(n=><rect key={n.id} x={65+n.x*0.025} y={44+n.y*0.025} width={Math.max(5,n.w*0.025)} height={Math.max(4,n.h*0.025)} rx={1} fill={n.type==='sticky'?(n.color||'#FDE68A'):n.fill||'#818CF8'} opacity={0.85}/>)}
+            {nodes.map(n=><rect key={n.id} x={65+n.x*0.025} y={44+n.y*0.025} width={Math.max(5,n.w*0.025)} height={Math.max(4,n.h*0.025)} rx={1} fill={n.type==='sticky'?(n.color||'#FDE68A'):n.fill||'#3B9EFF'} opacity={0.85}/>)}
           </svg>
           <div style={{position:'absolute',bottom:3,left:6,fontSize:9,color:'rgba(0,0,0,.35)',fontWeight:600}}>OVERVIEW</div>
         </div>
@@ -7570,7 +7603,7 @@ function TeamBoard({ teamId='demo', session, isManager, onClaimTask, onGoto }){
   const removePost=(p)=>persist(posts.filter(x=>x.id!==p.id));
 
   const KIND_META={
-    task:{ label:'Task', icon:'task', color:'#6366F1', bg:'rgba(99,102,241,.12)' },
+    task:{ label:'Task', icon:'task', color:'#0070F3', bg:'rgba(0,112,243,.12)' },
     message:{ label:'Message', icon:'message', color:'#38BDF8', bg:'rgba(56,189,248,.12)' },
     reminder:{ label:'Reminder', icon:'reminder', color:'#F59E0B', bg:'rgba(245,158,11,.12)' },
   };
@@ -7578,18 +7611,18 @@ function TeamBoard({ teamId='demo', session, isManager, onClaimTask, onGoto }){
   return (
     <div style={{ borderRadius:18, background:c.surf, border:`1px solid ${c.bord}`, overflow:'hidden' }}>
       <div style={{ padding:'18px 22px', borderBottom:expanded?`1px solid ${c.bord}`:'none', display:'flex', alignItems:'center', gap:10 }}>
-        <span style={{ color:'#6366F1',display:'flex' }}>{boardIcon('board',18)}</span>
+        <span style={{ color:'#0070F3',display:'flex' }}>{boardIcon('board',18)}</span>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:15, fontWeight:700, color:c.text }}>Team board</div>
           <div style={{ fontSize:12, color:c.mut }}>{posts.length===0?'Open tasks, messages & reminders for the whole team':`${posts.length} post${posts.length!==1?'s':''}${openTasks?` · ${openTasks} open task${openTasks!==1?'s':''} to claim`:''}`}</div>
         </div>
-        {isManager&&<button onClick={()=>{setExpanded(true);setComposing(true);}} style={{ padding:'8px 15px', borderRadius:10, border:'none', background:'linear-gradient(135deg,#6366F1,#818CF8)', color:'#fff', cursor:'pointer', fontSize:13, fontWeight:600 }}>＋ Post</button>}
+        {isManager&&<button onClick={()=>{setExpanded(true);setComposing(true);}} style={{ padding:'8px 15px', borderRadius:10, border:'none', background:'linear-gradient(135deg,#0070F3,#3B9EFF)', color:'#fff', cursor:'pointer', fontSize:13, fontWeight:600 }}>＋ Post</button>}
         <button onClick={()=>setExpanded(e=>!e)} style={{ width:32,height:32,borderRadius:9,border:`1px solid ${c.bord}`,background:'transparent',color:c.mut,cursor:'pointer',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>{expanded?'▴':'▾'}</button>
       </div>
 
       {/* Composer (managers) */}
       {expanded&&isManager&&composing&&(
-        <div style={{ padding:'18px 22px', borderBottom:`1px solid ${c.bord}`, background:dark?'rgba(255,255,255,.02)':'rgba(99,102,241,.03)' }}>
+        <div style={{ padding:'18px 22px', borderBottom:`1px solid ${c.bord}`, background:dark?'rgba(255,255,255,.02)':'rgba(0,112,243,.03)' }}>
           <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' }}>
             {Object.entries(KIND_META).map(([k,m])=>(
               <button key={k} onClick={()=>setKind(k)} style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:20, border:`1px solid ${kind===k?m.color:c.bord}`, background:kind===k?m.bg:'transparent', color:kind===k?m.color:c.sub, cursor:'pointer', fontSize:12.5, fontWeight:600 }}>
@@ -7606,7 +7639,7 @@ function TeamBoard({ teamId='demo', session, isManager, onClaimTask, onGoto }){
             )}
             <div style={{ flex:1 }}/>
             <button onClick={()=>{setComposing(false);setText('');}} style={{ padding:'8px 14px', borderRadius:9, border:`1px solid ${c.bord}`, background:'transparent', color:c.mut, cursor:'pointer', fontSize:13 }}>Cancel</button>
-            <button onClick={post} disabled={!text.trim()} style={{ padding:'8px 18px', borderRadius:9, border:'none', background:text.trim()?'#6366F1':c.bord, color:'#fff', cursor:text.trim()?'pointer':'default', fontSize:13, fontWeight:600 }}>Post to team</button>
+            <button onClick={post} disabled={!text.trim()} style={{ padding:'8px 18px', borderRadius:9, border:'none', background:text.trim()?'#0070F3':c.bord, color:'#fff', cursor:text.trim()?'pointer':'default', fontSize:13, fontWeight:600 }}>Post to team</button>
           </div>
         </div>
       )}
@@ -7653,7 +7686,7 @@ function TeamBoardPost({ post, meta, c, dark, myEmail, isManager, onClaim, onRep
                 ✓ Claimed by {post.claimedByEmail===myEmail?'you':post.claimedBy}
               </div>
             ):(
-              <button onClick={onClaim} style={{ marginTop:9, display:'inline-flex', alignItems:'center', gap:6, fontSize:12.5, fontWeight:600, color:'#6366F1', background:'rgba(99,102,241,.1)', border:'1px solid rgba(99,102,241,.3)', padding:'6px 14px', borderRadius:20, cursor:'pointer' }}>✋ Claim this task</button>
+              <button onClick={onClaim} style={{ marginTop:9, display:'inline-flex', alignItems:'center', gap:6, fontSize:12.5, fontWeight:600, color:'#0070F3', background:'rgba(0,112,243,.1)', border:'1px solid rgba(0,112,243,.3)', padding:'6px 14px', borderRadius:20, cursor:'pointer' }}>✋ Claim this task</button>
             )
           )}
 
@@ -7674,7 +7707,7 @@ function TeamBoardPost({ post, meta, c, dark, myEmail, isManager, onClaim, onRep
           {replyOpen&&(
             <div style={{ marginTop:8, display:'flex', gap:8 }}>
               <input value={replyText} onChange={e=>setReplyText(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){onReply(replyText);setReplyText('');setReplyOpen(false);}}} autoFocus placeholder="Write a reply..." style={{ flex:1, background:c.inp, border:`1px solid ${c.inpB}`, borderRadius:8, padding:'7px 11px', color:c.text, fontSize:12.5, outline:'none' }}/>
-              <button onClick={()=>{onReply(replyText);setReplyText('');setReplyOpen(false);}} disabled={!replyText.trim()} style={{ padding:'7px 14px', borderRadius:8, border:'none', background:replyText.trim()?'#6366F1':c.bord, color:'#fff', cursor:replyText.trim()?'pointer':'default', fontSize:12.5, fontWeight:600 }}>Send</button>
+              <button onClick={()=>{onReply(replyText);setReplyText('');setReplyOpen(false);}} disabled={!replyText.trim()} style={{ padding:'7px 14px', borderRadius:8, border:'none', background:replyText.trim()?'#0070F3':c.bord, color:'#fff', cursor:replyText.trim()?'pointer':'default', fontSize:12.5, fontWeight:600 }}>Send</button>
             </div>
           )}
         </div>
@@ -7698,14 +7731,14 @@ function ProjectSummary({ teamId, onGoto }) {
   if (!hasReport) return null;
   return (
     <button onClick={() => onGoto('spaces')} style={{ display: 'flex', alignItems: 'center', gap: 16, width: '100%', textAlign: 'left', padding: '16px 22px', borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, cursor: 'pointer' }} className="ss-card-hover">
-      <span style={{ color: '#6366F1', display: 'flex' }}>{boardIcon('summary', 20)}</span>
+      <span style={{ color: '#0070F3', display: 'flex' }}>{boardIcon('summary', 20)}</span>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>Project summary</div>
         <div style={{ fontSize: 12.5, color: c.mut, marginTop: 2 }}>
           <span style={{ color: '#34D399', fontWeight: 600 }}>{good} doing well</span> · <span style={{ color: '#F87171', fontWeight: 600 }}>{focus} need focus</span> across your spaces
         </div>
       </div>
-      <span style={{ fontSize: 12.5, color: '#818CF8', fontWeight: 600, whiteSpace: 'nowrap' }}>View in Spaces →</span>
+      <span style={{ fontSize: 12.5, color: '#3B9EFF', fontWeight: 600, whiteSpace: 'nowrap' }}>View in Spaces →</span>
     </button>
   );
 }
@@ -7854,7 +7887,7 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
     return items.slice(0, 6);
   })();
 
-  const prioColor = p => p === 'high' ? '#F87171' : p === 'medium' ? '#FBBF24' : '#818CF8';
+  const prioColor = p => p === 'high' ? '#F87171' : p === 'medium' ? '#FBBF24' : '#3B9EFF';
   const initials = (email) => (email||'?').split('@')[0].split(/[.\s]/).map(s=>s[0]).slice(0,2).join('').toUpperCase();
 
   // Detail-card modals for blockers & workload
@@ -7939,7 +7972,7 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
               <span style={{ color: '#A78BFA' }}>✦</span> Ask AI
             </button>
             <button onClick={() => onNewTask && onNewTask()}
-              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 11, border: 'none', background: 'linear-gradient(135deg,#6366F1,#818CF8)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', boxShadow: '0 2px 10px rgba(99,102,241,.3)' }}>
+              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 11, border: 'none', background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', boxShadow: '0 2px 10px rgba(0,112,243,.3)' }}>
               <span style={{ fontSize: 16 }}>＋</span> {isManager ? 'Assign task' : 'New task'}
             </button>
           </div>
@@ -7953,7 +7986,7 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
             style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '18px 18px', borderRadius: 16, border: `1px solid ${c.bord}`, background: c.surf, cursor: 'pointer', textAlign: 'left', transition: 'all .15s' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = c.bordH; e.currentTarget.style.transform = 'translateY(-2px)'; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = c.bord; e.currentTarget.style.transform = 'none'; }}>
-            <div style={{ width: 42, height: 42, borderRadius: 12, background: dark ? 'rgba(129,140,248,.12)' : 'rgba(99,102,241,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: c.accent, flexShrink: 0 }}>{a.icon}</div>
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: dark ? 'rgba(129,140,248,.12)' : 'rgba(0,112,243,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: c.accent, flexShrink: 0 }}>{a.icon}</div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: c.text, lineHeight: 1.2 }}>{a.l}</div>
               <div style={{ fontSize: 12, color: c.mut, marginTop: 3 }}>{a.sub}</div>
@@ -7998,7 +8031,7 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
                   {t.tag && <span style={{ fontSize: 12, color: c.mut, flexShrink: 0 }}>{t.tag}</span>}
                   {m
                     ? <Av member={m} size={22} url={m.avatar_url}/>
-                    : <span style={{ width: 22, height: 22, borderRadius: '50%', background: dark ? 'rgba(255,255,255,.08)' : 'rgba(99,102,241,.1)', color: c.sub, fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials(t.assignee_email)}</span>}
+                    : <span style={{ width: 22, height: 22, borderRadius: '50%', background: dark ? 'rgba(255,255,255,.08)' : 'rgba(0,112,243,.1)', color: c.sub, fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials(t.assignee_email)}</span>}
                 </div>
               );
             })}
@@ -8096,7 +8129,7 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
             {cmpBusy ? <span style={{ color: c.mut }}>Analyzing completion trend…</span> : cmpInsight}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            {[{ l: 'Completed', v: allTasks.filter(t=>t.status==='done').length, col: '#34D399' }, { l: 'Active', v: allTasks.filter(t=>t.status!=='done').length, col: '#818CF8' }, { l: 'Blocked', v: teamBlocked.length, col: teamBlocked.length?'#F87171':'#94A3B8' }].map(s => (
+            {[{ l: 'Completed', v: allTasks.filter(t=>t.status==='done').length, col: '#34D399' }, { l: 'Active', v: allTasks.filter(t=>t.status!=='done').length, col: '#3B9EFF' }, { l: 'Blocked', v: teamBlocked.length, col: teamBlocked.length?'#F87171':'#94A3B8' }].map(s => (
               <div key={s.l} style={{ flex: 1, textAlign: 'center', padding: '12px 8px', borderRadius: 12, background: c.row }}>
                 <div style={{ fontSize: 20, fontWeight: 800, color: s.col }}>{s.v}</div>
                 <div style={{ fontSize: 10.5, color: c.mut, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>{s.l}</div>
@@ -8110,7 +8143,7 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
       {/* Workload AI insight card */}
       {showWorkload && (
         <Modal onClose={() => setShowWorkload(false)} title="✦ Workload insight" width={460}>
-          <div style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(99,102,241,.07)', border: '1px solid rgba(99,102,241,.2)', marginBottom: 16, fontSize: 14, color: c.text, lineHeight: 1.65, minHeight: 60 }}>
+          <div style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(0,112,243,.07)', border: '1px solid rgba(0,112,243,.2)', marginBottom: 16, fontSize: 14, color: c.text, lineHeight: 1.65, minHeight: 60 }}>
             {wlBusy ? <span style={{ color: c.mut }}>Analyzing team workload…</span> : wlInsight}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -8283,7 +8316,7 @@ function SpacesArea({ team, session, members = [] }) {
           <div style={{ marginBottom: 22 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 7 }}>Name <span style={{ color: '#F87171' }}>*</span></div>
             <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} onKeyDown={e => e.key === 'Enter' && goInvite()} placeholder="e.g. New Project" autoFocus
-              style={{ width: '100%', background: c.inp, border: `1.5px solid ${draft.name ? '#6366F1' : c.inpB}`, borderRadius: 8, padding: '11px 14px', color: c.text, fontSize: 15, outline: 'none', boxSizing: 'border-box' }}/>
+              style={{ width: '100%', background: c.inp, border: `1.5px solid ${draft.name ? '#0070F3' : c.inpB}`, borderRadius: 8, padding: '11px 14px', color: c.text, fontSize: 15, outline: 'none', boxSizing: 'border-box' }}/>
           </div>
 
           <div style={{ marginBottom: 22 }}>
@@ -8292,13 +8325,13 @@ function SpacesArea({ team, session, members = [] }) {
               {SPACE_TEMPLATES.map(t => (
                 <button key={t.id} onClick={() => setDraft(d => ({ ...d, templateId: t.id }))}
                   style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 10, cursor: 'pointer', textAlign: 'left', width: '100%',
-                    border: `1.5px solid ${draft.templateId === t.id ? '#6366F1' : c.bord}`, background: draft.templateId === t.id ? (dark ? 'rgba(99,102,241,.1)' : 'rgba(99,102,241,.06)') : c.surf }}>
+                    border: `1.5px solid ${draft.templateId === t.id ? '#0070F3' : c.bord}`, background: draft.templateId === t.id ? (dark ? 'rgba(0,112,243,.1)' : 'rgba(0,112,243,.06)') : c.surf }}>
                   <div style={{ width: 38, height: 38, borderRadius: 9, background: t.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{t.icon}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>{t.name}</div>
                     <div style={{ fontSize: 12, color: c.mut, marginTop: 1 }}>{t.desc}</div>
                   </div>
-                  {draft.templateId === t.id && <span style={{ color: '#6366F1', fontSize: 16 }}>✓</span>}
+                  {draft.templateId === t.id && <span style={{ color: '#0070F3', fontSize: 16 }}>✓</span>}
                 </button>
               ))}
             </div>
@@ -8392,7 +8425,7 @@ function SpacesArea({ team, session, members = [] }) {
         return (
           <div style={{ marginBottom: 24, borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, padding: '18px 22px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 14 }}>
-              <span style={{ color: '#6366F1', display: 'flex' }}>{boardIcon('summary', 20)}</span>
+              <span style={{ color: '#0070F3', display: 'flex' }}>{boardIcon('summary', 20)}</span>
               <div style={{ flex: 1, minWidth: 160 }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: c.text }}>Project health</div>
                 <div style={{ fontSize: 12, color: c.mut }}>AI-scored across delays, blockers, workload & progress</div>
@@ -8446,7 +8479,7 @@ function SpacesArea({ team, session, members = [] }) {
                 onMouseEnter={e => e.currentTarget.style.borderColor = c.bordH}
                 onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                  <div style={{ width: 42, height: 42, borderRadius: 11, background: (s.color || '#6366F1') + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
+                  <div style={{ width: 42, height: 42, borderRadius: 11, background: (s.color || '#0070F3') + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 15, fontWeight: 700, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</div>
                     <div style={{ fontSize: 11.5, color: c.mut }}>{tpl?.name || 'Space'} · {s.key}</div>
@@ -8459,7 +8492,7 @@ function SpacesArea({ team, session, members = [] }) {
                   <div style={{ flex: 1 }}/>
                   <div style={{ display: 'flex', alignItems: 'center' }}>
                     {(s.members || []).slice(0, 3).map((m, i) => (
-                      <div key={i} style={{ width: 24, height: 24, borderRadius: '50%', background: 'linear-gradient(135deg,#6366F1,#818CF8)', border: `2px solid ${c.surf}`, marginLeft: i ? -8 : 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff' }}>{(m.email || m).slice(0, 2).toUpperCase()}</div>
+                      <div key={i} style={{ width: 24, height: 24, borderRadius: '50%', background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', border: `2px solid ${c.surf}`, marginLeft: i ? -8 : 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff' }}>{(m.email || m).slice(0, 2).toUpperCase()}</div>
                     ))}
                   </div>
                 </div>
@@ -8500,7 +8533,7 @@ function SpaceInvite({ draft, members, myEmail, onBack, onSkip, onInvite }) {
         <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 8 }}>Enter names or emails</div>
         <div style={{ border: `1.5px solid ${c.inpB}`, borderRadius: 9, padding: '8px 10px', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', background: c.inp, marginBottom: 18 }}>
           {chips.map(ch => (
-            <span key={ch.email} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: dark ? 'rgba(99,102,241,.18)' : 'rgba(99,102,241,.12)', borderRadius: 16, padding: '3px 6px 3px 9px', fontSize: 12.5, color: c.text, fontWeight: 600 }}>
+            <span key={ch.email} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: dark ? 'rgba(0,112,243,.18)' : 'rgba(0,112,243,.12)', borderRadius: 16, padding: '3px 6px 3px 9px', fontSize: 12.5, color: c.text, fontWeight: 600 }}>
               {ch.name || ch.email}
               <button onClick={() => removeChip(ch.email)} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
             </span>
@@ -8513,7 +8546,7 @@ function SpaceInvite({ draft, members, myEmail, onBack, onSkip, onInvite }) {
             {suggestions.slice(0, 6).map(m => (
               <button key={m.email} onClick={() => addChip(m)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
                 onMouseEnter={e => e.currentTarget.style.background = c.row} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'linear-gradient(135deg,#6366F1,#818CF8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff' }}>{(m.email || '').slice(0, 2).toUpperCase()}</div>
+                <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff' }}>{(m.email || '').slice(0, 2).toUpperCase()}</div>
                 <div><div style={{ fontSize: 13, fontWeight: 600, color: c.text }}>{m.name || m.email}</div><div style={{ fontSize: 11, color: c.mut }}>{m.email}</div></div>
               </button>
             ))}
@@ -8566,14 +8599,14 @@ function SpaceWorkspace({ space, members, session, onBack, onUpdate, onDelete })
 
   const stColor = s => (SPACE_STATUSES.find(x => x.id === s) || SPACE_STATUSES[0]).color;
   const stLabel = s => (SPACE_STATUSES.find(x => x.id === s) || SPACE_STATUSES[0]).label;
-  const prioColor = p => p === 'high' ? '#F87171' : p === 'medium' ? '#FBBF24' : '#818CF8';
+  const prioColor = p => p === 'high' ? '#F87171' : p === 'medium' ? '#FBBF24' : '#3B9EFF';
 
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto' }}>
       {/* Header */}
       <button onClick={onBack} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 13, marginBottom: 12, padding: 0 }}>← All spaces</button>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
-        <div style={{ width: 44, height: 44, borderRadius: 12, background: (space.color || '#6366F1') + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{space.icon}</div>
+        <div style={{ width: 44, height: 44, borderRadius: 12, background: (space.color || '#0070F3') + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{space.icon}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: c.text, margin: 0, letterSpacing: '-.02em' }}>{space.name}</h1>
           <div style={{ fontSize: 12, color: c.mut }}>{items.length} work items · {(space.members || []).length + 1} members</div>
@@ -8778,7 +8811,7 @@ function SpaceCalendar({ items, stColor }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => <div key={d} style={{ fontSize: 10, fontWeight: 700, color: c.mut, textAlign: 'center', padding: 4 }}>{d}</div>)}
         {cells.map((d, i) => (
-          <div key={i} style={{ minHeight: 64, borderRadius: 8, border: d ? `1px solid ${c.bord}` : 'none', padding: 5, background: d === now.getDate() ? (c.dark ? 'rgba(99,102,241,.1)' : 'rgba(99,102,241,.06)') : 'transparent' }}>
+          <div key={i} style={{ minHeight: 64, borderRadius: 8, border: d ? `1px solid ${c.bord}` : 'none', padding: 5, background: d === now.getDate() ? (c.dark ? 'rgba(0,112,243,.1)' : 'rgba(0,112,243,.06)') : 'transparent' }}>
             {d && <div style={{ fontSize: 11, color: c.sub, marginBottom: 3 }}>{d}</div>}
             {d && itemsOn(d).slice(0, 2).map(it => <div key={it.id} style={{ fontSize: 9, padding: '1px 4px', borderRadius: 3, background: stColor(it.status) + '33', color: stColor(it.status), marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.key}</div>)}
           </div>
@@ -8813,17 +8846,115 @@ function parseCSV(text) {
 }
 
 const norm = (s) => (s || '').toString().trim().toLowerCase();
+
+// A row set is the "unfilled template" if its only data rows are the known samples.
+function isTemplateSampleRows(rows) {
+  const flat = rows.flat().map(norm).join('|');
+  const samples = ['homepage redesign', 'api integration', 'onboarding flow'];
+  const hits = samples.filter(s => flat.includes(s)).length;
+  // template has 3 sample items; if 2+ present and very few rows, treat as placeholder
+  return hits >= 2;
+}
+
+// Convert a workbook into a single normalized row set (header + data rows in the
+// standard Item/Owner/Status/Approval/Pipeline/Target/% /Priority/Notes shape).
+// Handles multi-sheet QA reports: each meaningful sheet becomes a "SECTION" with
+// its issues mapped onto the standard columns. Skips summary/recommendation and
+// the unfilled Project-Tracker template.
+function buildRowsFromWorkbook(XLSX, wb) {
+  const STD = ['Item', 'Owner', 'Status', 'Approval', 'Pipeline Stage', 'Target Date', '% Done', 'Priority', 'Notes'];
+  const out = [STD];
+  let added = 0;
+
+  // map a severity/risk word to {priority, approval, pipeline}
+  const sevMap = (v) => {
+    const s = norm(v);
+    if (/high|critical|severe/.test(s)) return { priority: 'High', approval: 'Rejected', pipeline: 'Blocked' };
+    if (/med/.test(s)) return { priority: 'Medium', approval: 'Pending', pipeline: 'Active' };
+    if (/low/.test(s)) return { priority: 'Low', approval: 'Pending', pipeline: 'Active' };
+    return { priority: 'Medium', approval: 'Pending', pipeline: 'Active' };
+  };
+
+  for (const name of wb.SheetNames) {
+    const ws = wb.Sheets[name];
+    const r = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false, defval: '' });
+    if (!r || !r.length) continue;
+    const lname = norm(name);
+
+    // Skip non-itemized sheets
+    if (/executive summary|recommendation|most affected|overview/.test(lname)) continue;
+
+    const h = findHeaderRow(r);
+    if (h < 0) continue;
+    const head = r[h].map(norm);
+    const col = (names) => head.findIndex(c => names.some(n => c.includes(n)));
+
+    // If this is a standard project-tracker sheet (has Item + Approval columns)…
+    const itemCol = col(['item', 'deliverable', 'task', 'feature']);
+    const approvalCol = col(['approval', 'verdict', 'qc']);
+    const sessionCol = col(['session', 'session id', 'recording', 'file']);
+
+    if (itemCol >= 0 && approvalCol >= 0) {
+      // Standard tracker — but skip if it's just the unfilled template samples
+      const dataRows = r.slice(h + 1);
+      if (isTemplateSampleRows(dataRows)) continue;
+      // pass through using standard mapping
+      const ownerCol = col(['owner', 'assignee', 'speaker']);
+      const statusCol = col(['status']);
+      const pipeCol = col(['pipeline', 'stage']);
+      const targetCol = col(['target', 'due', 'date']);
+      const pctCol = col(['% done', 'percent', 'progress']);
+      const prioCol = col(['priority']);
+      const notesCol = col(['notes', 'comment', 'remark']);
+      out.push(['── SECTION: ' + name + ' ──', '', '', '', '', '', '', '', '']);
+      dataRows.forEach(row => {
+        const item = (row[itemCol] || '').toString().trim();
+        if (!item || /^[—\-–\s]+$/.test(item)) return;
+        out.push([item, ownerCol >= 0 ? row[ownerCol] : '', statusCol >= 0 ? row[statusCol] : '', row[approvalCol] || '', pipeCol >= 0 ? row[pipeCol] : '', targetCol >= 0 ? row[targetCol] : '', pctCol >= 0 ? row[pctCol] : '', prioCol >= 0 ? row[prioCol] : '', notesCol >= 0 ? row[notesCol] : '']);
+        added++;
+      });
+      continue;
+    }
+
+    // Issue-style sheet (Session ID + Issue/Severity/Risk) — map to standard rows
+    if (sessionCol >= 0) {
+      const speakerCol = col(['speaker']);
+      const issueCol = col(['issue type', 'issue category', 'issue', 'category']);
+      const sevCol = col(['severity', 'risk']);
+      const descCol = col(['description', 'detail']);
+      const actCol = col(['action required', 'action', 'notes']);
+      const tsCol = col(['timestamp', 'time']);
+      out.push(['── SECTION: ' + name + ' ──', '', '', '', '', '', '', '', '']);
+      r.slice(h + 1).forEach(row => {
+        const sess = (row[sessionCol] || '').toString().trim();
+        if (!sess || /^[⚠—\-–\s]/.test(sess) || norm(sess) === 'session id') return;
+        const sev = sevCol >= 0 ? row[sevCol] : '';
+        const m = sevMap(sev);
+        const issue = issueCol >= 0 ? (row[issueCol] || '').toString().trim() : '';
+        const desc = descCol >= 0 ? (row[descCol] || '').toString().trim() : '';
+        const act = actCol >= 0 ? (row[actCol] || '').toString().trim() : '';
+        const speaker = speakerCol >= 0 ? (row[speakerCol] || '').toString().trim() : '';
+        const ts = tsCol >= 0 ? (row[tsCol] || '').toString().trim() : '';
+        const notes = [issue && ('Issue: ' + issue), desc, act && ('Action: ' + act), ts && ts !== '–' && ('@ ' + ts)].filter(Boolean).join(' · ');
+        out.push([sess, speaker, 'Action Required', m.approval, m.pipeline, '', '0', m.priority, notes]);
+        added++;
+      });
+    }
+  }
+
+  return added > 0 ? out : null;
+}
 // Find the header row: scan up to 15 rows for any recognizable report column.
 function findHeaderRow(rows) {
   for (let i = 0; i < Math.min(rows.length, 15); i++) {
     const cells = (rows[i] || []).map(norm);
-    if (cells.some(c => ['item','deliverable','task','session','feature','work item','name'].includes(c)) ||
-        (cells.includes('owner') && cells.includes('status')) ||
-        cells.includes('approval') || cells.includes('pipeline stage')) {
-      return i;
-    }
+    const filled = cells.filter(c => c).length;
+    if (filled < 2) continue; // title rows have a single populated cell
+    const isHeaderCell = (c) => /^(item|deliverable|task|feature|work item|name|session id|session|owner|assignee|speaker|speaker\(s\)|status|approval|verdict|qc|severity|risk|issue type|issue category|issue|category|pipeline stage|stage|priority|description|notes|action required|action|target date|target|due date|timestamp)$/.test(c) || /session id/.test(c) || /speaker/.test(c);
+    const headerHits = cells.filter(isHeaderCell).length;
+    if (headerHits >= 2) return i;
   }
-  return -1; // none found
+  return -1;
 }
 function rowsToItems(rows) {
   if (!rows || rows.length < 2) return [];
@@ -8943,7 +9074,7 @@ function agileItems(space) {
 // Map to scrum columns: Backlog → To Do → In Progress → In Review → Done
 const SCRUM_COLS = [
   { id: 'backlog', label: 'Backlog', match: ['todo'], filt: (i) => i.status === 'todo' && i.pct === 0, color: '#64748B' },
-  { id: 'todo', label: 'Sprint To Do', match: ['todo'], filt: (i) => i.status === 'todo' && i.pct > 0, color: '#6366F1' },
+  { id: 'todo', label: 'Sprint To Do', match: ['todo'], filt: (i) => i.status === 'todo' && i.pct > 0, color: '#0070F3' },
   { id: 'inprog', label: 'In Progress', filt: (i) => i.status === 'inprog', color: '#2563EB' },
   { id: 'review', label: 'In Review', filt: (i) => i.status === 'review', color: '#D97706' },
   { id: 'done', label: 'Done', filt: (i) => i.status === 'done', color: '#16A34A' },
@@ -8991,7 +9122,7 @@ function SpaceAgile({ space, onUpdate }) {
   const cols = mode === 'scrum' ? SCRUM_COLS : KANBAN_COLS;
   const targets = deriveTargets(items);
 
-  const prioColor = p => p === 'critical' ? '#EF4444' : p === 'high' ? '#F87171' : p === 'medium' ? '#FBBF24' : '#818CF8';
+  const prioColor = p => p === 'critical' ? '#EF4444' : p === 'high' ? '#F87171' : p === 'medium' ? '#FBBF24' : '#3B9EFF';
 
   const refineWithAI = async () => {
     setAiBusy(true);
@@ -9052,7 +9183,7 @@ function SpaceAgile({ space, onUpdate }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       {it.owner && <span style={{ fontSize: 10, color: c.mut }}>{it.owner}</span>}
                       {it.due && <span style={{ fontSize: 10, color: c.mut }}>· {it.due}</span>}
-                      {it.source === 'report' && <span style={{ fontSize: 9, fontWeight: 700, color: '#6366F1', background: 'rgba(99,102,241,.12)', padding: '1px 5px', borderRadius: 4 }}>CLIENT</span>}
+                      {it.source === 'report' && <span style={{ fontSize: 9, fontWeight: 700, color: '#0070F3', background: 'rgba(0,112,243,.12)', padding: '1px 5px', borderRadius: 4 }}>CLIENT</span>}
                       {it.pct > 0 && it.pct < 100 && <span style={{ fontSize: 10, color: c.mut, marginLeft: 'auto' }}>{it.pct}%</span>}
                     </div>
                   </div>
@@ -9067,7 +9198,7 @@ function SpaceAgile({ space, onUpdate }) {
 
       {/* Targets */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: c.text }}>Targets {aiTargets && <span style={{ fontSize: 11, fontWeight: 600, color: '#6366F1', background: 'rgba(99,102,241,.12)', padding: '2px 8px', borderRadius: 20, marginLeft: 6 }}>AI refined</span>}</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: c.text }}>Targets {aiTargets && <span style={{ fontSize: 11, fontWeight: 600, color: '#0070F3', background: 'rgba(0,112,243,.12)', padding: '2px 8px', borderRadius: 20, marginLeft: 6 }}>AI refined</span>}</div>
         <div style={{ display: 'flex', gap: 8 }}>
           {aiTargets && <button onClick={() => { setAiTargets(null); onUpdate({ aiTargets: null }); }} style={{ fontSize: 12, color: c.mut, background: 'none', border: 'none', cursor: 'pointer' }}>Reset to auto</button>}
           <Btn v="ghost" onClick={refineWithAI} loading={aiBusy} style={{ fontSize: 12.5 }}>✦ Ask AI to refine</Btn>
@@ -9080,7 +9211,7 @@ function SpaceAgile({ space, onUpdate }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {(list || []).map((t, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12.5, color: c.sub, lineHeight: 1.5 }}>
-                  <span style={{ color: '#6366F1', flexShrink: 0 }}>▸</span><span>{t}</span>
+                  <span style={{ color: '#0070F3', flexShrink: 0 }}>▸</span><span>{t}</span>
                 </div>
               ))}
               {(!list || list.length === 0) && <div style={{ fontSize: 12, color: c.mut }}>—</div>}
@@ -9140,25 +9271,31 @@ function SpaceClientReport({ space, onUpdate }) {
         if (!XLSX) { setErr('Could not load the Excel reader. Please re-save your file as CSV and upload that.'); setBusy(false); return; }
         const buf = await f.arrayBuffer();
         const wb = XLSX.read(buf, { type: 'array' });
-        // Scan ALL sheets and pick the one whose rows best match a report (has a
-        // recognizable header) — falls back to the sheet with the most rows.
-        let best = null, bestScore = -1;
-        for (const name of wb.SheetNames) {
-          const ws = wb.Sheets[name];
-          const r = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false, defval: '' });
-          if (!r || !r.length) continue;
-          // score: + big bonus if a header row exists, + row count
-          let hasHeader = 0;
-          for (let i = 0; i < Math.min(r.length, 12); i++) {
-            const cells = (r[i] || []).map(c => (c || '').toString().trim().toLowerCase());
-            if (cells.some(x => ['item','deliverable','task','session'].includes(x)) ||
-                (cells.includes('owner') && cells.includes('status')) ||
-                cells.includes('approval')) { hasHeader = 1; break; }
+        // First try the workbook-aware builder (handles multi-sheet QA reports and
+        // skips the unfilled template). Fall back to best-single-sheet if it finds nothing.
+        const built = buildRowsFromWorkbook(XLSX, wb);
+        if (built) {
+          rows = built;
+        } else {
+          let best = null, bestScore = -1;
+          for (const name of wb.SheetNames) {
+            const ws = wb.Sheets[name];
+            const r = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false, defval: '' });
+            if (!r || !r.length) continue;
+            // skip the unfilled template sheet
+            if (isTemplateSampleRows(r.slice(1, 6))) continue;
+            let hasHeader = 0;
+            for (let i = 0; i < Math.min(r.length, 12); i++) {
+              const cells = (r[i] || []).map(c => (c || '').toString().trim().toLowerCase());
+              if (cells.some(x => ['item','deliverable','task','session'].includes(x)) ||
+                  (cells.includes('owner') && cells.includes('status')) ||
+                  cells.includes('approval')) { hasHeader = 1; break; }
+            }
+            const score = hasHeader * 10000 + r.length;
+            if (score > bestScore) { bestScore = score; best = r; }
           }
-          const score = hasHeader * 10000 + r.length;
-          if (score > bestScore) { bestScore = score; best = r; }
+          rows = best || [];
         }
-        rows = best || [];
       } else { setErr('Please upload a .xlsx or .csv file.'); setBusy(false); return; }
       const items = rowsToItems(rows);
       const summary = summarizeReport(rows);
@@ -9214,7 +9351,7 @@ function SpaceClientReport({ space, onUpdate }) {
   const apColor = (a) => { a = norm(a); return a === 'approved' ? '#16A34A' : a === 'rejected' ? '#DC2626' : '#D97706'; };
 
   const cards = [
-    { l: 'Delivered', v: progressPct + '%', col: '#6366F1', sub: `${done}/${total} items` },
+    { l: 'Delivered', v: progressPct + '%', col: '#0070F3', sub: `${done}/${total} items` },
     { l: 'Approval rate', v: approvalRate + '%', col: approvalRate >= 70 ? '#16A34A' : approvalRate >= 40 ? '#D97706' : '#DC2626', sub: `${approved} approved · ${rejected} rejected` },
     { l: 'Pending', v: pending, col: '#D97706', sub: 'awaiting decision' },
     { l: 'Blocked / action', v: blocked, col: blocked ? '#DC2626' : '#16A34A', sub: 'need attention' },
@@ -9410,7 +9547,7 @@ function MemberSettings({ session, team, myRole }) {
     <div style={{ maxWidth: 560, margin: '0 auto' }}>
       <Card style={{ padding: '22px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
-          <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'linear-gradient(135deg,#6366F1,#818CF8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: '#fff' }}>{name.split(/[.\s]/).map(s => s[0]).slice(0, 2).join('').toUpperCase()}</div>
+          <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: '#fff' }}>{name.split(/[.\s]/).map(s => s[0]).slice(0, 2).join('').toUpperCase()}</div>
           <div>
             <div style={{ fontSize: 17, fontWeight: 700, color: c.text }}>{name}</div>
             <div style={{ fontSize: 13, color: c.mut }}>{email}</div>
@@ -9449,7 +9586,7 @@ function saveShiftConfig(teamId, cfg) { try { localStorage.setItem(`ss-shift-${t
 function fmtHour(h) { const ap = h >= 12 ? 'PM' : 'AM'; const hh = h % 12 === 0 ? 12 : h % 12; return `${hh}${ap}`; }
 const TASK_LABELS = [
   { id: 'bug', label: 'Bug', color: '#EF4444' },
-  { id: 'feature', label: 'Feature', color: '#6366F1' },
+  { id: 'feature', label: 'Feature', color: '#0070F3' },
   { id: 'urgent', label: 'Urgent', color: '#F59E0B' },
   { id: 'review', label: 'Review', color: '#8B5CF6' },
   { id: 'design', label: 'Design', color: '#EC4899' },
@@ -9713,7 +9850,7 @@ function AttendancePanel({ team, members, session, isManager }) {
           { l: 'Online now', v: `${onlineNum}/${members.length}`, col: '#34D399', icon: '🟢' },
           { l: 'On break', v: onBreakNum, col: '#FBBF24', icon: '⏸️' },
           { l: 'Warnings', v: warnNum, col: warnNum ? '#F87171' : c.text, icon: '⚠️' },
-          { l: 'Shift', v: `${fmtHour(myShift.start)}–${fmtHour(myShift.end)}`, col: '#818CF8', icon: '🕘' },
+          { l: 'Shift', v: `${fmtHour(myShift.start)}–${fmtHour(myShift.end)}`, col: '#3B9EFF', icon: '🕘' },
         ].map(s => (
           <div key={s.l} style={{ padding: '14px 16px', borderRadius: 14, background: c.surf, border: `1px solid ${c.bord}` }}>
             <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
@@ -9725,7 +9862,7 @@ function AttendancePanel({ team, members, session, isManager }) {
 
       {/* Backend note */}
       {!(SB.IS_LIVE) && (
-        <div style={{ fontSize: 12, color: c.mut, background: 'rgba(99,102,241,.06)', border: `1px solid ${c.bord}`, borderRadius: 10, padding: '10px 14px', marginBottom: 16, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 12, color: c.mut, background: 'rgba(0,112,243,.06)', border: `1px solid ${c.bord}`, borderRadius: 10, padding: '10px 14px', marginBottom: 16, lineHeight: 1.5 }}>
           ℹ️ Live online/offline across the team activates once Supabase is connected. Manual shift &amp; break logs work now and are visible per device.
         </div>
       )}
@@ -9879,13 +10016,13 @@ function NotificationPanel({ notifs, onClose, onAction, onMarkAllRead, onClearAl
             <div style={{ fontSize: 12.5, color: c.mut }}>No blockers, deadlines, or meetings today.</div>
           </div>
         ) : visible.map(n => (
-          <div key={n.id} style={{ display: 'flex', gap: 12, padding: '13px 16px', borderBottom: `1px solid ${c.bord}`, position: 'relative', background: n.read ? 'transparent' : (dark ? 'rgba(129,140,248,.05)' : 'rgba(99,102,241,.03)') }}>
-            {!n.read && <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', width: 6, height: 6, borderRadius: '50%', background: '#6366F1' }}/>}
+          <div key={n.id} style={{ display: 'flex', gap: 12, padding: '13px 16px', borderBottom: `1px solid ${c.bord}`, position: 'relative', background: n.read ? 'transparent' : (dark ? 'rgba(129,140,248,.05)' : 'rgba(0,112,243,.03)') }}>
+            {!n.read && <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', width: 6, height: 6, borderRadius: '50%', background: '#0070F3' }}/>}
             <div style={{ width: 34, height: 34, borderRadius: 10, background: n.accent + '1f', color: n.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{n.icon}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: n.read ? 600 : 700, color: c.text }}>{n.title}</div>
               <div style={{ fontSize: 12.5, color: c.sub, marginTop: 2, lineHeight: 1.45 }}>{n.body}</div>
-              {n.action && <button onClick={() => onAction(n)} style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg,#6366F1,#818CF8)', border: 'none', borderRadius: 8, padding: '5px 12px', cursor: 'pointer' }}>{n.action.label} →</button>}
+              {n.action && <button onClick={() => onAction(n)} style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', border: 'none', borderRadius: 8, padding: '5px 12px', cursor: 'pointer' }}>{n.action.label} →</button>}
             </div>
           </div>
         ))}
@@ -9917,8 +10054,8 @@ function MailPreviewModal({ mail, onClose }) {
     <Modal onClose={onClose} title="" width={520}>
       <div style={{ marginTop: -8 }}>
         {/* Mail highlight header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 12, background: dark ? 'rgba(99,102,241,.1)' : 'rgba(99,102,241,.06)', border: '1px solid rgba(99,102,241,.25)', marginBottom: 16 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 11, background: 'linear-gradient(135deg,#6366F1,#818CF8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, flexShrink: 0 }}>📧</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 12, background: dark ? 'rgba(0,112,243,.1)' : 'rgba(0,112,243,.06)', border: '1px solid rgba(0,112,243,.25)', marginBottom: 16 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 11, background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, flexShrink: 0 }}>📧</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: c.text }}>{mail.subject}</div>
             <div style={{ fontSize: 12, color: c.mut, marginTop: 1 }}>To: {mail.to}</div>
@@ -10013,12 +10150,12 @@ function ManagerView({
       const mine = (e.targetEmail || '').toLowerCase() === myEmail;
       const byMe = (e.actorEmail || '').toLowerCase() === myEmail;
       let n = null;
-      if (e.type === 'task_assigned' && mine && !byMe) n = { icon: '\uD83D\uDCCC', accent: '#6366F1', title: 'New task assigned to you', body: e.actor + ' assigned "' + e.title + '"', go: 'tasks' };
-      else if (e.type === 'task_assigned' && !mine && isManager) n = { icon: '\uD83D\uDCCC', accent: '#818CF8', title: 'Task assigned', body: e.actor + ' \u2192 ' + e.target + ': "' + e.title + '"', go: 'tasks' };
+      if (e.type === 'task_assigned' && mine && !byMe) n = { icon: '\uD83D\uDCCC', accent: '#0070F3', title: 'New task assigned to you', body: e.actor + ' assigned "' + e.title + '"', go: 'tasks' };
+      else if (e.type === 'task_assigned' && !mine && isManager) n = { icon: '\uD83D\uDCCC', accent: '#3B9EFF', title: 'Task assigned', body: e.actor + ' \u2192 ' + e.target + ': "' + e.title + '"', go: 'tasks' };
       else if (e.type === 'task_created' && !byMe) n = { icon: '\uD83D\uDCDD', accent: '#38BDF8', title: e.actor + ' added a task', body: '"' + e.title + '"', go: 'tasks' };
       else if (e.type === 'task_started' && !byMe) n = { icon: '\u26A1', accent: '#38BDF8', title: e.actor + ' started a task', body: '"' + e.title + '"', go: 'tasks' };
       else if (e.type === 'task_completed' && !byMe) n = { icon: '\u2705', accent: '#34D399', title: e.actor + ' completed a task', body: '"' + e.title + '"', go: 'tasks' };
-      else if (e.type === 'teamboard' && !byMe) n = { icon: '\uD83D\uDCCB', accent: '#6366F1', title: 'New on the team board', body: e.actor + ': ' + e.title, go: 'home' };
+      else if (e.type === 'teamboard' && !byMe) n = { icon: '\uD83D\uDCCB', accent: '#0070F3', title: 'New on the team board', body: e.actor + ': ' + e.title, go: 'home' };
       else if (e.type === 'space_update' && !byMe) n = { icon: '\u25A6', accent: '#8B5CF6', title: 'Update in ' + (e.spaceName || 'a project space'), body: e.actor + ': ' + e.title, go: 'spaces' };
       else if (e.type === 'backlog' && (mine || isManager)) n = { icon: '\u26A0\uFE0F', accent: '#DC2626', title: mine ? 'Unfinished from ' + (e.fromDate || 'a previous day') : 'Carried-over backlog', body: '"' + e.title + '"' + (mine ? ' is still open' : ' \u2014 ' + (e.actor || 'someone')), go: 'tasks' };
       if (n) out.push({ id: e.id, at: e.at, kind: e.type, icon: n.icon, accent: n.accent, title: n.title, body: n.body + ' \u00b7 ' + ago(e.at), action: { label: 'View', go: n.go } });
@@ -10049,7 +10186,7 @@ function ManagerView({
     try {
       const digs = JSON.parse(localStorage.getItem('ss-digests-' + (team?.id || 'demo')) || '[]');
       digs.filter(d => (d.email || '').toLowerCase() === myEmail && d.day === todayKey).forEach(d => out.push({
-        id: 'mail-' + d.id, at: d.at || Date.now(), kind: 'mail', icon: '\uD83D\uDCE7', accent: '#6366F1',
+        id: 'mail-' + d.id, at: d.at || Date.now(), kind: 'mail', icon: '\uD83D\uDCE7', accent: '#0070F3',
         title: d.kind === 'eod' ? 'EOD summary from ' + d.from : 'Standup digest from ' + d.from,
         body: d.subject, mail: { subject: d.subject, body: d.body, to: d.to }, action: { label: 'Open email', mail: true },
       }));
@@ -10236,7 +10373,7 @@ function ManagerView({
     return (
       <button key={n.id} onClick={() => goArea(n.id)}
         style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', borderRadius: 10, border: 'none', cursor: 'pointer',
-          background: on ? (dark ? 'rgba(129,140,248,.14)' : 'rgba(99,102,241,.1)') : 'transparent',
+          background: on ? (dark ? 'rgba(129,140,248,.14)' : 'rgba(0,112,243,.1)') : 'transparent',
           color: on ? c.accent : c.sub, fontSize: 14, fontWeight: on ? 600 : 500, marginBottom: 2, textAlign: 'left', transition: 'all .12s', position: 'relative' }}
         onMouseEnter={e => { if (!on) e.currentTarget.style.background = c.row; }}
         onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent'; }}>
@@ -10254,7 +10391,7 @@ function ManagerView({
   // ── Sidebar ──
   const SidebarNav = ({ inDrawer }) => (
     <div style={{ width: 260, flexShrink: 0, height: '100vh', position: inDrawer ? 'relative' : 'sticky', top: 0,
-      background: dark ? '#0D1322' : '#FFFFFF', borderRight: `1px solid ${c.bord}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      background: dark ? 'rgba(13,13,13,.72)' : 'rgba(255,255,255,.7)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderRight: `1px solid ${c.bord}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Logo + workspace */}
       <div style={{ padding: '18px 20px 8px', display: 'flex', alignItems: 'center', gap: 11 }}>
         <Logo size={30} iconOnly onClick={onBack}/>
@@ -10283,7 +10420,7 @@ function ManagerView({
       <button onClick={onSettings} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '14px 18px', borderTop: `1px solid ${c.bord}`, background: 'transparent', border: 'none', borderTopWidth: 1, cursor: 'pointer', textAlign: 'left', width: '100%' }}
         onMouseEnter={e => e.currentTarget.style.background = c.row}
         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-        <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg,#6366F1,#818CF8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0 }}>{userInitials}</div>
+        <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0 }}>{userInitials}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 700, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName}</div>
           <div style={{ fontSize: 11.5, color: c.mut }}>{userRole}</div>
@@ -10309,6 +10446,7 @@ function ManagerView({
 
   return (
     <div style={{ position: 'relative', zIndex: 1, display: 'flex', minHeight: '100vh' }}>
+      <AmbientBackground/>
 
       {/* Desktop sidebar */}
       <div className="ss-sidebar-desktop"><SidebarNav/></div>
@@ -10328,7 +10466,7 @@ function ManagerView({
         <div style={{ height: 60, borderBottom: `1px solid ${c.bord}`, background: c.nav, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', position: 'sticky', top: 0, zIndex: 100, display: 'flex', alignItems: 'center', gap: 12, padding: '0 24px' }}>
           <button className="ss-burger" onClick={() => setMobileNav(true)} style={{ display: 'none', width: 38, height: 38, borderRadius: 10, border: `1px solid ${c.bord}`, background: 'transparent', color: c.text, cursor: 'pointer', fontSize: 18, alignItems: 'center', justifyContent: 'center' }}>☰</button>
 
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: c.text, margin: 0, flexShrink: 0 }}>{areaTitle[area]}</h2>
+          <h2 className="font-heading" style={{ fontSize: 19, fontWeight: 600, color: c.text, margin: 0, flexShrink: 0, letterSpacing:'-.02em' }}>{areaTitle[area]}</h2>
 
           {/* Search */}
           <div style={{ flex: 1, maxWidth: 440, position: 'relative', marginLeft: 8 }}>
@@ -10615,7 +10753,7 @@ function QuickNoteModal({ session, team, onClose, onOpenKnowledge }) {
       <Modal onClose={onClose} title="New note" width={460}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <Choice icon="≡" title="Meeting notes" desc="Capture decisions and action items from a meeting" accent="#FBBF24" onClick={() => { setNoteType('meeting'); setTitle('Meeting notes — ' + new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})); }}/>
-          <Choice icon="◈" title="Project notes" desc="Docs, SOPs, and project knowledge" accent="#818CF8" onClick={() => { setNoteType('project'); }}/>
+          <Choice icon="◈" title="Project notes" desc="Docs, SOPs, and project knowledge" accent="#3B9EFF" onClick={() => { setNoteType('project'); }}/>
         </div>
       </Modal>
     );
@@ -10699,7 +10837,7 @@ function StandupOptionsModal({ team, onClose, onJoin, onPip }) {
     <button onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 12, border: '1px solid ' + c.bord, background: c.surf, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all .15s' }}
       onMouseEnter={e => e.currentTarget.style.borderColor = c.bordH}
       onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
-      <div style={{ width: 40, height: 40, borderRadius: 11, background: (accent || '#6366F1') + '1f', color: accent || '#818CF8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{icon}</div>
+      <div style={{ width: 40, height: 40, borderRadius: 11, background: (accent || '#0070F3') + '1f', color: accent || '#3B9EFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{icon}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>{title}</div>
         <div style={{ fontSize: 12, color: c.mut, marginTop: 2 }}>{desc}</div>
@@ -10721,7 +10859,7 @@ function StandupOptionsModal({ team, onClose, onJoin, onPip }) {
           <div style={{ fontSize: 11, color: c.mut, marginTop: 2 }}>{fmtTime(ev._start)}</div>
         </div>
         {prov
-          ? <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: 'linear-gradient(135deg,#6366F1,#818CF8)', padding: '4px 12px', borderRadius: 20, flexShrink: 0 }}>{cta} {prov}</span>
+          ? <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', padding: '4px 12px', borderRadius: 20, flexShrink: 0 }}>{cta} {prov}</span>
           : <span style={{ fontSize: 11, color: c.mut, flexShrink: 0 }}>No link</span>}
       </button>
     );
@@ -10756,7 +10894,7 @@ function StandupOptionsModal({ team, onClose, onJoin, onPip }) {
           <div style={{ fontSize: 12.5, color: c.mut, lineHeight: 1.5, marginBottom: 2 }}>Choose what floats over your call.</div>
           <Action icon="📝" title="Meeting notes" desc="Floating notes pad over your call" accent="#FBBF24" onClick={() => onPip('notes')}/>
           <Action icon="✅" title="Create tasks" desc="Floating task board over your call" accent="#60A5FA" onClick={() => onPip('tasks')}/>
-          <Action icon="🪟" title="Both" desc="Notes and tasks together in one window" accent="#818CF8" onClick={() => onPip('both')}/>
+          <Action icon="🪟" title="Both" desc="Notes and tasks together in one window" accent="#3B9EFF" onClick={() => onPip('both')}/>
           <div style={{ marginTop: 4, paddingTop: 12, borderTop: '1px solid ' + c.bord }}>
             <Action icon="🎥" title="Join a meeting + open PiP" desc="Open a call from your calendar, then float PiP on top" accent="#34D399" onClick={() => setView('pipjoin')}/>
           </div>
@@ -10775,7 +10913,7 @@ function StandupOptionsModal({ team, onClose, onJoin, onPip }) {
             <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, letterSpacing: '.08em', marginBottom: 8 }}>PIP SHOWS</div>
             <div style={{ display: 'flex', gap: 8 }}>
               {[['notes', '📝 Notes'], ['tasks', '✅ Tasks'], ['both', '🪟 Both']].map(([m, lbl]) => (
-                <button key={m} onClick={() => setPendingPipMode(m)} style={{ flex: 1, padding: '8px 10px', borderRadius: 9, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (pendingPipMode === m ? '#818CF8' : c.bord), background: pendingPipMode === m ? 'rgba(99,102,241,.12)' : 'transparent', color: pendingPipMode === m ? c.accent : c.sub }}>{lbl}</button>
+                <button key={m} onClick={() => setPendingPipMode(m)} style={{ flex: 1, padding: '8px 10px', borderRadius: 9, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', border: '1px solid ' + (pendingPipMode === m ? '#3B9EFF' : c.bord), background: pendingPipMode === m ? 'rgba(0,112,243,.12)' : 'transparent', color: pendingPipMode === m ? c.accent : c.sub }}>{lbl}</button>
               ))}
             </div>
           </div>
@@ -10796,7 +10934,7 @@ function StandupOptionsModal({ team, onClose, onJoin, onPip }) {
     <Modal onClose={onClose} title="Start standup" width={520}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <Action icon="🎯" title="Join the standup" desc="Pick a meeting from your calendar and jump in" onClick={() => setView('join')} accent="#34D399"/>
-        <Action icon="🪟" title="PiP mode" desc="Floating window that stays over your video call" onClick={() => setView('pip')} accent="#818CF8"/>
+        <Action icon="🪟" title="PiP mode" desc="Floating window that stays over your video call" onClick={() => setView('pip')} accent="#3B9EFF"/>
       </div>
     </Modal>
   );
@@ -10913,7 +11051,7 @@ function PipWindow() { return null; }
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
 var DEMO_MEMBERS=[
-  {id:'dm1',user_id:'u1',email:'tanisk.pandey@xtransmatrix.com',name:'Tanisk Pandey',role:'manager',color:'#818CF8'},
+  {id:'dm1',user_id:'u1',email:'tanisk.pandey@xtransmatrix.com',name:'Tanisk Pandey',role:'manager',color:'#3B9EFF'},
   {id:'dm2',user_id:'u2',email:'deepak.nr@xtransmatrix.com',name:'Deepak NR',role:'member',color:'#38BDF8'},
   {id:'dm3',user_id:'u3',email:'madhan.m@xtransmatrix.com',name:'Madhan M',role:'member',color:'#34D399'},
   {id:'dm4',user_id:'u4',email:'monica@xtransmatrix.com',name:'Monica M',role:'member',color:'#F472B6'},
@@ -11137,7 +11275,7 @@ export default function App() {
               session.user.user_metadata?.name||session.user.email.split('@')[0]);
             const mems2=await SB.getTeamMembers(team.id);
             if(mems2&&mems2.length>0) setMembers(mems2);
-            else setMembers([{id:'me',user_id:session.user.id,email:session.user.email,name:session.user.user_metadata?.name||'You',role:'manager',designation:'Team Manager',color:'#818CF8',status:'active'}]);
+            else setMembers([{id:'me',user_id:session.user.id,email:session.user.email,name:session.user.user_metadata?.name||'You',role:'manager',designation:'Team Manager',color:'#3B9EFF',status:'active'}]);
           }
         }
       } catch(err) {
@@ -11405,7 +11543,7 @@ function NotesTab({ session, team, role='manager' }) {
     <div>
       <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:14 }}>
         <button onClick={()=>setView('list')} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:13,padding:0 }}>← Back</button>
-        <span style={{ fontSize:11,padding:'2px 8px',borderRadius:20,background:selectedNote?.type==='meeting'?'rgba(99,102,241,.12)':'rgba(52,211,153,.12)',color:selectedNote?.type==='meeting'?'#818CF8':'#34D399',fontWeight:600 }}>{selectedNote?.type==='meeting'?'📅 Meeting':'📁 Project'}</span>
+        <span style={{ fontSize:11,padding:'2px 8px',borderRadius:20,background:selectedNote?.type==='meeting'?'rgba(0,112,243,.12)':'rgba(52,211,153,.12)',color:selectedNote?.type==='meeting'?'#3B9EFF':'#34D399',fontWeight:600 }}>{selectedNote?.type==='meeting'?'📅 Meeting':'📁 Project'}</span>
         <div style={{ flex:1 }}/>
         <Btn onClick={saveNote}>{saved?'✓ Saved!':'Save'}</Btn>
       </div>
@@ -11622,7 +11760,7 @@ function TeamAnalysisTab({ tasks, members, history = [], memberView = false }) {
           <div>
             <div style={{ fontSize: 12, color: c.mut, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>Today's completion</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-              <span style={{ fontSize: 36, fontWeight: 800, color: pct >= 80 ? '#34D399' : pct >= 50 ? '#818CF8' : '#F97316' }}>{pct}%</span>
+              <span style={{ fontSize: 36, fontWeight: 800, color: pct >= 80 ? '#34D399' : pct >= 50 ? '#3B9EFF' : '#F97316' }}>{pct}%</span>
               {trend != null && <span style={{ fontSize: 13, fontWeight: 700, color: trend > 0 ? '#34D399' : trend < 0 ? '#F87171' : c.mut }}>{trend > 0 ? '▲' : trend < 0 ? '▼' : '–'} {Math.abs(trend)}% vs last</span>}
             </div>
           </div>
@@ -11635,7 +11773,7 @@ function TeamAnalysisTab({ tasks, members, history = [], memberView = false }) {
             ))}
           </div>
         </div>
-        <div style={{ marginTop: 16 }}><Bar pct={pct} h={8} color="linear-gradient(90deg,#6366F1,#34D399)"/></div>
+        <div style={{ marginTop: 16 }}><Bar pct={pct} h={8} color="linear-gradient(90deg,#0070F3,#34D399)"/></div>
       </Card>
 
       {/* Alerts + Highlights side by side (members see Highlights only — no per-person call-outs) */}
