@@ -63,6 +63,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 input,select,textarea,button{font-family:inherit}
 /* ── Emergent design language ───────────────────────────────────────── */
 .font-heading{font-family:'Outfit',sans-serif;letter-spacing:-.025em}
+h1,h2,h3{font-family:'Outfit',sans-serif;letter-spacing:-.022em}
 .font-mono{font-family:'JetBrains Mono',monospace}
 .eyebrow{font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.18em;font-size:11px}
 /* Ambient drifting blobs */
@@ -79,6 +80,20 @@ input,select,textarea,button{font-family:inherit}
 @keyframes check-burst{0%{transform:scale(.4);opacity:.55}100%{transform:scale(2.4);opacity:0}}
 .check-burst{animation:check-burst .55s ease-out forwards}
 @media(prefers-reduced-motion:reduce){.ambient-blob-a,.ambient-blob-b,.ambient-blob-c{animation:none}.check-path{stroke-dashoffset:0;animation:none}}
+/* Tactile, springy interaction on every button + smooth global transitions */
+button{transition:transform .12s cubic-bezier(.22,1,.36,1),background .15s,border-color .15s,box-shadow .15s,opacity .15s,color .15s}
+button:active{transform:scale(.96)}
+button:disabled:active{transform:none}
+a{transition:color .15s,opacity .15s}
+input,select,textarea{transition:border-color .15s,box-shadow .15s,background .15s}
+input:focus,select:focus,textarea:focus{box-shadow:0 0 0 3px var(--ss-focus,rgba(0,112,243,.15))}
+/* Cards & rows gently lift on hover (opt-in via .ss-lift) */
+.ss-lift{transition:transform .18s cubic-bezier(.22,1,.36,1),box-shadow .18s,border-color .18s}
+.ss-lift:hover{transform:translateY(-2px)}
+/* Pop-in for newly mounted modals/menus */
+@keyframes ssPop{0%{opacity:0;transform:scale(.97) translateY(8px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+.ss-pop{animation:ssPop .22s cubic-bezier(.22,1,.36,1) both}
+@media(prefers-reduced-motion:reduce){button:active{transform:none}.ss-lift:hover{transform:none}.ss-pop{animation:none}}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(0,112,243,.25);border-radius:10px}
@@ -229,7 +244,7 @@ function Card({ children, style={}, onClick }) {
       border:`1px solid ${h&&onClick?c.bordH:c.bord}`,borderRadius:16,
       backdropFilter:'blur(28px)',WebkitBackdropFilter:'blur(28px)',
       boxShadow:dark?'0 2px 20px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.04)':'0 2px 20px rgba(0,112,243,.06),inset 0 1px 0 rgba(255,255,255,.9)',
-      transition:'all .18s',cursor:onClick?'pointer':undefined,...style
+      transition:'transform .18s cubic-bezier(.22,1,.36,1),background .18s,border-color .18s,box-shadow .18s',cursor:onClick?'pointer':undefined,transform:h&&onClick?'translateY(-2px)':'none',...style
     }}>{children}</div>
   );
 }
@@ -249,8 +264,8 @@ function Sel({ label, children, style={}, ...p }) {
 function Btn({ children, v='primary', style={}, disabled, loading, ...p }) {
   const { dark }=useTheme();
   const vs={
-    primary:{background:'linear-gradient(135deg,#6B5FE4 0%,#9B8AFB 100%)',color:'#fff',border:'none',boxShadow:'0 3px 14px rgba(107,95,228,.38)'},
-    ghost:{background:dark?'rgba(255,255,255,.06)':'rgba(0,112,243,.07)',color:dark?'rgba(240,236,255,.7)':'#4338CA',border:dark?'1px solid rgba(255,255,255,.1)':'1px solid rgba(0,112,243,.16)'},
+    primary:{background:'linear-gradient(135deg,#0070F3 0%,#3B9EFF 100%)',color:'#fff',border:'none',boxShadow:'0 3px 14px rgba(0,112,243,.34)'},
+    ghost:{background:dark?'rgba(255,255,255,.06)':'rgba(0,112,243,.07)',color:dark?'rgba(240,236,255,.7)':'#0059C9',border:dark?'1px solid rgba(255,255,255,.1)':'1px solid rgba(0,112,243,.16)'},
     danger:{background:'rgba(239,68,68,.1)',color:'#F87171',border:'1px solid rgba(239,68,68,.2)'},
     warn:{background:'rgba(245,158,11,.1)',color:'#FCD34D',border:'1px solid rgba(245,158,11,.2)'},
     success:{background:'linear-gradient(135deg,#059669,#34D399)',color:'#fff',border:'none',boxShadow:'0 3px 12px rgba(52,211,153,.28)'},
@@ -268,7 +283,7 @@ function ToastEl({ msg, type, onClose }) {
 }
 function Modal({ children, onClose, title, width=500 }) {
   const c=useC();
-  return <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,.65)',backdropFilter:'blur(6px)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:20 }} onClick={e=>e.target===e.currentTarget&&onClose()}><Card style={{ width:'100%',maxWidth:width,padding:28,animation:'fadeUp .22s ease',maxHeight:'90vh',overflowY:'auto' }}>{title&&<h3 style={{ margin:'0 0 20px',color:c.text,fontSize:16,fontWeight:700 }}>{title}</h3>}{children}</Card></div>;
+  return <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,.65)',backdropFilter:'blur(6px)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:20 }} onClick={e=>e.target===e.currentTarget&&onClose()}><Card style={{ width:'100%',maxWidth:width,padding:28,animation:'ssPop .26s cubic-bezier(.22,1,.36,1) both',maxHeight:'90vh',overflowY:'auto' }}>{title&&<h3 style={{ margin:'0 0 20px',color:c.text,fontSize:16,fontWeight:700 }}>{title}</h3>}{children}</Card></div>;
 }
 function StatCard({ label, value, color='#3B9EFF', sub, icon }) {
   const c=useC();
@@ -1394,7 +1409,7 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
             {msgs.map(m=>(
               <div key={m.id} style={{ display:'flex',flexDirection:m.role==='user'?'row-reverse':'row',alignItems:'flex-end',gap:6 }}>
                 {m.role==='assistant'&&<div style={{ width:22,height:22,borderRadius:'50%',background:'rgba(0,112,243,.15)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginBottom:2 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 2L13.5 8.5L20 7L14.5 11.5L17 18L12 14L7 18L9.5 11.5L4 7L10.5 8.5L12 2Z" fill={dark?'#C4B5FD':'#0070F3'}/></svg></div>}
-                <div style={{ maxWidth:'84%',background:m.role==='user'?'linear-gradient(135deg,#6B5FE4,#9B8AFB)':dark?'rgba(255,255,255,.06)':'rgba(255,255,255,.8)',color:m.role==='user'?'#fff':c.text,padding:'8px 12px',borderRadius:m.role==='user'?'14px 14px 4px 14px':'14px 14px 14px 4px',fontSize:12,lineHeight:1.55,border:m.role==='user'?'none':`1px solid ${c.bord}`,boxShadow:m.role==='assistant'?'0 1px 6px rgba(0,0,0,.06)':'none' }}>
+                <div style={{ maxWidth:'84%',background:m.role==='user'?'linear-gradient(135deg,#0070F3,#3B9EFF)':dark?'rgba(255,255,255,.06)':'rgba(255,255,255,.8)',color:m.role==='user'?'#fff':c.text,padding:'8px 12px',borderRadius:m.role==='user'?'14px 14px 4px 14px':'14px 14px 14px 4px',fontSize:12,lineHeight:1.55,border:m.role==='user'?'none':`1px solid ${c.bord}`,boxShadow:m.role==='assistant'?'0 1px 6px rgba(0,0,0,.06)':'none' }}>
                   {m.text.split('\n').map((l,i)=><div key={i} style={{ marginBottom:l?0:4 }}>{l||<br/>}</div>)}
                 </div>
               </div>
@@ -1405,7 +1420,7 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
           {/* Input */}
           <div style={{ padding:'10px 12px',borderTop:`1px solid ${c.bord}`,display:'flex',gap:8,flexShrink:0,background:dark?'rgba(255,255,255,.02)':'rgba(255,255,255,.5)' }}>
             <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()} placeholder="Ask anything..." style={{ flex:1,background:'transparent',border:'none',color:c.text,fontSize:13,outline:'none',letterSpacing:'-.01em' }}/>
-            <button onClick={send} disabled={!input.trim()||loading} style={{ width:32,height:32,borderRadius:10,background:input.trim()?'linear-gradient(135deg,#6B5FE4,#9B8AFB)':'transparent',border:input.trim()?'none':`1px solid ${c.bord}`,color:input.trim()?'#fff':c.mut,cursor:input.trim()?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0,transition:'all .15s' }}>↑</button>
+            <button onClick={send} disabled={!input.trim()||loading} style={{ width:32,height:32,borderRadius:10,background:input.trim()?'linear-gradient(135deg,#0070F3,#3B9EFF)':'transparent',border:input.trim()?'none':`1px solid ${c.bord}`,color:input.trim()?'#fff':c.mut,cursor:input.trim()?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0,transition:'all .15s' }}>↑</button>
           </div>
         </div>
       )}
@@ -3458,8 +3473,8 @@ function MemberTaskCard({ task, user, onStatus, onBlocker }) {
     <Card style={{ marginBottom:10,overflow:'hidden',border:task.status==='blocked'?'1px solid rgba(239,68,68,.35)':task.status==='done'?'1px solid rgba(52,211,153,.25)':`1px solid ${c.bord}` }}>
       <div style={{ padding:'14px 16px' }}>
         <div style={{ display:'flex',alignItems:'flex-start',gap:10,marginBottom:6 }}>
-          <button onClick={()=>onStatus(task.id,next[task.status])} style={{ width:22,height:22,borderRadius:'50%',flexShrink:0,marginTop:1,border:`2px solid ${task.status==='done'?'#34D399':'rgba(128,128,128,.3)'}`,background:task.status==='done'?'#34D399':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .2s' }}>
-            {task.status==='done'&&<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+          <button onClick={()=>onStatus(task.id,next[task.status])} style={{ position:'relative',width:22,height:22,borderRadius:'50%',flexShrink:0,marginTop:1,border:`2px solid ${task.status==='done'?'#34D399':'rgba(128,128,128,.3)'}`,background:task.status==='done'?'#34D399':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .2s' }}>
+            {task.status==='done'&&<><span className="check-burst" style={{ position:'absolute',inset:-2,borderRadius:'50%',background:'rgba(52,211,153,.5)',pointerEvents:'none' }}/><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path className="check-path" d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg></>}
           </button>
           <div style={{ flex:1 }}>
             <div style={{ fontSize:14,color:task.status==='done'?c.mut:c.text,textDecoration:task.status==='done'?'line-through':'none',lineHeight:1.4,marginBottom:6 }}>{task.title}</div>
@@ -3680,14 +3695,14 @@ function LiveTab({ tasks: allTasks, members, onStatus, onPriority, onNote, onAdd
             : <Btn onClick={()=>setShowModal(true)} style={{ padding:'7px 14px',fontSize:12,background:'linear-gradient(135deg,#0070F3,#3B9EFF)',border:'none',flexShrink:0 }}>+ Add my task</Btn>}
         </div>
         {filtered.length===0?<div style={{ padding:'40px',textAlign:'center',color:c.mut,fontSize:14 }}>{(isManager?total:tasks.length)===0?(isManager?'⏳ Waiting for team to add tasks...':'You have no tasks yet — add one above.'):'No tasks match this filter'}</div>
-          :filtered.map(t=><MgrRow key={t.id} task={t} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onDelete={onDelete} session={session} isManager={isManager}/>)}
+          :filtered.map((t,i)=><MgrRow key={t.id} idx={i} task={t} members={members} onStatus={onStatus} onPriority={onPriority} onNote={onNote} onDelete={onDelete} session={session} isManager={isManager}/>)}
       </Card>
       {showModal&&<AssignModal members={members} onClose={()=>setShowModal(false)} onAdd={onAddTask} isManager={isManager} session={session}/>}
     </div>
   );
 }
 
-function MgrRow({ task, members, onStatus, onPriority, onNote, onDelete, session, isManager = true }) {
+function MgrRow({ task, members, onStatus, onPriority, onNote, onDelete, session, isManager = true, idx = 0 }) {
   const c=useC(); const [showN,setShowN]=useState(false); const [note,setNote]=useState(task.manager_note||'');
   const member=members.find(m=>m.email===task.assignee_email); const p=getPriority(task.priority);
   // Proper status cycle: todo → in-progress → done → todo. Managers and the
@@ -3695,10 +3710,10 @@ function MgrRow({ task, members, onStatus, onPriority, onNote, onDelete, session
   const cycle={'todo':'in-progress','in-progress':'done','done':'todo','blocked':'in-progress'};
   const setStatusTo=(s)=>onStatus(task.id,s);
   return (
-    <div style={{ borderBottom:`1px solid ${c.bord}`,transition:'background .15s' }} onMouseEnter={e=>e.currentTarget.style.background=c.row} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+    <div style={{ borderBottom:`1px solid ${c.bord}`,transition:'background .15s',animation:`slideIn .35s cubic-bezier(.22,1,.36,1) both`,animationDelay:`${Math.min(idx*0.035,0.5)}s` }} onMouseEnter={e=>e.currentTarget.style.background=c.row} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
       <div style={{ display:'flex',alignItems:'center',gap:10,padding:'11px 16px' }}>
-        <button onClick={()=>setStatusTo(cycle[task.status]||'in-progress')} title={`Mark ${cycle[task.status]==='done'?'done':cycle[task.status]==='in-progress'?'in progress':'to do'}`} style={{ width:20,height:20,borderRadius:'50%',flexShrink:0,border:`2px solid ${task.status==='done'?'#34D399':task.status==='in-progress'?'#38BDF8':'rgba(128,128,128,.3)'}`,background:task.status==='done'?'#34D399':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .2s' }}>
-          {task.status==='done'&&<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+        <button onClick={()=>setStatusTo(cycle[task.status]||'in-progress')} title={`Mark ${cycle[task.status]==='done'?'done':cycle[task.status]==='in-progress'?'in progress':'to do'}`} style={{ position:'relative',width:20,height:20,borderRadius:'50%',flexShrink:0,border:`2px solid ${task.status==='done'?'#34D399':task.status==='in-progress'?'#38BDF8':'rgba(128,128,128,.3)'}`,background:task.status==='done'?'#34D399':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .2s' }}>
+          {task.status==='done'&&<><span className="check-burst" style={{ position:'absolute',inset:-2,borderRadius:'50%',background:'rgba(52,211,153,.5)',pointerEvents:'none' }}/><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path className="check-path" d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg></>}
           {task.status==='in-progress'&&<span style={{ width:7,height:7,borderRadius:'50%',background:'#38BDF8' }}/>}
         </button>
         <div style={{ width:7,height:7,borderRadius:'50%',background:p.color,flexShrink:0 }}/>
@@ -5462,7 +5477,7 @@ Instructions:
                 <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,112,243,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 13 }}>✦</div>
               )}
               <div style={{ maxWidth: '82%', padding: '9px 13px', borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '4px 14px 14px 14px',
-                background: msg.role === 'user' ? 'linear-gradient(135deg,#6B5FE4,#9B8AFB)' : (dark ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.95)'),
+                background: msg.role === 'user' ? 'linear-gradient(135deg,#0070F3,#3B9EFF)' : (dark ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.95)'),
                 color: msg.role === 'user' ? '#fff' : c.text, fontSize: 13, lineHeight: 1.65,
                 border: msg.role === 'user' ? 'none' : `1px solid ${c.bord}`, whiteSpace: 'pre-wrap' }}>
                 {msg.text}
@@ -5501,7 +5516,7 @@ Instructions:
           style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: c.text, fontSize: 13, lineHeight: 1.5, minWidth: 0 }}
         />
         <button onClick={() => ask()} disabled={!query.trim() || loading}
-          style={{ padding: '7px 18px', borderRadius: 9, background: query.trim() && !loading ? 'linear-gradient(135deg,#6B5FE4,#9B8AFB)' : 'transparent',
+          style={{ padding: '7px 18px', borderRadius: 9, background: query.trim() && !loading ? 'linear-gradient(135deg,#0070F3,#3B9EFF)' : 'transparent',
             border: query.trim() && !loading ? 'none' : `1px solid ${c.bord}`, color: query.trim() && !loading ? '#fff' : c.mut,
             cursor: query.trim() && !loading ? 'pointer' : 'default', fontSize: 13, fontWeight: 600, flexShrink: 0, transition: 'all .15s', whiteSpace: 'nowrap' }}>
           {loading ? '…' : '✦ Ask'}
@@ -5637,7 +5652,7 @@ function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, pr
               <span style={{ fontSize: 11, color: c.mut }}>{Math.round(preview.size/1024)}KB</span>
               {preview.dataUrl && (
                 <a href={preview.dataUrl} download={preview.name}
-                  style={{ padding: '6px 14px', borderRadius: 8, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', textDecoration: 'none', fontSize: 12, fontWeight: 600 }}>
+                  style={{ padding: '6px 14px', borderRadius: 8, background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', color: '#fff', textDecoration: 'none', fontSize: 12, fontWeight: 600 }}>
                   ⬇ Download
                 </a>
               )}
@@ -5662,7 +5677,7 @@ function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, pr
                   <div style={{ fontSize: 14, marginBottom: 8 }}>{preview.name}</div>
                   <div style={{ fontSize: 12 }}>{preview.extractedText}</div>
                   {preview.dataUrl && (
-                    <a href={preview.dataUrl} download={preview.name} style={{ display: 'inline-block', marginTop: 16, padding: '10px 24px', borderRadius: 10, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>
+                    <a href={preview.dataUrl} download={preview.name} style={{ display: 'inline-block', marginTop: 16, padding: '10px 24px', borderRadius: 10, background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', color: '#fff', textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>
                       ⬇ Download file
                     </a>
                   )}
@@ -5683,7 +5698,7 @@ function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, pr
           <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.ppt,.pptx,.doc,.docx,.txt,.csv,.json,.xlsx,.xls,.md"
             onChange={e => handleFiles(e.target.files)} style={{ display: 'none' }}/>
           <button onClick={() => fileInputRef.current?.click()} disabled={extracting}
-            style={{ padding: '6px 16px', borderRadius: 8, background: extracting ? 'rgba(0,112,243,.3)' : 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: extracting ? 'wait' : 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+            style={{ padding: '6px 16px', borderRadius: 8, background: extracting ? 'rgba(0,112,243,.3)' : 'linear-gradient(135deg,#0070F3,#3B9EFF)', color: '#fff', border: 'none', cursor: extracting ? 'wait' : 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
             {extracting ? <><div style={{ width: 11, height: 11, borderRadius: '50%', border: '2px solid rgba(255,255,255,.3)', borderTop: '2px solid #fff', animation: 'spin .75s linear infinite' }}/> Extracting…</> : '+ Browse files'}
           </button>
         </div>
@@ -5754,7 +5769,7 @@ function WikiOverview({ curProject, projPages, pinnedPages, projectId, projectFi
           {curProject?.desc && <p style={{ color: c.mut, fontSize: 14, marginTop: 5, marginBottom: 0, lineHeight: 1.6 }}>{curProject.desc}</p>}
         </div>
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-          <button onClick={onNewPage} style={{ padding: '8px 16px', borderRadius: 9, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>+ New page</button>
+          <button onClick={onNewPage} style={{ padding: '8px 16px', borderRadius: 9, background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>+ New page</button>
           <button onClick={onDeleteProject} style={{ padding: '8px 14px', borderRadius: 9, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', color: '#F87171', cursor: 'pointer', fontSize: 13 }}>🗑</button>
         </div>
       </div>
@@ -5802,7 +5817,7 @@ function WikiOverview({ curProject, projPages, pinnedPages, projectId, projectFi
           <div style={{ padding: 32, textAlign: 'center', borderRadius: 12, border: `1.5px dashed ${c.bord}` }}>
             <div style={{ fontSize: 36, marginBottom: 10 }}>📄</div>
             <div style={{ color: c.mut, fontSize: 14, marginBottom: 14 }}>No pages yet</div>
-            <button onClick={onNewPage} style={{ padding: '9px 20px', borderRadius: 9, background: 'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>+ Create first page</button>
+            <button onClick={onNewPage} style={{ padding: '9px 20px', borderRadius: 9, background: 'linear-gradient(135deg,#0070F3,#3B9EFF)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>+ Create first page</button>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -6246,7 +6261,7 @@ function ProjectWiki({ team, session, members = [] }) {
       <div style={{ fontSize:56 }}>📚</div>
       <h2 style={{ fontSize:24, fontWeight:800, color:c.text, margin:0 }}>Project Wiki</h2>
       <p style={{ color:c.mut, fontSize:14, textAlign:'center', maxWidth:380, lineHeight:1.7, margin:0 }}>SOPs, runbooks, decisions, onboarding docs — all in one place with AI search.</p>
-      <button onClick={()=>setView('newProject')} style={{ padding:'12px 28px', borderRadius:10, background:'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color:'#fff', border:'none', cursor:'pointer', fontSize:14, fontWeight:700 }}>+ Create your first project</button>
+      <button onClick={()=>setView('newProject')} style={{ padding:'12px 28px', borderRadius:10, background:'linear-gradient(135deg,#0070F3,#3B9EFF)', color:'#fff', border:'none', cursor:'pointer', fontSize:14, fontWeight:700 }}>+ Create your first project</button>
     </div>
   );
 
@@ -6280,7 +6295,7 @@ function ProjectWiki({ team, session, members = [] }) {
           <textarea value={npDesc} onChange={e=>setNpDesc(e.target.value)} placeholder="What is this project about?" rows={3}
             style={{ width:'100%', background:dark?'rgba(255,255,255,.06)':'rgba(255,255,255,.9)', border:`1.5px solid ${c.inpB}`, borderRadius:10, padding:'10px 14px', color:c.text, fontSize:13, outline:'none', boxSizing:'border-box', resize:'vertical', fontFamily:'inherit', lineHeight:1.6 }}/>
         </div>
-        <button onClick={createProject} disabled={!npName.trim()} style={{ padding:'11px 28px', borderRadius:10, background:'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color:'#fff', border:'none', cursor:npName.trim()?'pointer':'not-allowed', fontSize:14, fontWeight:700, opacity:npName.trim()?1:.5 }}>Create project</button>
+        <button onClick={createProject} disabled={!npName.trim()} style={{ padding:'11px 28px', borderRadius:10, background:'linear-gradient(135deg,#0070F3,#3B9EFF)', color:'#fff', border:'none', cursor:npName.trim()?'pointer':'not-allowed', fontSize:14, fontWeight:700, opacity:npName.trim()?1:.5 }}>Create project</button>
       </div>
     </div>
   );
@@ -6304,7 +6319,7 @@ function ProjectWiki({ team, session, members = [] }) {
               style={{ width:'100%', background:dark?'rgba(255,255,255,.06)':'rgba(255,255,255,.9)', border:`1.5px solid ${c.inpB}`, borderRadius:10, padding:'10px 14px', color:c.text, fontSize:14, outline:'none', boxSizing:'border-box' }}/>
           </div>
         </div>
-        <button onClick={createPage} disabled={!pgTitle.trim()} style={{ padding:'11px 24px', borderRadius:10, background:'linear-gradient(135deg,#6B5FE4,#9B8AFB)', color:'#fff', border:'none', cursor:pgTitle.trim()?'pointer':'not-allowed', fontSize:14, fontWeight:700, opacity:pgTitle.trim()?1:.5 }}>Create page</button>
+        <button onClick={createPage} disabled={!pgTitle.trim()} style={{ padding:'11px 24px', borderRadius:10, background:'linear-gradient(135deg,#0070F3,#3B9EFF)', color:'#fff', border:'none', cursor:pgTitle.trim()?'pointer':'not-allowed', fontSize:14, fontWeight:700, opacity:pgTitle.trim()?1:.5 }}>Create page</button>
       </div>
     </div>
   );
@@ -11070,7 +11085,7 @@ class ErrorBoundary extends React.Component {
           <div style={{ fontSize:48,marginBottom:16 }}>⚡</div>
           <h2 style={{ fontSize:20,fontWeight:700,marginBottom:8 }}>StandSync ran into an issue</h2>
           <p style={{ fontSize:13,color:'rgba(240,236,255,.5)',marginBottom:24,maxWidth:360 }}>{this.state.err}</p>
-          <button onClick={()=>{ localStorage.clear(); window.location.href='/'; }} style={{ padding:'10px 24px',borderRadius:10,background:'linear-gradient(135deg,#6B5FE4,#9B8AFB)',color:'#fff',border:'none',cursor:'pointer',fontSize:14,fontWeight:600 }}>Clear cache &amp; reload</button>
+          <button onClick={()=>{ localStorage.clear(); window.location.href='/'; }} style={{ padding:'10px 24px',borderRadius:10,background:'linear-gradient(135deg,#0070F3,#3B9EFF)',color:'#fff',border:'none',cursor:'pointer',fontSize:14,fontWeight:600 }}>Clear cache &amp; reload</button>
           <button onClick={()=>window.location.reload()} style={{ marginTop:10,padding:'8px 20px',borderRadius:10,background:'transparent',color:'rgba(240,236,255,.5)',border:'1px solid rgba(255,255,255,.1)',cursor:'pointer',fontSize:13 }}>Just reload</button>
         </div>
       );
