@@ -96,6 +96,8 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 3px var(--ss-focus,rgba
 @media(prefers-reduced-motion:reduce){button:active{transform:none}.ss-lift:hover{transform:none}.ss-pop{animation:none}}
 /* ── Premium depth & 3D-feel (no Three.js) ──────────────────────────── */
 /* Tilt-on-hover cards: perspective wrapper + transform on inner */
+.ss-statcard:hover .ss-statcard-underline{opacity:1!important}
+@media(max-width:760px){.ss-crumb{display:none!important}}
 .ss-tilt{transform-style:preserve-3d;transition:transform .25s cubic-bezier(.22,1,.36,1),box-shadow .25s}
 .ss-tilt:hover{box-shadow:0 30px 70px -30px rgba(0,112,243,.45),0 8px 24px -12px rgba(0,0,0,.3)}
 .ss-depth-1{box-shadow:0 1px 2px rgba(0,0,0,.06),0 8px 24px -12px rgba(0,0,0,.18)}
@@ -113,6 +115,16 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 3px var(--ss-focus,rgba
 @keyframes ssFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
 .ss-float{animation:ssFloat 6s ease-in-out infinite}
 @media(prefers-reduced-motion:reduce){.ss-tilt:hover{transform:none!important}.ss-sheen:hover::after{animation:none}.ss-grad-text{animation:none}.ss-float{animation:none}}
+/* ── True CSS 3D depth ──────────────────────────────────────────────── */
+.ss-3d-scene{perspective:1400px;perspective-origin:50% 30%}
+@keyframes ss3dRise{0%{opacity:0;transform:perspective(1400px) rotateX(8deg) translateY(26px) translateZ(-60px)}100%{opacity:1;transform:perspective(1400px) rotateX(0) translateY(0) translateZ(0)}}
+.ss-3d-rise{animation:ss3dRise .55s cubic-bezier(.22,1,.36,1) both;transform-style:preserve-3d}
+@keyframes ss3dPop{0%{opacity:0;transform:perspective(1000px) scale(.94) translateZ(-40px)}100%{opacity:1;transform:perspective(1000px) scale(1) translateZ(0)}}
+.ss-3d-pop{animation:ss3dPop .4s cubic-bezier(.22,1,.36,1) both}
+/* Depth lift: card pushes toward the viewer on hover */
+.ss-depth-hover{transition:transform .25s cubic-bezier(.22,1,.36,1),box-shadow .25s}
+.ss-depth-hover:hover{transform:perspective(900px) translateZ(22px);box-shadow:0 40px 80px -36px rgba(0,112,243,.5),0 12px 30px -16px rgba(0,0,0,.35)}
+@media(prefers-reduced-motion:reduce){.ss-3d-rise,.ss-3d-pop{animation:none}.ss-depth-hover:hover{transform:none}}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(0,112,243,.25);border-radius:10px}
@@ -270,18 +282,18 @@ function Av({ member, size=36, url }) {
 }
 function PBadge({ priority }) { const p=getPriority(priority); return <span style={{ fontSize:10,fontWeight:700,letterSpacing:'.06em',background:p.bg,color:p.color,padding:'3px 8px',borderRadius:20,textTransform:'uppercase',border:`1px solid ${p.color}35`,whiteSpace:'nowrap' }}>{p.label}</span>; }
 function SBadge({ status }) { const s=getStatus(status); return <span style={{ fontSize:10,fontWeight:700,letterSpacing:'.06em',background:s.bg,color:s.color,padding:'3px 8px',borderRadius:20,textTransform:'uppercase',border:`1px solid ${s.color}35`,whiteSpace:'nowrap' }}>{s.label}</span>; }
-function Card({ children, style={}, onClick, tilt=false }) {
+function Card({ children, style={}, onClick, tilt=false, className='' }) {
   const c=useC(); const { dark }=useTheme(); const [h,setH]=useState(false);
   const ref=useRef(null); const [t,setT]=useState({ rx:0, ry:0 });
   const onMove=(e)=>{
     if(!tilt||!ref.current)return;
     const r=ref.current.getBoundingClientRect();
     const px=(e.clientX-r.left)/r.width-0.5, py=(e.clientY-r.top)/r.height-0.5;
-    setT({ rx:py*-5, ry:px*6 });
+    setT({ rx:py*-7, ry:px*9 });
   };
   const reset=()=>{ setH(false); setT({ rx:0, ry:0 }); };
   return(
-    <div ref={ref} onClick={onClick}
+    <div ref={ref} onClick={onClick} className={className}
       onMouseEnter={()=>setH(true)} onMouseMove={onMove} onMouseLeave={reset}
       style={{
       background:dark?(h&&onClick?'rgba(255,255,255,.07)':'rgba(255,255,255,.048)'):(h&&onClick?'rgba(255,255,255,.92)':'rgba(255,255,255,.72)'),
@@ -289,7 +301,7 @@ function Card({ children, style={}, onClick, tilt=false }) {
       backdropFilter:'blur(28px) saturate(1.3)',WebkitBackdropFilter:'blur(28px) saturate(1.3)',
       boxShadow:dark?'0 2px 20px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.04)':'0 2px 20px rgba(0,112,243,.06),inset 0 1px 0 rgba(255,255,255,.9)',
       transition:'transform .2s cubic-bezier(.22,1,.36,1),background .18s,border-color .18s,box-shadow .18s',cursor:onClick?'pointer':undefined,
-      transform:tilt?`perspective(900px) rotateX(${t.rx}deg) rotateY(${t.ry}deg) ${h?'translateY(-2px)':''}`:(h&&onClick?'translateY(-2px)':'none'),
+      transform:tilt?`perspective(900px) rotateX(${t.rx}deg) rotateY(${t.ry}deg) ${h?'translateZ(20px)':'translateZ(0)'}`:(h&&onClick?'translateY(-2px)':'none'),
       ...style
     }}>{children}</div>
   );
@@ -329,11 +341,11 @@ function ToastEl({ msg, type, onClose }) {
 }
 function Modal({ children, onClose, title, width=500 }) {
   const c=useC();
-  return <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,.65)',backdropFilter:'blur(6px)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:20 }} onClick={e=>e.target===e.currentTarget&&onClose()}><Card style={{ width:'100%',maxWidth:width,padding:28,animation:'ssPop .26s cubic-bezier(.22,1,.36,1) both',maxHeight:'90vh',overflowY:'auto' }}>{title&&<h3 style={{ margin:'0 0 20px',color:c.text,fontSize:16,fontWeight:700 }}>{title}</h3>}{children}</Card></div>;
+  return <div className="ss-3d-scene" style={{ position:'fixed',inset:0,background:'rgba(0,0,0,.65)',backdropFilter:'blur(6px)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:20 }} onClick={e=>e.target===e.currentTarget&&onClose()}><Card style={{ width:'100%',maxWidth:width,padding:28,animation:'ss3dPop .34s cubic-bezier(.22,1,.36,1) both',maxHeight:'90vh',overflowY:'auto' }}>{title&&<h3 style={{ margin:'0 0 20px',color:c.text,fontSize:16,fontWeight:700 }}>{title}</h3>}{children}</Card></div>;
 }
 function StatCard({ label, value, color='#3B9EFF', sub, icon }) {
   const c=useC();
-  return <Card tilt style={{ padding:'16px 20px' }}><div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start' }}><div><div className="eyebrow" style={{ color:c.mut,marginBottom:6 }}>{label}</div><div className="font-heading" style={{ fontSize:30,fontWeight:600,color,letterSpacing:'-.025em',lineHeight:1,fontVariantNumeric:'tabular-nums' }}>{value}</div>{sub&&<div style={{ fontSize:11,color:c.mut,marginTop:5,fontFamily:"'JetBrains Mono',monospace" }}>{sub}</div>}</div>{icon&&<span className="ss-float" style={{ fontSize:22,opacity:.45 }}>{icon}</span>}</div></Card>;
+  return <Card tilt className="ss-statcard" style={{ padding:'16px 20px', position:'relative', overflow:'hidden' }}><div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start' }}><div><div className="eyebrow" style={{ color:c.mut,marginBottom:6 }}>{label}</div><div className="font-heading" style={{ fontSize:30,fontWeight:600,color,letterSpacing:'-.025em',lineHeight:1,fontVariantNumeric:'tabular-nums' }}>{value}</div>{sub&&<div style={{ fontSize:11,color:c.mut,marginTop:5,fontFamily:"'JetBrains Mono',monospace" }}>{sub}</div>}</div>{icon&&<span className="ss-float" style={{ fontSize:22,opacity:.45 }}>{icon}</span>}</div><div className="ss-statcard-underline" style={{ position:'absolute', bottom:0, left:16, right:16, height:2, background:`linear-gradient(90deg,transparent,${c.accent},transparent)`, opacity:0, transition:'opacity .25s' }}/></Card>;
 }
 function Lbl({ children, style={} }) { const c=useC(); return <div style={{ fontSize:10,fontWeight:700,letterSpacing:'.1em',color:c.mut,textTransform:'uppercase',marginBottom:8,...style }}>{children}</div>; }
 // Reusable empty state: icon/illustration, title, explanation, primary + secondary actions, optional preview.
@@ -1460,7 +1472,7 @@ function AIBubble({ tasks=[], members=[], history=[], session, myTasks=[], teamN
                 </div>
               </div>
             ))}
-            {loading&&<div style={{ display:'flex',gap:4,padding:'8px 11px',background:dark?'rgba(255,255,255,.06)':'rgba(255,255,255,.8)',borderRadius:'14px 14px 14px 4px',width:'fit-content',border:`1px solid ${c.bord}` }}>{[0,1,2].map(i=><div key={i} style={{ width:5,height:5,borderRadius:'50%',background:'#A78BFA',animation:'bounce .7s ease '+(i*.14)+'s infinite' }}/>)}</div>}
+            {loading&&<div style={{ display:'flex',gap:4,padding:'8px 11px',background:dark?'rgba(255,255,255,.06)':'rgba(255,255,255,.8)',borderRadius:'14px 14px 14px 4px',width:'fit-content',border:`1px solid ${c.bord}` }}>{[0,1,2].map(i=><div key={i} style={{ width:5,height:5,borderRadius:'50%',background:'#3B9EFF',animation:'bounce .7s ease '+(i*.14)+'s infinite' }}/>)}</div>}
             <div ref={bottomRef}/>
           </div>
           {/* Input */}
@@ -3527,7 +3539,7 @@ function MemberTaskCard({ task, user, onStatus, onBlocker }) {
             <div style={{ display:'flex',flexWrap:'wrap',gap:5 }}><PBadge priority={task.priority}/><SBadge status={task.status}/>{task.timeline&&<span style={{ fontSize:10,color:c.mut,background:'rgba(128,128,128,.1)',padding:'3px 8px',borderRadius:20 }}>🕐 {task.timeline}</span>}</div>
           </div>
         </div>
-        {task.manager_note&&<div style={{ padding:'8px 12px',background:'rgba(129,140,248,.1)',border:'1px solid rgba(129,140,248,.2)',borderRadius:8,fontSize:12,color:c.sub,marginTop:8 }}><span style={{ color:'#3B9EFF',fontWeight:700 }}>📌 Note: </span>{task.manager_note}</div>}
+        {task.manager_note&&<div style={{ padding:'8px 12px',background:'rgba(59,158,255,.1)',border:'1px solid rgba(59,158,255,.2)',borderRadius:8,fontSize:12,color:c.sub,marginTop:8 }}><span style={{ color:'#3B9EFF',fontWeight:700 }}>📌 Note: </span>{task.manager_note}</div>}
         {task.blocker&&<div style={{ padding:'8px 12px',background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:8,fontSize:12,color:'#F87171',marginTop:8 }}><span style={{ fontWeight:700 }}>⚠️ Blocker: </span>{task.blocker}</div>}
       </div>
       <div style={{ padding:'0 16px 12px',display:'flex',gap:6,flexWrap:'wrap' }}>
@@ -3734,7 +3746,7 @@ function LiveTab({ tasks: allTasks, members, onStatus, onPriority, onNote, onAdd
       {total>0&&<Card style={{ padding:'14px 18px',marginBottom:16 }}><div style={{ display:'flex',justifyContent:'space-between',marginBottom:8 }}><span style={{ fontSize:13,color:c.mut }}>Team progress{!isManager?<span style={{ color:c.mut }}> · you: {myDone}/{tasks.length} done</span>:''}</span><span style={{ fontSize:13,fontWeight:700,color:'#3B9EFF' }}>{pct}% · {done}/{total}</span></div><Bar pct={pct} h={8} color="linear-gradient(90deg,#0070F3,#34D399)"/></Card>}
       <Card style={{ overflow:'hidden' }}>
         <div style={{ padding:'12px 16px',borderBottom:`1px solid ${c.bord}`,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center' }}>
-          <div style={{ display:'flex',gap:5,flex:1,flexWrap:'wrap',alignItems:'center' }}>{!isManager&&<span style={{ fontSize:12.5,fontWeight:700,color:c.text,marginRight:4 }}>My tasks</span>}{(isManager?[{v:'all',l:'All'},...members.map(m=>({v:m.email,l:(m.name||m.email).split(' ')[0]}))]:[]).map(f=><button key={f.v} onClick={()=>setFu(f.v)} style={{ fontSize:12,padding:'5px 12px',borderRadius:20,border:`1px solid ${c.bord}`,background:fu===f.v?'rgba(129,140,248,.2)':'transparent',color:fu===f.v?'#3B9EFF':c.mut,cursor:'pointer',fontWeight:fu===f.v?700:400,transition:'all .15s' }}>{f.l}</button>)}</div>
+          <div style={{ display:'flex',gap:5,flex:1,flexWrap:'wrap',alignItems:'center' }}>{!isManager&&<span style={{ fontSize:12.5,fontWeight:700,color:c.text,marginRight:4 }}>My tasks</span>}{(isManager?[{v:'all',l:'All'},...members.map(m=>({v:m.email,l:(m.name||m.email).split(' ')[0]}))]:[]).map(f=><button key={f.v} onClick={()=>setFu(f.v)} style={{ fontSize:12,padding:'5px 12px',borderRadius:20,border:`1px solid ${c.bord}`,background:fu===f.v?'rgba(59,158,255,.2)':'transparent',color:fu===f.v?'#3B9EFF':c.mut,cursor:'pointer',fontWeight:fu===f.v?700:400,transition:'all .15s' }}>{f.l}</button>)}</div>
           <div style={{ display:'flex',gap:5 }}>{['all','todo','in-progress','done','blocked'].map(s=><button key={s} onClick={()=>setFs(s)} style={{ fontSize:11,padding:'4px 10px',borderRadius:20,border:`1px solid ${c.bord}`,background:fs===s?'rgba(128,128,128,.12)':'transparent',color:c.mut,cursor:'pointer',fontWeight:fs===s?700:400,textTransform:'capitalize' }}>{s==='all'?'All':s.replace('-',' ')}</button>)}</div>
           {isManager
             ? <Btn onClick={()=>setShowModal(true)} style={{ padding:'7px 14px',fontSize:12,background:'linear-gradient(135deg,#0070F3,#3B9EFF)',border:'none',flexShrink:0 }}>+ Assign task</Btn>
@@ -3782,7 +3794,7 @@ function MgrRow({ task, members, onStatus, onPriority, onNote, onDelete, session
         <select value={task.priority} onChange={e=>onPriority(task.id,e.target.value)} style={{ background:'transparent',border:'none',color:p.color,fontSize:10,cursor:'pointer',outline:'none',fontWeight:700,letterSpacing:'.05em',textTransform:'uppercase' }}>
           {['critical','high','medium','low'].map(v=><option key={v} value={v} style={{ background:c.dark?'#0D0B24':'#fff',color:c.text }}>{v}</option>)}
         </select>
-        <button onClick={()=>setShowN(!showN)} style={{ background:task.manager_note?'rgba(129,140,248,.15)':'transparent',border:task.manager_note?'1px solid rgba(129,140,248,.3)':`1px solid ${c.bord}`,borderRadius:6,cursor:'pointer',padding:'3px 6px',color:task.manager_note?'#3B9EFF':c.mut,fontSize:12 }}>📌</button>
+        <button onClick={()=>setShowN(!showN)} style={{ background:task.manager_note?'rgba(59,158,255,.15)':'transparent',border:task.manager_note?'1px solid rgba(59,158,255,.3)':`1px solid ${c.bord}`,borderRadius:6,cursor:'pointer',padding:'3px 6px',color:task.manager_note?'#3B9EFF':c.mut,fontSize:12 }}>📌</button>
         {onDelete&&<button onClick={()=>{ if(window.confirm('Delete this task?')) onDelete(task.id); }} title="Delete task" style={{ background:'transparent',border:`1px solid ${c.bord}`,borderRadius:6,cursor:'pointer',padding:'3px 7px',color:c.mut,fontSize:12 }} onMouseEnter={e=>{e.currentTarget.style.color='#F87171';e.currentTarget.style.borderColor='rgba(239,68,68,.3)';}} onMouseLeave={e=>{e.currentTarget.style.color=c.mut;e.currentTarget.style.borderColor=c.bord;}}>🗑</button>}
       </div>
       {task.blocker&&<div style={{ padding:'0 16px 10px 54px' }}><div style={{ fontSize:12,color:'#F87171',background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.2)',borderRadius:8,padding:'8px 12px' }}>⚠️ {task.blocker}</div></div>}
@@ -4790,7 +4802,7 @@ function ReliabilityTab({ tasks, members, history, team }) {
       ) : (
         <>
           {/* HERO — team trust score */}
-          <div style={{ borderRadius: 18, background: 'linear-gradient(135deg, rgba(0,112,243,.1), rgba(129,140,248,.03))', border: '1px solid rgba(0,112,243,.22)', padding: '24px 26px', marginBottom: 16, display: 'flex', gap: 28, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ borderRadius: 18, background: 'linear-gradient(135deg, rgba(0,112,243,.1), rgba(59,158,255,.03))', border: '1px solid rgba(0,112,243,.22)', padding: '24px 26px', marginBottom: 16, display: 'flex', gap: 28, alignItems: 'center', flexWrap: 'wrap' }}>
             <svg width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`} style={{ flexShrink: 0 }}>
               <circle cx={ringSize/2} cy={ringSize/2} r={r} fill="none" stroke="rgba(128,128,128,.15)" strokeWidth="11"/>
               <circle cx={ringSize/2} cy={ringSize/2} r={r} fill="none" stroke={scoreColor(teamScore)} strokeWidth="11" strokeLinecap="round"
@@ -4937,7 +4949,7 @@ function WeeklyExecSummary({ tasks, members, history, team }) {
       </div>
 
       {/* AI narrative */}
-      <div style={{ borderRadius: 16, background: 'linear-gradient(135deg, rgba(0,112,243,.1), rgba(129,140,248,.04))', border: '1px solid rgba(0,112,243,.22)', padding: '20px 22px', marginBottom: 16 }}>
+      <div style={{ borderRadius: 16, background: 'linear-gradient(135deg, rgba(0,112,243,.1), rgba(59,158,255,.04))', border: '1px solid rgba(0,112,243,.22)', padding: '20px 22px', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <span style={{ fontSize: 15 }}>✦</span>
           <span style={{ fontSize: 12, color: c.mut, textTransform: 'uppercase', letterSpacing: '.06em' }}>This week at {team?.name || 'your team'}</span>
@@ -5173,7 +5185,7 @@ function TimeSavedTab({ tasks, members, history, team }) {
       </div>
 
       {/* Hero hours-saved */}
-      <div style={{ borderRadius: 18, background: 'linear-gradient(135deg, rgba(0,112,243,.12), rgba(129,140,248,.06))', border: '1px solid rgba(0,112,243,.25)', padding: '26px', marginBottom: 18, textAlign: 'center' }}>
+      <div style={{ borderRadius: 18, background: 'linear-gradient(135deg, rgba(0,112,243,.12), rgba(59,158,255,.06))', border: '1px solid rgba(0,112,243,.25)', padding: '26px', marginBottom: 18, textAlign: 'center' }}>
         <div style={{ fontSize: 12, color: c.mut, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 6 }}>Estimated time saved</div>
         <div style={{ fontSize: 46, fontWeight: 800, color: '#0070F3', lineHeight: 1 }}>{hours} <span style={{ fontSize: 22 }}>hours</span></div>
         <div style={{ fontSize: 12.5, color: c.sub, marginTop: 8 }}>≈ {Math.round(hours * 60)} minutes of manager overhead avoided</div>
@@ -5334,7 +5346,7 @@ function TeamSettingsTab({ team, members, session, onMembersUpdate, hideMembers 
                   <div style={{ fontSize:11,color:c.mut }}>{m.email}</div>
                   <div style={{ fontSize:11,color:'#3B9EFF',marginTop:2 }}>{m.designation||m.role}</div>
                 </div>
-                <span style={{ fontSize:11,color:m.role==='manager'?'#3B9EFF':'#34D399',background:m.role==='manager'?'rgba(129,140,248,.12)':'rgba(52,211,153,.12)',padding:'3px 9px',borderRadius:20,textTransform:'capitalize' }}>{m.role}</span>
+                <span style={{ fontSize:11,color:m.role==='manager'?'#3B9EFF':'#34D399',background:m.role==='manager'?'rgba(59,158,255,.12)':'rgba(52,211,153,.12)',padding:'3px 9px',borderRadius:20,textTransform:'capitalize' }}>{m.role}</span>
                 {session?.user?.id!==m.user_id&&(
                   <button onClick={()=>{setEditMember(m);setEditDesg(m.designation||'');setEditRole(m.role||'member');}} style={{ fontSize:12,color:c.mut,background:c.surf,border:`1px solid ${c.bord}`,borderRadius:7,cursor:'pointer',padding:'4px 10px' }}>Edit</button>
                 )}
@@ -8043,11 +8055,11 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
       {/* Quick action cards */}
       <div className="ss-home-quick" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 14 }}>
         {QUICK.map(a => (
-          <button key={a.l} onClick={a.fn}
-            style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '18px 18px', borderRadius: 16, border: `1px solid ${c.bord}`, background: c.surf, cursor: 'pointer', textAlign: 'left', transition: 'all .15s' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = c.bordH; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = c.bord; e.currentTarget.style.transform = 'none'; }}>
-            <div style={{ width: 42, height: 42, borderRadius: 12, background: dark ? 'rgba(129,140,248,.12)' : 'rgba(0,112,243,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: c.accent, flexShrink: 0 }}>{a.icon}</div>
+          <button key={a.l} onClick={a.fn} className="ss-3d-scene"
+            style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '18px 18px', borderRadius: 16, border: `1px solid ${c.bord}`, background: c.surf, cursor: 'pointer', textAlign: 'left', transition: 'transform .25s cubic-bezier(.22,1,.36,1),border-color .2s,box-shadow .25s' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = c.bordH; e.currentTarget.style.transform = 'perspective(900px) translateZ(18px) translateY(-2px)'; e.currentTarget.style.boxShadow = '0 30px 60px -30px rgba(0,112,243,.45)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = c.bord; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}>
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: dark ? 'rgba(59,158,255,.14)' : 'rgba(0,112,243,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: c.accent, flexShrink: 0 }}>{a.icon}</div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: c.text, lineHeight: 1.2 }}>{a.l}</div>
               <div style={{ fontSize: 12, color: c.mut, marginTop: 3 }}>{a.sub}</div>
@@ -10077,7 +10089,7 @@ function NotificationPanel({ notifs, onClose, onAction, onMarkAllRead, onClearAl
             <div style={{ fontSize: 12.5, color: c.mut }}>No blockers, deadlines, or meetings today.</div>
           </div>
         ) : visible.map(n => (
-          <div key={n.id} style={{ display: 'flex', gap: 12, padding: '13px 16px', borderBottom: `1px solid ${c.bord}`, position: 'relative', background: n.read ? 'transparent' : (dark ? 'rgba(129,140,248,.05)' : 'rgba(0,112,243,.03)') }}>
+          <div key={n.id} style={{ display: 'flex', gap: 12, padding: '13px 16px', borderBottom: `1px solid ${c.bord}`, position: 'relative', background: n.read ? 'transparent' : (dark ? 'rgba(59,158,255,.05)' : 'rgba(0,112,243,.03)') }}>
             {!n.read && <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', width: 6, height: 6, borderRadius: '50%', background: '#0070F3' }}/>}
             <div style={{ width: 34, height: 34, borderRadius: 10, background: n.accent + '1f', color: n.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{n.icon}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -10434,10 +10446,11 @@ function ManagerView({
     return (
       <button key={n.id} onClick={() => goArea(n.id)}
         style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', borderRadius: 10, border: 'none', cursor: 'pointer',
-          background: on ? (dark ? 'rgba(129,140,248,.14)' : 'rgba(0,112,243,.1)') : 'transparent',
-          color: on ? c.accent : c.sub, fontSize: 14, fontWeight: on ? 600 : 500, marginBottom: 2, textAlign: 'left', transition: 'all .12s', position: 'relative' }}
+          background: on ? (dark ? 'rgba(59,158,255,.14)' : 'rgba(0,112,243,.1)') : 'transparent',
+          color: on ? c.accent : c.sub, fontSize: 14, fontWeight: on ? 600 : 500, marginBottom: 2, textAlign: 'left', transition: 'all .14s cubic-bezier(.22,1,.36,1)', position: 'relative' }}
         onMouseEnter={e => { if (!on) e.currentTarget.style.background = c.row; }}
         onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent'; }}>
+        {on && <span style={{ position:'absolute', left:0, top:7, bottom:7, width:3, borderRadius:'0 3px 3px 0', background:c.accent, boxShadow:`0 0 10px ${c.accent}` }}/>}
         <span style={{ fontSize: 18, width: 20, textAlign: 'center', flexShrink: 0 }}>{n.icon}</span>
         <span style={{ flex: 1 }}>{n.label}</span>
         {n.badge > 0 && <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: '#EF4444', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{n.badge > 9 ? '9+' : n.badge}</span>}
@@ -10470,7 +10483,7 @@ function ManagerView({
         {NAV_YOU.map(NavBtn)}
         <div style={{ height: 8 }}/>
         <button onClick={() => openPip && openPip()}
-          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', borderRadius: 10, border: 'none', cursor: 'pointer', background: pipOpen ? 'rgba(129,140,248,.14)' : 'transparent', color: pipOpen ? c.accent : c.sub, fontSize: 14, fontWeight: 500, textAlign: 'left' }}>
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', borderRadius: 10, border: 'none', cursor: 'pointer', background: pipOpen ? 'rgba(59,158,255,.14)' : 'transparent', color: pipOpen ? c.accent : c.sub, fontSize: 14, fontWeight: 500, textAlign: 'left' }}>
           <span style={{ fontSize: 18, width: 20, textAlign: 'center' }}>⧉</span>
           <span style={{ flex: 1 }}>Picture-in-picture</span>
           {pipOpen && <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#34D399' }}/>}
@@ -10527,6 +10540,7 @@ function ManagerView({
         <div style={{ height: 60, borderBottom: `1px solid ${c.bord}`, background: c.nav, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', position: 'sticky', top: 0, zIndex: 100, display: 'flex', alignItems: 'center', gap: 12, padding: '0 24px' }}>
           <button className="ss-burger" onClick={() => setMobileNav(true)} style={{ display: 'none', width: 38, height: 38, borderRadius: 10, border: `1px solid ${c.bord}`, background: 'transparent', color: c.text, cursor: 'pointer', fontSize: 18, alignItems: 'center', justifyContent: 'center' }}>☰</button>
 
+          <div style={{ display:'flex', alignItems:'center', gap:7, fontFamily:"'JetBrains Mono',monospace", fontSize:11.5, color:c.mut, flexShrink:0 }} className="ss-crumb"><span>standsync</span><span style={{ opacity:.5 }}>/</span><span style={{ color:c.sub }}>{(areaTitle[area]||'').toLowerCase()}</span></div>
           <h2 className="font-heading" style={{ fontSize: 19, fontWeight: 600, color: c.text, margin: 0, flexShrink: 0, letterSpacing:'-.02em' }}>{areaTitle[area]}</h2>
 
           {/* Search */}
@@ -10537,6 +10551,7 @@ function ManagerView({
                 onKeyDown={e => { if (e.key === 'Enter' && searchResults[0]) runResult(searchResults[0]); if (e.key === 'Escape') { setSearch(''); setSearchOpen(false); } }}
                 placeholder="Search tasks, people, pages…" style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: c.text, fontSize: 13, minWidth: 0 }}/>
               {search && <button onClick={() => { setSearch(''); setSearchOpen(false); }} style={{ background: 'none', border: 'none', color: c.mut, cursor: 'pointer', fontSize: 15, lineHeight: 1 }}>×</button>}
+              {!search && <span style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:10, color:c.mut, border:`1px solid ${c.bord}`, borderRadius:5, padding:'2px 6px', flexShrink:0 }}>⌘K</span>}
             </div>
             {searchOpen && search.trim() && (
               <>
@@ -10629,7 +10644,7 @@ function ManagerView({
         )}
 
         {/* Content */}
-        <div key={area} className="ss-area-enter" style={{ flex: 1, padding: '34px 32px 64px', maxWidth: 1280, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+        <div key={area} className="ss-3d-scene ss-3d-rise" style={{ flex: 1, padding: '34px 32px 64px', maxWidth: 1280, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
 
           {area === 'home' && (
             <HomeCommand session={session} team={team} tasks={tasks} members={members}
