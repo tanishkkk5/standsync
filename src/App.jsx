@@ -682,6 +682,21 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
     });
   },[session]);
 
+  // Skip the team-picker landing: once teams load, drop the user straight into
+  // their team (most recent first). The picker stays reachable via "Back to teams"
+  // for multi-team users and for create/join — but isn't shown as a gate on entry.
+  const autoEnteredRef = useRef(false);
+  useEffect(()=>{
+    if(autoEnteredRef.current) return;
+    if(sessionStorage.getItem('ss-skip-autoenter')==='1') return; // user chose to view picker
+    if(teams && teams.length>0){
+      const tm = teams[0];
+      const teamData = tm.teams?.id ? tm.teams : (tm.id ? tm : tm.teams);
+      const role = tm.role || 'member';
+      if(teamData && teamData.id){ autoEnteredRef.current = true; goToTeam(teamData, role); }
+    }
+  },[teams]);
+
   const [createError,setCreateError]=useState('');
   const deleteTeam=async(teamId)=>{
     if(!teamId)return;
@@ -737,7 +752,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
 
   const goToTeam=(team,role)=>{
     const normalized = team && team.id ? team : (team && team.teams ? team.teams : null);
-    if(normalized&&normalized.id) onSelectTeam(normalized,role);
+    if(normalized&&normalized.id){ try{ sessionStorage.removeItem('ss-skip-autoenter'); }catch(e){} onSelectTeam(normalized,role); }
   };
 
   // ── Team list ──────────────────────────────────────────────────────────────
@@ -8029,17 +8044,17 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
   ];
 
   return (
-    <div className="ss-home-root" style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
+    <div className="ss-home-root" style={{ maxWidth: 1180, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 52 }}>
 
       {/* Greeting */}
       <div>
-        <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, letterSpacing: '.1em', marginBottom: 10 }}>{dateStr}</div>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 240 }}>
-            <h1 style={{ fontSize: 34, fontWeight: 800, color: c.text, letterSpacing: '-.03em', margin: 0, lineHeight: 1.1 }}>{greeting}, {name}</h1>
-            <p style={{ fontSize: 15, color: c.sub, margin: '10px 0 0', lineHeight: 1.5 }}>{aiSummary}</p>
+        <div className="eyebrow" style={{ color: c.mut, marginBottom: 14 }}>{dateStr} · Workspace overview</div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 260 }}>
+            <h1 className="font-heading" style={{ fontSize: 44, fontWeight: 600, color: c.text, letterSpacing: '-.035em', margin: 0, lineHeight: 1.05 }}>{greeting}, <span className="ss-grad-text">{name}</span>.</h1>
+            <p style={{ fontSize: 16, color: c.sub, margin: '14px 0 0', lineHeight: 1.6, maxWidth: 560 }}>{aiSummary}</p>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 10, flexShrink: 0, marginTop: 6 }}>
             <button onClick={() => onGoto('insights')}
               style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 11, border: `1px solid ${c.bord}`, background: c.surf, color: c.text, cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
               <span style={{ color: '#A78BFA' }}>✦</span> Ask AI
@@ -8053,7 +8068,9 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
       </div>
 
       {/* Quick action cards */}
-      <div className="ss-home-quick" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 14 }}>
+      <div>
+        <div className="eyebrow" style={{ color: c.mut, marginBottom: 16 }}>Quick actions</div>
+        <div className="ss-home-quick" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 16 }}>
         {QUICK.map(a => (
           <button key={a.l} onClick={a.fn} className="ss-3d-scene"
             style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '18px 18px', borderRadius: 16, border: `1px solid ${c.bord}`, background: c.surf, cursor: 'pointer', textAlign: 'left', transition: 'transform .25s cubic-bezier(.22,1,.36,1),border-color .2s,box-shadow .25s' }}
@@ -8066,6 +8083,7 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
             </div>
           </button>
         ))}
+      </div>
       </div>
 
       <ProjectSummary teamId={team?.id || 'demo'} onGoto={onGoto}/>
@@ -11541,9 +11559,9 @@ export default function App() {
       {/* App views */}
       {(session||!SB.IS_LIVE)&&view==='home'&&<HomeView key={homeKey} session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} onSelectTeam={handleSelectTeam} onLogout={handleLogout} onSettings={()=>setView('settings')}/>}
       {(session||!SB.IS_LIVE)&&view==='settings'&&<SettingsPage session={session||{user:{email:'demo@standsync.app',user_metadata:{name:'Demo User'}}}} team={team} members={members} setMembers={setMembers} isManager={isManager} onBack={()=>setView(team?'standup':'home')} onSaved={d=>showToast('Profile saved')}/>}
-      {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView canViewPerformance={canViewPerformance} myRole={myRole} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
+      {(session||!SB.IS_LIVE)&&view==='standup'&&isManager&&<ManagerView canViewPerformance={canViewPerformance} myRole={myRole} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask} onBack={()=>{sessionStorage.setItem('ss-skip-autoenter','1');setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
       {/* PiP is a real popup window — no DOM element needed */}
-      {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<ManagerView isManager={false} canViewPerformance={canViewPerformance} myRole={myRole} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask} onBack={()=>{setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
+      {(session||!SB.IS_LIVE)&&view==='standup'&&!isManager&&<ManagerView isManager={false} canViewPerformance={canViewPerformance} myRole={myRole} session={session||{user:{email:userForView.email,user_metadata:{name:userForView.name}}}} team={team||{id:'demo',name:'xtransmatrix',standup_name:'Supa Daily Standup'}} tasks={tasks} members={members} history={history} standup={standup} onStatus={handleStatus} onPriority={handlePriority} onNote={handleNote} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask} onBack={()=>{sessionStorage.setItem('ss-skip-autoenter','1');setHomeKey(k=>k+1);setView('home');}} onSettings={()=>setView('settings')} onLogout={handleLogout} emailBusy={emailBusy} onDigest={handleDigest} onEOD={handleEOD} messages={messages} onSendMessage={handleSendMessage} chatTheme={chatTheme} onChangeTheme={setChatTheme} setMembers={setMembers} openPip={openPip} pipOpen={pipOpen}/>}
     </ThemeCtx.Provider>
   );
 }
