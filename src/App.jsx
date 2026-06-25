@@ -5652,13 +5652,14 @@ function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, pr
   const fileInputRef = useRef();
   const files = projectFiles[selProject] || [];
 
-  const fileIcon = (f) => {
-    if (f.type?.startsWith('image/')) return '🖼️';
-    if (f.name?.match(/\.pdf$/i)) return '📄';
-    if (f.name?.match(/\.pptx?$/i)) return '📊';
-    if (f.name?.match(/\.docx?$/i)) return '📝';
-    if (f.name?.match(/\.xlsx?$/i)) return '📈';
-    return '📎';
+  const fileIcon = (f, size = 18) => {
+    const p = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round' };
+    if (f.type?.startsWith('image/')) return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>;
+    if (f.name?.match(/\.pdf$/i)) return <svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><text x="7" y="18" fontSize="6" fill="currentColor" stroke="none" fontFamily="monospace">PDF</text></svg>;
+    if (f.name?.match(/\.pptx?$/i)) return <svg {...p}><rect x="3" y="3" width="18" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>;
+    if (f.name?.match(/\.docx?$/i)) return <svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>;
+    if (f.name?.match(/\.xlsx?$/i)) return <svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="12" y1="11" x2="12" y2="19"/></svg>;
+    return <svg {...p}><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>;
   };
 
   // Extract text from PDF using PDF.js CDN
@@ -5765,7 +5766,7 @@ function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, pr
             onClick={e => e.stopPropagation()}>
             {/* Modal header */}
             <div style={{ padding: '14px 20px', borderBottom: `1px solid ${c.bord}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 20 }}>{fileIcon(preview)}</span>
+              <span style={{ display:"inline-flex", color: "#3B9EFF" }}>{fileIcon(preview, 20)}</span>
               <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.name}</span>
               <span style={{ fontSize: 11, color: c.mut }}>{Math.round(preview.size/1024)}KB</span>
               {preview.dataUrl && (
@@ -5791,7 +5792,7 @@ function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, pr
               )}
               {!textExtracted(preview) && !preview.type?.startsWith('image/') && !preview.name?.match(/\.pdf$/i) && (
                 <div style={{ textAlign: 'center', padding: 40, color: c.mut }}>
-                  <div style={{ fontSize: 48, marginBottom: 12 }}>{fileIcon(preview)}</div>
+                  <div style={{ marginBottom: 12, color: "#3B9EFF", display:"flex", justifyContent:"center" }}>{fileIcon(preview, 48)}</div>
                   <div style={{ fontSize: 14, marginBottom: 8 }}>{preview.name}</div>
                   <div style={{ fontSize: 12 }}>{preview.extractedText}</div>
                   {preview.dataUrl && (
@@ -5809,7 +5810,7 @@ function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, pr
       {/* Panel */}
       <div style={{ marginBottom: 24, borderRadius: 14, border: `1px solid ${c.bord}`, overflow: 'visible', background: dark ? 'rgba(255,255,255,.03)' : 'rgba(255,255,255,.7)' }}>
         <div style={{ padding: '12px 18px', borderBottom: `1px solid ${c.bord}`, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 16 }}>📎</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={c.sub} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
           <span style={{ fontSize: 13, fontWeight: 700, color: c.text, flex: 1 }}>Project Files & SOPs</span>
           <span style={{ fontSize: 11, color: c.mut }}>{files.length} file{files.length !== 1 ? 's' : ''}</span>
           {files.some(f => textExtracted(f)) && <span style={{ fontSize: 11, color: '#34D399', background: 'rgba(52,211,153,.1)', padding: '2px 8px', borderRadius: 20 }}>✓ AI reads extracted text</span>}
@@ -5823,12 +5824,18 @@ function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, pr
 
         {files.length === 0 ? (
           <div style={{ padding: '28px 20px', textAlign: 'center', cursor: 'pointer' }} onClick={() => fileInputRef.current?.click()}>
-            <div style={{ fontSize: 38, marginBottom: 10 }}>📁</div>
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke={c.mut} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 12, opacity: .55 }}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
             <div style={{ fontSize: 13, color: c.text, fontWeight: 600, marginBottom: 5 }}>Upload PDFs, presentations, images, docs, SOPs</div>
             <div style={{ fontSize: 11, color: c.mut, marginBottom: 14 }}>PDFs: text extracted automatically · AI reads everything</div>
             <div style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-              {['📄 PDF (text extracted)','📊 PPT/PPTX','📝 DOC/DOCX','🖼️ Images','📃 TXT/CSV/MD'].map(t => (
-                <span key={t} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: dark ? 'rgba(255,255,255,.06)' : 'rgba(0,112,243,.08)', color: c.mut, border: `1px solid ${c.bord}` }}>{t}</span>
+              {[
+                { label: 'PDF (text extracted)', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> },
+                { label: 'PPT/PPTX', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> },
+                { label: 'DOC/DOCX', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg> },
+                { label: 'Images', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg> },
+                { label: 'TXT/CSV/MD', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg> },
+              ].map(t => (
+                <span key={t.label} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: dark ? 'rgba(255,255,255,.06)' : 'rgba(0,112,243,.08)', color: c.mut, border: `1px solid ${c.bord}`, display:'inline-flex', alignItems:'center', gap: 6 }}>{t.icon}{t.label}</span>
               ))}
             </div>
           </div>
@@ -5841,7 +5848,7 @@ function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, pr
                 onMouseLeave={e => e.currentTarget.style.borderColor = c.bord}>
                 {f.type?.startsWith('image/') && f.dataUrl
                   ? <img src={f.dataUrl} alt={f.name} style={{ width: '100%', height: 72, objectFit: 'cover', borderRadius: 6, marginBottom: 8 }}/>
-                  : <div style={{ fontSize: 28, marginBottom: 8, textAlign: 'center' }}>{fileIcon(f)}</div>
+                  : <div style={{ marginBottom: 8, color: "#3B9EFF", display:"flex", justifyContent:"center" }}>{fileIcon(f, 28)}</div>
                 }
                 <div style={{ fontSize: 12, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }} title={f.name}>{f.name}</div>
                 <div style={{ fontSize: 10, color: c.mut, marginBottom: 3 }}>{Math.round(f.size/1024)}KB · {new Date(f.uploadedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
@@ -5901,11 +5908,15 @@ function WikiOverview({ curProject, projPages, pinnedPages, projectId, projectFi
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 24 }}>
-        {[{label:'Pages & files',value:totalPages,icon:'📄'},{label:'Words documented',value:wordCount.toLocaleString(),icon:'✍️'},{label:'Last edited',value:lastEdited?new Date(lastEdited.updatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'—',icon:'🕘'}].map(s=>(
-          <div key={s.label} style={{ padding: '16px 18px', borderRadius: 12, background: dark?'rgba(255,255,255,.04)':'rgba(255,255,255,.8)', border: `1px solid ${c.bord}` }}>
-            <div style={{ fontSize: 22, marginBottom: 6 }}>{s.icon}</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: c.text, letterSpacing: '-.02em' }}>{s.value}</div>
-            <div style={{ fontSize: 11, color: c.mut, textTransform: 'uppercase', letterSpacing: '.07em', marginTop: 2 }}>{s.label}</div>
+        {[
+          { label: 'Pages & files', value: totalPages, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg> },
+          { label: 'Words documented', value: wordCount.toLocaleString(), icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg> },
+          { label: 'Last edited', value: lastEdited ? new Date(lastEdited.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
+        ].map(s => (
+          <div key={s.label} style={{ padding: '16px 18px', borderRadius: 12, background: dark ? 'rgba(255,255,255,.04)' : 'rgba(255,255,255,.8)', border: `1px solid ${c.bord}` }}>
+            <div style={{ marginBottom: 8, color: '#3B9EFF', opacity: .9 }}>{s.icon}</div>
+            <div className="font-heading" style={{ fontSize: 26, fontWeight: 600, color: c.text, letterSpacing: '-.025em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{s.value}</div>
+            <div className="eyebrow" style={{ color: c.mut, marginTop: 6 }}>{s.label}</div>
           </div>
         ))}
       </div>
@@ -6006,10 +6017,10 @@ function ProjectWiki({ team, session, members = [] }) {
         if (d.projectFiles) setProjectFiles(d.projectFiles);
         if (d.projects?.length) setSelProject(d.projects[0].id);
       } else {
-        const dp = { id:'p1', name:'Getting Started', emoji:'🚀', color:'#0070F3', desc:'Team knowledge base', createdAt:Date.now() };
-        const dpg = { id:'pg1', projectId:'p1', title:'Welcome to Project Wiki', emoji:'👋', pinned:true, updatedAt:Date.now(),
+        const dp = { id:'p1', name:'Getting Started', emoji:'◆', color:'#0070F3', desc:'Team knowledge base', createdAt:Date.now() };
+        const dpg = { id:'pg1', projectId:'p1', title:'Welcome to Project Wiki', emoji:'✦', pinned:true, updatedAt:Date.now(),
           blocks:[
-            {id:'b1',type:'heading1',content:'Welcome to Project Wiki 👋'},
+            {id:'b1',type:'heading1',content:'Welcome to Project Wiki'},
             {id:'b2',type:'callout',content:'Create SOPs, docs, and notes — all searchable by AI.',calloutType:'info'},
             {id:'b3',type:'heading2',content:'Getting started'},
             {id:'b4',type:'bullet',content:'Create projects for each product or workstream'},
@@ -6691,7 +6702,7 @@ function BrainstormWelcome({ c, dark, onPick }) {
     <button onClick={onClick} style={{ flex:'1 1 240px',minWidth:240,textAlign:'left',background:c.surf,border:`1px solid ${c.bord}`,borderRadius:16,padding:'22px 22px 20px',cursor:'pointer',transition:'all .15s' }}
       onMouseEnter={e=>{e.currentTarget.style.borderColor='#0070F3';e.currentTarget.style.transform='translateY(-3px)';}}
       onMouseLeave={e=>{e.currentTarget.style.borderColor=c.bord;e.currentTarget.style.transform='none';}}>
-      <div style={{ fontSize:34,marginBottom:12 }}>{icon}</div>
+      <div style={{ width:48,height:48,marginBottom:14,borderRadius:12,background:dark?'rgba(0,112,243,.1)':'rgba(0,112,243,.08)',border:`1px solid ${c.bord}`,display:'flex',alignItems:'center',justifyContent:'center',color:'#3B9EFF' }}>{icon}</div>
       <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:8 }}>
         <span style={{ fontSize:16,fontWeight:700,color:c.text }}>{title}</span>
         {badge && <span style={{ fontSize:10,fontWeight:700,color:badgeCol,background:badgeCol+'1f',padding:'2px 8px',borderRadius:20 }}>{badge}</span>}
@@ -6699,19 +6710,22 @@ function BrainstormWelcome({ c, dark, onPick }) {
       <ul style={{ margin:0,padding:'0 0 0 16px',color:c.sub,fontSize:12.5,lineHeight:1.7 }}>{lines.map((l,i)=><li key={i}>{l}</li>)}</ul>
     </button>
   );
+  const iconLock = <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+  const iconPeople = <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+  const iconTpl = <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>;
   return (
     <div style={{ height:'calc(100vh - 62px)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',borderRadius:14,border:`1px solid ${c.bord}`,background:dark?c.bg:'#fff',padding:24 }}>
-      <div style={{ fontSize:13,fontWeight:600,color:'#0070F3',letterSpacing:'.08em',textTransform:'uppercase',marginBottom:8 }}>Brainstorm</div>
-      <h2 style={{ fontSize:26,fontWeight:800,color:c.text,marginBottom:6,textAlign:'center' }}>What would you like to work on today?</h2>
+      <div className="eyebrow" style={{ color:'#3B9EFF',marginBottom:10 }}>Brainstorm</div>
+      <h2 className="font-heading" style={{ fontSize:28,fontWeight:600,color:c.text,marginBottom:6,textAlign:'center',letterSpacing:'-.03em' }}>What would you like to work on today?</h2>
       <p style={{ fontSize:13.5,color:c.mut,marginBottom:28,textAlign:'center' }}>Pick a workspace to get started. You can switch any time.</p>
       <div style={{ display:'flex',gap:16,flexWrap:'wrap',maxWidth:840,justifyContent:'center' }}>
-        <Card3 icon="🔒" title="Personal" badge="Private" badgeCol="#94A3B8"
+        <Card3 icon={iconLock} title="Personal" badge="Private" badgeCol="#94A3B8"
           lines={['Rough work & scratch ideas','Only visible to you','Never synced to team boards']}
           onClick={()=>onPick({ mode:'personal' })}/>
-        <Card3 icon="👥" title="Shared" badge="Team" badgeCol="#34D399"
+        <Card3 icon={iconPeople} title="Shared" badge="Team" badgeCol="#34D399"
           lines={['Team & project collaboration','Visible to authorized members','Activity tracking enabled']}
           onClick={()=>onPick({ mode:'shared' })}/>
-        <Card3 icon="▦" title="Start from template" badge="Shared only" badgeCol="#0070F3"
+        <Card3 icon={iconTpl} title="Start from template" badge="Shared only" badgeCol="#0070F3"
           lines={['Structured frameworks','SWOT, OKR, retros & more','Team collaboration ready']}
           onClick={()=>setPicking('template')}/>
       </div>
