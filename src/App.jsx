@@ -97,6 +97,47 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 3px var(--ss-focus,rgba
 /* ── Premium depth & 3D-feel (no Three.js) ──────────────────────────── */
 /* Tilt-on-hover cards: perspective wrapper + transform on inner */
 .ss-statcard:hover .ss-statcard-underline{opacity:1!important}
+/* ── Upgraded spring-physics timing ──────────────────────────────────── */
+/* All 3D transitions use an overshoot spring: fast out, slight bounce back */
+:root{
+  --spring-fast:cubic-bezier(.34,1.56,.64,1);
+  --spring-med:cubic-bezier(.22,1.2,.36,1);
+  --spring-soft:cubic-bezier(.22,1,.36,1);
+}
+/* Deeper tilt: perspective 700px so the effect is more pronounced */
+.ss-tilt{transform-style:preserve-3d;transition:transform .3s var(--spring-fast),box-shadow .3s}
+.ss-tilt:hover{box-shadow:0 40px 80px -30px rgba(0,112,243,.5),0 10px 30px -14px rgba(0,0,0,.35)}
+/* Z-layer lift classes: cards float toward viewer */
+.ss-z-1{transition:transform .28s var(--spring-fast),box-shadow .28s}
+.ss-z-1:hover{transform:perspective(800px) translateZ(14px);box-shadow:0 28px 60px -28px rgba(0,112,243,.38)}
+.ss-z-2{transition:transform .28s var(--spring-fast),box-shadow .28s}
+.ss-z-2:hover{transform:perspective(800px) translateZ(26px);box-shadow:0 40px 80px -32px rgba(0,112,243,.48),0 8px 24px -12px rgba(0,0,0,.3)}
+/* Magnetic pull: sibling elements lean toward cursor */
+.ss-magnetic{display:inline-flex;transition:transform .2s var(--spring-fast)}
+/* Row entrance stagger — cards slide up with depth */
+@keyframes ssRowEnter{0%{opacity:0;transform:perspective(900px) translateY(16px) translateZ(-28px)}100%{opacity:1;transform:perspective(900px) translateY(0) translateZ(0)}}
+.ss-row-enter{animation:ssRowEnter .4s var(--spring-soft) both}
+/* Stagger delays for sibling rows */
+.ss-row-enter:nth-child(1){animation-delay:.04s}
+.ss-row-enter:nth-child(2){animation-delay:.08s}
+.ss-row-enter:nth-child(3){animation-delay:.12s}
+.ss-row-enter:nth-child(4){animation-delay:.16s}
+.ss-row-enter:nth-child(5){animation-delay:.20s}
+.ss-row-enter:nth-child(n+6){animation-delay:.24s}
+/* Card surface shimmer on hover (metallic sheen) */
+@keyframes ssSurfaceSheen{0%{transform:translateX(-150%) skewX(-22deg)}100%{transform:translateX(250%) skewX(-22deg)}}
+.ss-surface-sheen{position:relative;overflow:hidden}
+.ss-surface-sheen::before{content:'';position:absolute;top:0;bottom:0;left:0;width:50%;background:linear-gradient(105deg,transparent 25%,rgba(255,255,255,.065) 50%,transparent 75%);transform:translateX(-150%) skewX(-22deg);pointer-events:none;border-radius:inherit;z-index:1}
+.ss-surface-sheen:hover::before{animation:ssSurfaceSheen 1.1s var(--spring-soft)}
+/* Inset glow on focused inputs */
+.ss-input-glow:focus{box-shadow:0 0 0 2px rgba(0,112,243,.35),inset 0 1px 3px rgba(0,0,0,.2)}
+/* Auth hero floating feature cards */
+@keyframes ssFeatureFloat{0%,100%{transform:perspective(800px) translateZ(0) translateY(0)}50%{transform:perspective(800px) translateZ(8px) translateY(-4px)}}
+.ss-feature-float{animation:ssFeatureFloat 7s ease-in-out infinite;transform-style:preserve-3d}
+.ss-feature-float:nth-child(2){animation-delay:1.4s}
+.ss-feature-float:nth-child(3){animation-delay:2.8s}
+.ss-feature-float:nth-child(4){animation-delay:4.2s}
+@media(prefers-reduced-motion:reduce){.ss-tilt:hover,.ss-z-1:hover,.ss-z-2:hover{transform:none!important;box-shadow:none!important}.ss-row-enter{animation:none}.ss-feature-float{animation:none}.ss-surface-sheen::before{display:none}}
 @media(max-width:760px){.ss-crumb{display:none!important}}
 .ss-tilt{transform-style:preserve-3d;transition:transform .25s cubic-bezier(.22,1,.36,1),box-shadow .25s}
 .ss-tilt:hover{box-shadow:0 30px 70px -30px rgba(0,112,243,.45),0 8px 24px -12px rgba(0,0,0,.3)}
@@ -117,14 +158,16 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 3px var(--ss-focus,rgba
 @media(prefers-reduced-motion:reduce){.ss-tilt:hover{transform:none!important}.ss-sheen:hover::after{animation:none}.ss-grad-text{animation:none}.ss-float{animation:none}}
 /* ── True CSS 3D depth ──────────────────────────────────────────────── */
 .ss-3d-scene{perspective:1400px;perspective-origin:50% 30%}
-@keyframes ss3dRise{0%{opacity:0;transform:perspective(1400px) rotateX(8deg) translateY(26px) translateZ(-60px)}100%{opacity:1;transform:perspective(1400px) rotateX(0) translateY(0) translateZ(0)}}
-.ss-3d-rise{animation:ss3dRise .55s cubic-bezier(.22,1,.36,1) both;transform-style:preserve-3d}
-@keyframes ss3dPop{0%{opacity:0;transform:perspective(1000px) scale(.94) translateZ(-40px)}100%{opacity:1;transform:perspective(1000px) scale(1) translateZ(0)}}
-.ss-3d-pop{animation:ss3dPop .4s cubic-bezier(.22,1,.36,1) both}
+@keyframes ss3dRise{0%{opacity:0;transform:perspective(1400px) rotateX(12deg) translateY(38px) translateZ(-90px) scale(.97)}60%{opacity:1;transform:perspective(1400px) rotateX(-1.5deg) translateY(-4px) translateZ(6px) scale(1.008)}80%{transform:perspective(1400px) rotateX(.6deg) translateY(1px) translateZ(2px) scale(.999)}100%{opacity:1;transform:perspective(1400px) rotateX(0) translateY(0) translateZ(0) scale(1)}}
+.ss-3d-rise{animation:ss3dRise .65s cubic-bezier(.22,1,.36,1) both;transform-style:preserve-3d}
+@keyframes ss3dPop{0%{opacity:0;transform:perspective(1000px) scale(.90) translateZ(-60px) rotateX(6deg)}65%{opacity:1;transform:perspective(1000px) scale(1.02) translateZ(6px) rotateX(-.8deg)}85%{transform:perspective(1000px) scale(.99) translateZ(1px) rotateX(.3deg)}100%{opacity:1;transform:perspective(1000px) scale(1) translateZ(0) rotateX(0)}}
+.ss-3d-pop{animation:ss3dPop .42s cubic-bezier(.22,1,.36,1) both}
 /* Boot flash for splash logo */
 @keyframes ssLogoFlash{0%{opacity:0;transform:perspective(1200px) rotateX(20deg) translateZ(-120px) scale(.85)}45%{opacity:1;transform:perspective(1200px) rotateX(0) translateZ(0) scale(1.04)}65%{transform:perspective(1200px) rotateX(0) translateZ(0) scale(.98)}100%{opacity:1;transform:perspective(1200px) rotateX(0) translateZ(0) scale(1)}}
 .ss-logo-flash{animation:ssLogoFlash .7s cubic-bezier(.22,1,.36,1) both;transform-style:preserve-3d}
 @keyframes ssScan{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.ss-subtabs{scrollbar-width:none;-ms-overflow-style:none}
+.ss-subtabs::-webkit-scrollbar{display:none;width:0;height:0}
 /* Depth lift: card pushes toward the viewer on hover */
 .ss-depth-hover{transition:transform .25s cubic-bezier(.22,1,.36,1),box-shadow .25s}
 .ss-depth-hover:hover{transform:perspective(900px) translateZ(22px);box-shadow:0 40px 80px -36px rgba(0,112,243,.5),0 12px 30px -16px rgba(0,0,0,.35)}
@@ -164,10 +207,194 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 3px var(--ss-focus,rgba
 
 // ─── PRIMITIVES ───────────────────────────────────────────────────────────────
 // Slowly drifting ambient gradient blobs + faint grid, with subtle mouse parallax — depth without 3D libs.
-function AmbientBackground() {
-  const c = useC(); const dark = c.dark;
+// ── WebGL ambient background (auth / splash ONLY) ───────────────────────────
+// A raw WebGL2 fragment shader that paints smooth organic noise. Zero libraries.
+// Runs at 30fps via a throttled rAF. Kills the context on unmount.
+// NOT used inside the dashboard — no render loop during daily work.
+function WebGLAmbient({ dark }) {
+  const canvasRef = useRef(null);
+  const stateRef = useRef({});
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    const gl = canvas.getContext('webgl2', { alpha: true, antialias: false, powerPreference: 'low-power' })
+             || canvas.getContext('webgl',  { alpha: true, antialias: false, powerPreference: 'low-power' });
+    if (!gl) return; // graceful fallback to CSS blobs
+    const vert = `attribute vec2 a;void main(){gl_Position=vec4(a,0,1);}`;
+    const frag = `
+precision mediump float;
+uniform float u_time;
+uniform vec2  u_res;
+uniform int   u_dark;
+// Smooth organic noise via multiple sine harmonics — no texture lookups needed.
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float noise(vec2 p){
+  vec2 i=floor(p),f=fract(p);
+  vec2 u=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1,0)),u.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),u.x),u.y);
+}
+float fbm(vec2 p){
+  float v=0.,a=.5;
+  for(int i=0;i<5;i++){v+=a*noise(p);p=p*2.1+vec2(1.3,-.7);a*=.5;}
+  return v;
+}
+void main(){
+  vec2 uv=gl_FragCoord.xy/u_res;
+  float t=u_time*.18;
+  vec2 p=uv*2.2+vec2(t*.4,-t*.25);
+  float n=fbm(p+vec2(fbm(p+vec2(fbm(p,t),t)),t));
+  // Palette: blue anchor with purple/teal accents
+  vec3 colA=u_dark==1?vec3(.0,.27,.62):vec3(.0,.44,1.);  // #0070F3
+  vec3 colB=u_dark==1?vec3(.30,.22,.80):vec3(.49,.36,1.); // purple
+  vec3 colC=u_dark==1?vec3(.0,.36,.30):vec3(.0,.71,.51);  // teal
+  vec3 col=mix(colA,mix(colB,colC,n*.7),smoothstep(.32,.68,n));
+  float alpha=u_dark==1?(.12+n*.18):(.06+n*.1);
+  gl_FragColor=vec4(col*alpha,alpha);
+}`;
+    const compile = (type, src) => {
+      const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s;
+    };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, vert));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, frag));
+    gl.linkProgram(prog); gl.useProgram(prog);
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,3,-1,-1,3]), gl.STATIC_DRAW);
+    const aloc = gl.getAttribLocation(prog, 'a');
+    gl.enableVertexAttribArray(aloc); gl.vertexAttribPointer(aloc, 2, gl.FLOAT, false, 0, 0);
+    const uTime = gl.getUniformLocation(prog, 'u_time');
+    const uRes  = gl.getUniformLocation(prog, 'u_res');
+    const uDark = gl.getUniformLocation(prog, 'u_dark');
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    let raf = null, last = 0, start = performance.now();
+    const FRAME_MS = reduce ? 99999 : 33; // 30fps cap; static if reduced-motion
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width  = Math.floor(canvas.offsetWidth  * dpr);
+      canvas.height = Math.floor(canvas.offsetHeight * dpr);
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    };
+    const ro = new ResizeObserver(resize); ro.observe(canvas); resize();
+    const draw = (ts) => {
+      raf = requestAnimationFrame(draw);
+      if (ts - last < FRAME_MS) return;
+      last = ts;
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.uniform1f(uTime, (ts - start) * .001);
+      gl.uniform2f(uRes, canvas.width, canvas.height);
+      gl.uniform1i(uDark, dark ? 1 : 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    };
+    raf = requestAnimationFrame(draw);
+    stateRef.current = { gl, prog, buf, raf, ro };
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      ro.disconnect();
+      try { gl.deleteProgram(prog); gl.deleteBuffer(buf); } catch {}
+      const ext = gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext();
+    };
+  }, [dark]);
+  return (
+    <canvas ref={canvasRef} aria-hidden="true"
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', zIndex: 0, pointerEvents: 'none' }}/>
+  );
+}
+
+// ── Particle field (auth / splash ONLY) ──────────────────────────────────────
+// ~80 dots connected by proximity lines. Mouse-reactive parallax.
+// Single rAF loop, 30fps throttled, kills itself on unmount.
+function ParticleField({ dark }) {
+  const canvasRef = useRef(null);
+  useEffect(() => {
+    const canvas = canvasRef.current; if (!canvas) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    if (reduce) return;
+    const ctx = canvas.getContext('2d');
+    let raf = null, last = 0, mouse = { x: -9999, y: -9999 };
+    const FRAME_MS = 33; // 30fps
+    const N = 72;
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width  = Math.floor(canvas.offsetWidth  * dpr);
+      canvas.height = Math.floor(canvas.offsetHeight * dpr);
+      ctx.scale(dpr, dpr);
+    };
+    const ro = new ResizeObserver(resize); ro.observe(canvas); resize();
+    // Seed particles
+    const pts = Array.from({ length: N }, () => ({
+      x: Math.random() * (canvas.offsetWidth  || 1400),
+      y: Math.random() * (canvas.offsetHeight || 900),
+      vx: (Math.random() - .5) * .35,
+      vy: (Math.random() - .5) * .35,
+      r: Math.random() * 1.6 + .6,
+    }));
+    const onMove = (e) => {
+      const r = canvas.getBoundingClientRect();
+      mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top;
+    };
+    window.addEventListener('mousemove', onMove);
+    const DOT_COL  = dark ? 'rgba(59,158,255,'  : 'rgba(0,112,243,';
+    const LINE_COL = dark ? 'rgba(59,158,255,'  : 'rgba(0,112,243,';
+    const LINK_DIST = 140;
+    const draw = (ts) => {
+      raf = requestAnimationFrame(draw);
+      if (ts - last < FRAME_MS) return; last = ts;
+      const W = canvas.offsetWidth, H = canvas.offsetHeight;
+      ctx.clearRect(0, 0, W, H);
+      pts.forEach(p => {
+        // Gentle drift toward mouse
+        const dx = mouse.x - p.x, dy = mouse.y - p.y;
+        const d = Math.hypot(dx, dy);
+        if (d < 220) { p.vx += dx / d * .008; p.vy += dy / d * .008; }
+        p.vx *= .985; p.vy *= .985;
+        p.x += p.vx; p.y += p.vy;
+        if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
+        if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
+      });
+      // Lines between close points
+      for (let i = 0; i < pts.length; i++) {
+        for (let j = i + 1; j < pts.length; j++) {
+          const dx = pts[i].x - pts[j].x, dy = pts[i].y - pts[j].y;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d < LINK_DIST) {
+            const alpha = (1 - d / LINK_DIST) * (dark ? .22 : .14);
+            ctx.beginPath();
+            ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[j].x, pts[j].y);
+            ctx.strokeStyle = LINE_COL + alpha + ')';
+            ctx.lineWidth = .8; ctx.stroke();
+          }
+        }
+      }
+      // Dots
+      pts.forEach(p => {
+        // Edge fade
+        const edgeFade = Math.min(p.x / 80, p.y / 80, (W - p.x) / 80, (H - p.y) / 80, 1);
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = DOT_COL + (.5 * edgeFade) + ')'; ctx.fill();
+      });
+    };
+    raf = requestAnimationFrame(draw);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      ro.disconnect(); window.removeEventListener('mousemove', onMove);
+    };
+  }, [dark]);
+  return (
+    <canvas ref={canvasRef} aria-hidden="true"
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', zIndex: 1, pointerEvents: 'none' }}/>
+  );
+}
+
+// ── AmbientBackground — two modes ────────────────────────────────────────────
+// webgl=true  → WebGL shader + particle canvas (auth / splash screens)
+// webgl=false → pure CSS blobs (dashboard — no render loop during work)
+function AmbientBackground({ webgl = false }) {
+  const c = useC(); const { dark } = useTheme();
   const [p, setP] = useState({ x: 0, y: 0 });
   useEffect(() => {
+    if (webgl) return; // mouse parallax only needed for CSS blob version
     let raf = null;
     const onMove = (e) => {
       if (raf) return;
@@ -177,18 +404,29 @@ function AmbientBackground() {
         setP({ x, y }); raf = null;
       });
     };
-    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
     if (!reduce) window.addEventListener('pointermove', onMove);
     return () => { window.removeEventListener('pointermove', onMove); if (raf) cancelAnimationFrame(raf); };
-  }, []);
-  const blob = (bg) => ({ position:'absolute', borderRadius:'50%', filter:'blur(120px)', background:bg, transition:'transform .5s cubic-bezier(.22,1,.36,1)' });
+  }, [webgl]);
+
+  if (webgl) {
+    return (
+      <div aria-hidden="true" style={{ pointerEvents: 'none', position: 'fixed', inset: 0, zIndex: 0, overflow: 'hidden', background: dark ? '#0A0A0A' : '#F8F9FC' }}>
+        <WebGLAmbient dark={dark}/>
+        <ParticleField dark={dark}/>
+      </div>
+    );
+  }
+
+  // Dashboard: CSS blobs, no render loop
+  const blob = (bg) => ({ position: 'absolute', borderRadius: '50%', filter: 'blur(120px)', background: bg, transition: 'transform .5s cubic-bezier(.22,1,.36,1)' });
   return (
-    <div aria-hidden="true" style={{ pointerEvents:'none', position:'fixed', inset:0, zIndex:0, overflow:'hidden' }}>
-      <div style={{ position:'absolute', inset:0, background:c.bg }} />
-      <div className="blueprint-grid" style={{ position:'absolute', inset:0, color:c.bord, opacity:dark?.5:.6, transform:`translate(${p.x*-8}px,${p.y*-8}px)`, transition:'transform .5s cubic-bezier(.22,1,.36,1)' }} />
-      <div className="ambient-blob-a" style={{ ...blob(dark?'radial-gradient(circle at center, rgba(0,122,255,.22), transparent 60%)':'radial-gradient(circle at center, rgba(0,112,243,.10), transparent 60%)'), top:-160, left:-160, height:720, width:720, transform:`translate(${p.x*40}px,${p.y*40}px)` }} />
-      <div className="ambient-blob-b" style={{ ...blob(dark?'radial-gradient(circle at center, rgba(120,80,255,.16), transparent 60%)':'radial-gradient(circle at center, rgba(120,80,255,.07), transparent 60%)'), top:'33%', right:-220, height:640, width:640, transform:`translate(${p.x*-55}px,${p.y*-55}px)` }} />
-      <div className="ambient-blob-c" style={{ ...blob(dark?'radial-gradient(circle at center, rgba(16,185,129,.12), transparent 60%)':'radial-gradient(circle at center, rgba(16,185,129,.06), transparent 60%)'), bottom:-260, left:'33%', height:680, width:680, transform:`translate(${p.x*30}px,${p.y*-30}px)` }} />
+    <div aria-hidden="true" style={{ pointerEvents: 'none', position: 'fixed', inset: 0, zIndex: 0, overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', inset: 0, background: c.bg }} />
+      <div className="blueprint-grid" style={{ position: 'absolute', inset: 0, color: c.bord, opacity: dark ? .5 : .6, transform: `translate(${p.x * -8}px,${p.y * -8}px)`, transition: 'transform .5s cubic-bezier(.22,1,.36,1)' }} />
+      <div className="ambient-blob-a" style={{ ...blob(dark ? 'radial-gradient(circle at center, rgba(0,122,255,.22), transparent 60%)' : 'radial-gradient(circle at center, rgba(0,112,243,.10), transparent 60%)'), top: -160, left: -160, height: 720, width: 720, transform: `translate(${p.x * 40}px,${p.y * 40}px)` }} />
+      <div className="ambient-blob-b" style={{ ...blob(dark ? 'radial-gradient(circle at center, rgba(120,80,255,.16), transparent 60%)' : 'radial-gradient(circle at center, rgba(120,80,255,.07), transparent 60%)'), top: '33%', right: -220, height: 640, width: 640, transform: `translate(${p.x * -55}px,${p.y * -55}px)` }} />
+      <div className="ambient-blob-c" style={{ ...blob(dark ? 'radial-gradient(circle at center, rgba(16,185,129,.12), transparent 60%)' : 'radial-gradient(circle at center, rgba(16,185,129,.06), transparent 60%)'), bottom: -260, left: '33%', height: 680, width: 680, transform: `translate(${p.x * 30}px,${p.y * -30}px)` }} />
     </div>
   );
 }
@@ -286,28 +524,96 @@ function Av({ member, size=36, url }) {
   if(src) return <img src={src} alt={ini} style={{ width:size,height:size,borderRadius:'50%',objectFit:'cover',flexShrink:0,border:`2px solid ${color}55` }}/>;
   return <div style={{ width:size,height:size,borderRadius:'50%',background:color+'22',border:`2px solid ${color}55`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:size*.32,fontWeight:700,color,flexShrink:0 }}>{ini}</div>;
 }
+// Team-presence dropdown with proper outside-click handling and theme-matching surface.
+function PresencePill({ members, online, status, dark, c, open, setOpen }) {
+  const wrapRef = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDocDown = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDocDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDocDown); document.removeEventListener('keydown', onKey); };
+  }, [open, setOpen]);
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', flexShrink: 0 }}>
+      <button onClick={() => setOpen(o => !o)} title="Who's online"
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 34, padding: '0 12px', borderRadius: 18, border: `1px solid ${c.bord}`, background: open ? c.row : 'transparent', color: c.sub, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", transition: 'all .15s' }}
+        onMouseEnter={e => { if (!open) e.currentTarget.style.background = c.row; }}
+        onMouseLeave={e => { if (!open) e.currentTarget.style.background = 'transparent'; }}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#34D399', boxShadow: '0 0 0 3px rgba(52,211,153,.2)' }}/>
+        {online.length}/{members.length}
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: 42, right: 0, zIndex: 60, width: 270, maxHeight: 360, overflowY: 'auto', background: c.surf, border: `1px solid ${c.bord}`, borderRadius: 14, boxShadow: '0 14px 44px rgba(0,0,0,.35)', padding: 8, animation: 'ss3dPop .2s cubic-bezier(.22,1,.36,1) both' }}>
+          <div className="eyebrow" style={{ color: c.mut, padding: '6px 10px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#34D399' }}/>
+            {online.length} online now
+          </div>
+          {members.length === 0 && <div style={{ padding: '14px 10px', fontSize: 12, color: c.mut, textAlign: 'center' }}>No team members yet</div>}
+          {members.map(m => {
+            const st = status(m);
+            const dot = st === 'online' ? '#34D399' : st === 'break' ? '#F59E0B' : '#94A3B8';
+            const lbl = st === 'online' ? 'Online' : st === 'break' ? 'On break' : 'Offline';
+            return (
+              <div key={m.email} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 9, transition: 'background .12s' }}
+                onMouseEnter={e => e.currentTarget.style.background = c.row}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <div style={{ position: 'relative' }}>
+                  <Av member={m} size={28} url={m.avatar_url}/>
+                  <span style={{ position: 'absolute', bottom: -1, right: -1, width: 9, height: 9, borderRadius: '50%', background: dot, border: `1.5px solid ${c.surf}` }}/>
+                </div>
+                <span style={{ flex: 1, fontSize: 13, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500 }}>{m.name || m.email.split('@')[0]}</span>
+                <span style={{ fontSize: 10.5, color: dot, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', fontFamily: "'JetBrains Mono', monospace" }}>{lbl}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 function PBadge({ priority }) { const p=getPriority(priority); return <span style={{ fontSize:10,fontWeight:700,letterSpacing:'.06em',background:p.bg,color:p.color,padding:'3px 8px',borderRadius:20,textTransform:'uppercase',border:`1px solid ${p.color}35`,whiteSpace:'nowrap' }}>{p.label}</span>; }
 function SBadge({ status }) { const s=getStatus(status); return <span style={{ fontSize:10,fontWeight:700,letterSpacing:'.06em',background:s.bg,color:s.color,padding:'3px 8px',borderRadius:20,textTransform:'uppercase',border:`1px solid ${s.color}35`,whiteSpace:'nowrap' }}>{s.label}</span>; }
 function Card({ children, style={}, onClick, tilt=false, className='' }) {
   const c=useC(); const { dark }=useTheme(); const [h,setH]=useState(false);
   const ref=useRef(null); const [t,setT]=useState({ rx:0, ry:0 });
+  const target=useRef({ rx:0, ry:0 }); const current=useRef({ rx:0, ry:0 });
+  const raf=useRef(null);
+  const springTick=()=>{
+    const { rx:crx,ry:cry }=current.current,{ rx:trx,ry:try_ }=target.current;
+    const k=.13;
+    const nx=crx+(trx-crx)*k,ny=cry+(try_-cry)*k;
+    current.current={ rx:nx,ry:ny }; setT({ rx:nx,ry:ny });
+    if(Math.abs(nx-trx)>.01||Math.abs(ny-try_)>.01) raf.current=requestAnimationFrame(springTick);
+    else raf.current=null;
+  };
   const onMove=(e)=>{
     if(!tilt||!ref.current)return;
     const r=ref.current.getBoundingClientRect();
-    const px=(e.clientX-r.left)/r.width-0.5, py=(e.clientY-r.top)/r.height-0.5;
-    setT({ rx:py*-7, ry:px*9 });
+    const px=(e.clientX-r.left)/r.width-0.5,py=(e.clientY-r.top)/r.height-0.5;
+    target.current={ rx:py*-10,ry:px*14 };
+    if(!raf.current) raf.current=requestAnimationFrame(springTick);
   };
-  const reset=()=>{ setH(false); setT({ rx:0, ry:0 }); };
+  const reset=()=>{
+    setH(false); target.current={ rx:0,ry:0 };
+    if(!raf.current) raf.current=requestAnimationFrame(springTick);
+  };
+  useEffect(()=>()=>{ if(raf.current) cancelAnimationFrame(raf.current); },[]);
+  const sx=tilt&&h?t.ry*1.8:0,sy=tilt&&h?Math.abs(t.rx)*2+16:0,sp=tilt&&h?80:20;
   return(
-    <div ref={ref} onClick={onClick} className={className}
+    <div ref={ref} onClick={onClick} className={`ss-surface-sheen${className?' '+className:''}`}
       onMouseEnter={()=>setH(true)} onMouseMove={onMove} onMouseLeave={reset}
       style={{
       background:dark?(h&&onClick?'rgba(255,255,255,.07)':'rgba(255,255,255,.048)'):(h&&onClick?'rgba(255,255,255,.92)':'rgba(255,255,255,.72)'),
       border:`1px solid ${h&&onClick?c.bordH:c.bord}`,borderRadius:16,
       backdropFilter:'blur(28px) saturate(1.3)',WebkitBackdropFilter:'blur(28px) saturate(1.3)',
-      boxShadow:dark?'0 2px 20px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.04)':'0 2px 20px rgba(0,112,243,.06),inset 0 1px 0 rgba(255,255,255,.9)',
-      transition:'transform .2s cubic-bezier(.22,1,.36,1),background .18s,border-color .18s,box-shadow .18s',cursor:onClick?'pointer':undefined,
-      transform:tilt?`perspective(900px) rotateX(${t.rx}deg) rotateY(${t.ry}deg) ${h?'translateZ(20px)':'translateZ(0)'}`:(h&&onClick?'translateY(-2px)':'none'),
+      boxShadow:tilt&&h
+        ?`${sx}px ${sy}px ${sp}px -${sp*.4}px rgba(0,112,243,${dark?.42:.3}),0 4px 16px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,${dark?.07:.6})`
+        :dark?'0 2px 20px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.04)':'0 2px 20px rgba(0,112,243,.06),inset 0 1px 0 rgba(255,255,255,.9)',
+      transition:'background .18s,border-color .18s',cursor:onClick?'pointer':undefined,
+      transform:tilt?`perspective(700px) rotateX(${t.rx}deg) rotateY(${t.ry}deg) ${h?'translateZ(22px)':'translateZ(0)'}`:(h&&onClick?'translateY(-2px)':'none'),
+      transformStyle:'preserve-3d',willChange:tilt?'transform':undefined,
       ...style
     }}>{children}</div>
   );
@@ -350,8 +656,27 @@ function Modal({ children, onClose, title, width=500 }) {
   return <div className="ss-3d-scene" style={{ position:'fixed',inset:0,background:'rgba(0,0,0,.65)',backdropFilter:'blur(6px)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:20 }} onClick={e=>e.target===e.currentTarget&&onClose()}><Card style={{ width:'100%',maxWidth:width,padding:28,animation:'ss3dPop .34s cubic-bezier(.22,1,.36,1) both',maxHeight:'90vh',overflowY:'auto' }}>{title&&<h3 style={{ margin:'0 0 20px',color:c.text,fontSize:16,fontWeight:700 }}>{title}</h3>}{children}</Card></div>;
 }
 function StatCard({ label, value, color='#3B9EFF', sub, icon }) {
-  const c=useC();
-  return <Card tilt className="ss-statcard" style={{ padding:'16px 20px', position:'relative', overflow:'hidden' }}><div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start' }}><div><div className="eyebrow" style={{ color:c.mut,marginBottom:6 }}>{label}</div><div className="font-heading" style={{ fontSize:30,fontWeight:600,color,letterSpacing:'-.025em',lineHeight:1,fontVariantNumeric:'tabular-nums' }}>{value}</div>{sub&&<div style={{ fontSize:11,color:c.mut,marginTop:5,fontFamily:"'JetBrains Mono',monospace" }}>{sub}</div>}</div>{icon&&<span className="ss-float" style={{ fontSize:22,opacity:.45 }}>{icon}</span>}</div><div className="ss-statcard-underline" style={{ position:'absolute', bottom:0, left:16, right:16, height:2, background:`linear-gradient(90deg,transparent,${c.accent},transparent)`, opacity:0, transition:'opacity .25s' }}/></Card>;
+  const c=useC(); const [iconPos,setIconPos]=useState({x:0,y:0}); const [hov,setHov]=useState(false);
+  const iconRef=useRef(null);
+  const onMove=(e)=>{
+    if(!iconRef.current)return;
+    const r=iconRef.current.getBoundingClientRect();
+    setIconPos({ x:(e.clientX-r.left-r.width*.5)*.25, y:(e.clientY-r.top-r.height*.5)*.25 });
+  };
+  return <Card tilt className="ss-statcard" style={{ padding:'16px 20px',position:'relative',overflow:'hidden' }}
+    onMouseMove={onMove} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>{ setHov(false); setIconPos({x:0,y:0}); }}>
+    <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start' }}>
+      <div>
+        <div className="eyebrow" style={{ color:c.mut,marginBottom:6 }}>{label}</div>
+        <div className="font-heading" style={{ fontSize:30,fontWeight:600,color,letterSpacing:'-.025em',lineHeight:1,fontVariantNumeric:'tabular-nums',
+          transform:hov?'perspective(400px) translateZ(8px)':'perspective(400px) translateZ(0)',transition:'transform .3s var(--spring-fast,cubic-bezier(.34,1.56,.64,1))' }}>{value}</div>
+        {sub&&<div style={{ fontSize:11,color:c.mut,marginTop:5,fontFamily:"'JetBrains Mono',monospace" }}>{sub}</div>}
+      </div>
+      {icon&&<span ref={iconRef} className="ss-float" style={{ fontSize:22,opacity:.45,display:'inline-block',
+        transform:`translate(${iconPos.x}px,${iconPos.y}px)`,transition:'transform .2s var(--spring-fast,cubic-bezier(.34,1.56,.64,1))' }}>{icon}</span>}
+    </div>
+    <div className="ss-statcard-underline" style={{ position:'absolute',bottom:0,left:16,right:16,height:2,background:`linear-gradient(90deg,transparent,${c.accent},transparent)`,opacity:0,transition:'opacity .25s' }}/>
+  </Card>;
 }
 function Lbl({ children, style={} }) { const c=useC(); return <div style={{ fontSize:10,fontWeight:700,letterSpacing:'.1em',color:c.mut,textTransform:'uppercase',marginBottom:8,...style }}>{children}</div>; }
 // Reusable empty state: icon/illustration, title, explanation, primary + secondary actions, optional preview.
@@ -564,7 +889,7 @@ function AuthPage({ onLogin, inviteToken }) {
 
   return (
     <div className="ss-3d-scene" style={{ minHeight: '100vh', position: 'relative', zIndex: 1 }}>
-      <AmbientBackground/>
+      <AmbientBackground webgl={true}/>
       <div className="ss-auth-wrap ss-3d-rise" style={{ display: 'flex', minHeight: '100vh', position:'relative', zIndex:1 }}>
 
         {/* LEFT — hero (60%) */}
@@ -577,12 +902,12 @@ function AuthPage({ onLogin, inviteToken }) {
           <p style={{ fontSize: 16, color: c.sub, lineHeight: 1.6, margin: '0 0 40px', maxWidth: 480 }}>StandSync brings tasks, standups, collaboration, knowledge, and AI insights into one workspace.</p>
 
           <div className="ss-auth-features" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, maxWidth: 540 }}>
-            {FEATURES.map(f => (
-              <div key={f.title} style={{ padding: '18px 20px', borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, transition: 'transform .18s, border-color .18s' }}
-                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.borderColor = c.bordH; }}
-                onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.borderColor = c.bord; }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(124,92,255,.14)', color: '#A78BFA', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, marginBottom: 12 }}>{f.icon}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: c.text, marginBottom: 4 }}>{f.title}</div>
+            {FEATURES.map((f, i) => (
+              <div key={f.title} className="ss-feature-float ss-surface-sheen"
+                style={{ padding: '18px 20px', borderRadius: 16, background: c.surf, border: `1px solid ${c.bord}`, transformStyle: 'preserve-3d', cursor: 'default' }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(0,112,243,.12)', color: '#3B9EFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, marginBottom: 12,
+                  transform: 'translateZ(10px)', transition: 'transform .3s var(--spring-fast,cubic-bezier(.34,1.56,.64,1))' }}>{f.icon}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: c.text, marginBottom: 4, transform: 'translateZ(6px)' }}>{f.title}</div>
                 <div style={{ fontSize: 12.5, color: c.mut, lineHeight: 1.5 }}>{f.desc}</div>
               </div>
             ))}
@@ -771,7 +1096,7 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
   // transition into the app feels intentional, not glitchy.
   if(view==='list' && (loading || splashHeld || (teams && teams.length>0 && !autoEnteredRef.current && sessionStorage.getItem('ss-skip-autoenter')!=='1'))) return(
     <div className="ss-3d-scene" style={{ minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:24,position:'relative',zIndex:1 }}>
-      <AmbientBackground/>
+      <AmbientBackground webgl={true}/>
       <div style={{ position:'relative',zIndex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:22 }}>
         <div className="ss-logo-flash" style={{ display:'flex',alignItems:'center',gap:14 }}>
           <Logo size={56} iconOnly/>
@@ -1151,6 +1476,264 @@ function HomeView({ session, onSelectTeam, onLogout, onSettings }) {
       </Card>
     </div>
   );
+}
+
+// ─── AGILE ENGINE — DETERMINISTIC SNAPSHOT BUILDER ─────────────────────
+// Pure function. No LLM. Computes every fact the agile artifacts need from
+// raw tasks + history + wiki, so the LLM can ONLY synthesize, not invent.
+// Every value here is a real measurement — sprint velocity is real, blocker
+// hotspots are real, completion rate is real. The LLM gets these as input
+// and is constrained by them.
+function buildAgileSnapshot({ teamId = 'demo', tasks = [], members = [], history = [], teamName = 'Team' } = {}) {
+  const now = Date.now();
+  const day = (d) => new Date(d).toISOString().slice(0, 10);
+  const todayISO = day(now);
+  const DAY_MS = 86400000;
+
+  // ── 1. Task partition ──
+  const done     = tasks.filter(t => t.status === 'done');
+  const inProg   = tasks.filter(t => ['in-progress', 'in_progress', 'inprogress'].includes(t.status));
+  const todo     = tasks.filter(t => !t.status || t.status === 'todo');
+  const blocked  = tasks.filter(t => t.status === 'blocked');
+  const active   = tasks.filter(t => t.status !== 'done');
+  const backlog  = tasks.filter(t => t._carriedOver && t.status !== 'done'); // carried-over unfinished
+  const total    = tasks.length;
+  const completion = total ? Math.round(done.length / total * 100) : 0;
+
+  // ── 2. Historical velocity (last 4 weeks of standups) ──
+  // velocity = average tasks completed per standup. This is the floor for next sprint.
+  // Note on accuracy: each standup has its own task rows even if work overlaps,
+  // so we measure per-standup completion rate then average — that's the fairest
+  // representation of throughput when carry-over exists.
+  const recentHistory = (history || []).slice(0, 28); // up to 28 standups (~4 weeks)
+  let totalDone = 0, daysWithData = 0;
+  const dailyVelocity = [];
+  const dailyCompletionRates = [];
+  recentHistory.forEach(h => {
+    const ht = h.tasks || [];
+    if (!ht.length) return;
+    daysWithData++;
+    const d = ht.filter(x => x.status === 'done').length;
+    totalDone += d;
+    dailyVelocity.push(d);
+    dailyCompletionRates.push(ht.length ? d / ht.length : 0);
+  });
+  const avgVelocity = daysWithData ? +(totalDone / daysWithData).toFixed(1) : 0;
+  const sprintVelocity = Math.round(avgVelocity * 10); // 2-week sprint nominal (10 working days)
+  const histCompletion = dailyCompletionRates.length ? Math.round(dailyCompletionRates.reduce((s, x) => s + x, 0) / dailyCompletionRates.length * 100) : 0;
+
+  // ── 3. Per-member workload + reliability ──
+  const memberStats = members.map(m => {
+    const mine = tasks.filter(t => t.assignee_email === m.email);
+    const mineActive = mine.filter(t => t.status !== 'done');
+    const mineDone   = mine.filter(t => t.status === 'done');
+    const mineBlock  = mine.filter(t => t.status === 'blocked');
+    // Historical: how often does this person finish what they commit to?
+    let histCommit = 0, histDelivered = 0;
+    recentHistory.forEach(h => {
+      (h.tasks || []).forEach(t => {
+        if (t.assignee_email === m.email) {
+          histCommit++;
+          if (t.status === 'done') histDelivered++;
+        }
+      });
+    });
+    const reliability = histCommit ? Math.round(histDelivered / histCommit * 100) : null;
+    const capacityPct = Math.min(100, Math.round((mineActive.length / 5) * 100));
+    return {
+      email: m.email, name: m.name || m.email.split('@')[0],
+      activeCount: mineActive.length, doneCount: mineDone.length, blockedCount: mineBlock.length,
+      capacityPct, reliability, totalCommitted: histCommit, totalDelivered: histDelivered,
+    };
+  });
+  const overloaded = memberStats.filter(s => s.capacityPct >= 80);
+  const lowCapacity = memberStats.filter(s => s.capacityPct < 30);
+  const unreliable = memberStats.filter(s => s.reliability !== null && s.reliability < 60 && s.totalCommitted >= 3);
+
+  // ── 4. Theme / topic clusters from task titles ──
+  // Simple keyword grouping — not embeddings, but accurate enough to surface "we keep doing X" patterns.
+  const STOP = new Set(['the','a','an','and','or','but','to','for','of','in','on','with','from','by','at','as','is','are','be','been','was','were','this','that','it','its','my','our','their','his','her','i','you','we','they','will','should','can','could','would','do','does','did','have','has','had','need','needs','want','wants','make','made','update','add','fix','new']);
+  const wordFreq = {};
+  tasks.forEach(t => {
+    const txt = (t.title || t.text || '').toLowerCase();
+    txt.split(/[^a-z0-9]+/).forEach(w => {
+      if (w.length >= 4 && !STOP.has(w)) wordFreq[w] = (wordFreq[w] || 0) + 1;
+    });
+  });
+  const themes = Object.entries(wordFreq).filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([w, n]) => ({ keyword: w, count: n }));
+
+  // ── 5. Backlog candidates for next sprint ──
+  // Prioritize: high-priority active > backlog (carried over) > medium active > todo > low
+  const priWeight = { high: 4, critical: 5, medium: 2, low: 1 };
+  const candidates = active.map(t => {
+    const base = priWeight[t.priority] || 2;
+    const carryPenalty = t._carriedOver ? 2 : 0;     // carried-over items get boost (overdue)
+    const blockedBoost = t.status === 'blocked' ? 1 : 0;
+    return { task: t, score: base + carryPenalty + blockedBoost };
+  }).sort((a, b) => b.score - a.score);
+  // Sprint capacity = sprintVelocity if known, else a sensible default (members * 5)
+  const teamCapacity = sprintVelocity > 0 ? sprintVelocity : Math.max(8, members.length * 5);
+  const proposedSprint = candidates.slice(0, teamCapacity);
+
+  // ── 6. Risk signals ──
+  const risks = [];
+  if (blocked.length >= 2) risks.push({ severity: 'high', kind: 'blocker-pileup', text: `${blocked.length} blocked tasks — momentum is at risk` });
+  if (backlog.length >= 3) risks.push({ severity: 'high', kind: 'overdue', text: `${backlog.length} tasks carried over from prior standups` });
+  if (overloaded.length > 0) risks.push({ severity: 'medium', kind: 'overload', text: `${overloaded.map(o => o.name).join(', ')} ${overloaded.length === 1 ? 'is' : 'are'} at >80% capacity` });
+  if (avgVelocity > 0 && active.length > avgVelocity * 5 * 2) risks.push({ severity: 'medium', kind: 'overcommit', text: `${active.length} active tasks vs. typical 2-week throughput of ${sprintVelocity}` });
+  if (histCompletion < 50 && daysWithData >= 5) risks.push({ severity: 'medium', kind: 'low-throughput', text: `Historical completion rate is ${histCompletion}%` });
+  if (unreliable.length > 0) risks.push({ severity: 'low', kind: 'reliability', text: `${unreliable.map(u => u.name).join(', ')} ${unreliable.length === 1 ? 'has' : 'have'} delivered <60% of past commitments` });
+
+  // ── 7. Retro signals (what to discuss) ──
+  const retroSignals = {
+    wins:   done.slice(0, 5).map(t => ({ title: t.title || t.text, who: t.assignee_name || (t.assignee_email || '').split('@')[0] })),
+    stalls: backlog.slice(0, 5).map(t => ({ title: t.title || t.text, since: t._standupDate || 'earlier' })),
+    blockers: blocked.slice(0, 5).map(t => ({ title: t.title || t.text, who: t.assignee_name || (t.assignee_email || '').split('@')[0] })),
+    velocity: { current: dailyVelocity[0] || 0, average: avgVelocity, trend: dailyVelocity.length >= 3 ? (dailyVelocity[0] - dailyVelocity[dailyVelocity.length - 1]) : 0 },
+  };
+
+  // ── 8. Wiki / SOP context (best-effort read from localStorage) ──
+  let wikiContext = '';
+  try {
+    const raw = localStorage.getItem(`ss-wiki-${teamId}`);
+    if (raw) {
+      const w = JSON.parse(raw);
+      const projs = (w.projects || []).map(p => `Project: ${p.name}${p.desc ? ' — ' + p.desc : ''}`).join('\n');
+      const pages = (w.pages || []).slice(0, 10).map(pg => {
+        const txt = (pg.blocks || []).map(b => b.content || '').join(' ').slice(0, 400);
+        return `Page: ${pg.title}\n${txt}`;
+      }).join('\n\n');
+      wikiContext = [projs, pages].filter(Boolean).join('\n\n');
+    }
+  } catch (e) {}
+
+  return {
+    teamName, teamId, asOf: new Date().toISOString(),
+    counts: { total, done: done.length, inProg: inProg.length, todo: todo.length, blocked: blocked.length, active: active.length, backlog: backlog.length, completion },
+    velocity: { daily: avgVelocity, sprint: sprintVelocity, completion: histCompletion, daysOfData: daysWithData, samples: dailyVelocity.slice(0, 7) },
+    memberStats, overloaded, lowCapacity, unreliable,
+    themes,
+    candidates: proposedSprint, teamCapacity,
+    risks, retroSignals,
+    wikiExcerpt: wikiContext.slice(0, 3000), // cap so prompts stay reasonable
+  };
+}
+
+// Build the LLM prompt for a given artifact. Strict, JSON-mode-friendly,
+// and constrained to the snapshot so it can't invent unrelated work.
+function agilePrompt(kind, snap) {
+  const base = `You are an experienced agile coach analyzing real team data for "${snap.teamName}". You must ground every statement in the data provided. Do NOT invent tasks, members, or facts. If data is insufficient, say so plainly.
+
+TEAM SNAPSHOT (as of ${snap.asOf.slice(0, 10)}):
+- Tasks: ${snap.counts.total} total — ${snap.counts.done} done, ${snap.counts.inProg} in progress, ${snap.counts.todo} to do, ${snap.counts.blocked} blocked.
+- Backlog (carried-over unfinished): ${snap.counts.backlog}
+- Completion rate: ${snap.counts.completion}% today, ${snap.velocity.completion}% historical avg over ${snap.velocity.daysOfData} standups.
+- Velocity: ${snap.velocity.daily} tasks/day avg, ≈${snap.velocity.sprint}/sprint (2-week).
+- Themes recurring in task titles: ${snap.themes.map(t => t.keyword + '(' + t.count + ')').join(', ') || 'none yet'}.
+- Member load: ${snap.memberStats.map(s => s.name + '=' + s.activeCount + ' active' + (s.reliability !== null ? '/' + s.reliability + '%-rel' : '')).join(', ') || 'no members'}.
+- Risks flagged by heuristics: ${snap.risks.map(r => '[' + r.severity + '] ' + r.text).join('; ') || 'none'}.
+${snap.wikiExcerpt ? '\nPROJECT WIKI / SOPs (excerpt):\n' + snap.wikiExcerpt.slice(0, 2000) : ''}`;
+
+  if (kind === 'sprint') {
+    const cands = snap.candidates.slice(0, 20).map((c, i) =>
+      `${i + 1}. [${c.task.priority || 'medium'}${c.task._carriedOver ? ' · CARRIED OVER' : ''}${c.task.status === 'blocked' ? ' · BLOCKED' : ''}] ${c.task.title || c.task.text} (assigned: ${c.task.assignee_name || (c.task.assignee_email || '').split('@')[0] || 'unassigned'})`
+    ).join('\n');
+    return `${base}
+
+PROPOSED SPRINT CANDIDATES (ranked by heuristic priority — DO NOT add tasks outside this list):
+${cands || '(no candidate tasks)'}
+
+Your job: write a sprint plan as JSON ONLY, no markdown, no preamble. Schema:
+{
+  "sprintGoal": "One sentence describing what this sprint should achieve, derived from themes and priorities.",
+  "rationale": "2-3 sentence justification grounded in velocity/load/risks. Mention specific numbers from the snapshot.",
+  "scope": [{"taskId": "exact id from candidate list", "reason": "why include"}],
+  "deferred": [{"taskTitle": "...", "reason": "why hold"}],
+  "watchOuts": ["specific risk grounded in data", "another"],
+  "successCriteria": ["measurable outcome 1", "measurable outcome 2"]
+}
+Return ONLY valid JSON.`;
+  }
+
+  if (kind === 'retro') {
+    return `${base}
+
+RETRO SIGNALS:
+Wins: ${snap.retroSignals.wins.map(w => w.title + ' (' + w.who + ')').join('; ') || 'none'}
+Stalls (carried over): ${snap.retroSignals.stalls.map(s => s.title + ' (since ' + s.since + ')').join('; ') || 'none'}
+Blockers: ${snap.retroSignals.blockers.map(b => b.title).join('; ') || 'none'}
+Velocity trend: current ${snap.retroSignals.velocity.current}, avg ${snap.retroSignals.velocity.average}, direction ${snap.retroSignals.velocity.trend >= 0 ? 'up' : 'down'}
+
+Return JSON ONLY:
+{
+  "wentWell": [{"point": "...", "evidence": "specific task/number from data"}],
+  "didntGo": [{"point": "...", "evidence": "..."}],
+  "actions": [{"action": "...", "owner": "member name if applicable or 'team'", "by": "next sprint|next standup|ongoing"}],
+  "patterns": ["pattern observed across data, e.g. recurring blocker theme"]
+}`;
+  }
+
+  if (kind === 'risk') {
+    return `${base}
+
+Return JSON ONLY:
+{
+  "overall": {"level": "low|medium|high", "summary": "one sentence"},
+  "risks": [{"name": "...", "severity": "low|medium|high", "evidence": "specific data ref", "mitigation": "concrete next step"}],
+  "earlyWarnings": ["leading indicator 1", "leading indicator 2"]
+}`;
+  }
+
+  if (kind === 'stories') {
+    const sample = snap.candidates.slice(0, 8).map((c, i) =>
+      `${i + 1}. ${c.task.title || c.task.text} [${c.task.priority || 'medium'}]`
+    ).join('\n');
+    return `${base}
+
+TASKS TO CONVERT TO USER STORIES (use ONLY these, do not invent new ones):
+${sample || '(no tasks)'}
+
+Return JSON ONLY:
+{
+  "epics": [{"name": "epic name from themes", "rationale": "why group these"}],
+  "stories": [{"taskTitle": "exact title from list", "epic": "epic name", "story": "As a [persona], I want [capability], so that [benefit]", "acceptance": ["AC 1", "AC 2", "AC 3"]}]
+}`;
+  }
+
+  return base;
+}
+
+// Heuristic-only fallback if the LLM is unavailable or returns garbage.
+// Every artifact must have a deterministic version so the feature still works.
+function heuristicSprint(snap) {
+  const cands = snap.candidates.slice(0, snap.teamCapacity);
+  const topTheme = snap.themes[0]?.keyword;
+  return {
+    sprintGoal: topTheme
+      ? `Close out the ${topTheme}-related work and clear the carry-over backlog.`
+      : `Close out the highest-priority active work and clear the carry-over backlog.`,
+    rationale: `Based on ${snap.velocity.sprint || 'projected'} task/sprint velocity and ${snap.counts.backlog} carry-over items, the team can realistically commit to ${cands.length} tasks. ${snap.risks.length ? 'Heuristics flagged: ' + snap.risks.slice(0, 2).map(r => r.text).join('; ') + '.' : ''}`,
+    scope: cands.map(c => ({ taskId: c.task.id, taskTitle: c.task.title || c.task.text, reason: c.task._carriedOver ? 'Carried over from prior standups' : c.task.priority === 'high' || c.task.priority === 'critical' ? 'High priority' : 'Next in priority order' })),
+    deferred: snap.candidates.slice(snap.teamCapacity, snap.teamCapacity + 5).map(c => ({ taskTitle: c.task.title || c.task.text, reason: 'Beyond projected sprint capacity' })),
+    watchOuts: snap.risks.map(r => r.text),
+    successCriteria: [
+      `Complete at least ${Math.max(1, Math.floor(cands.length * 0.7))} of ${cands.length} planned tasks`,
+      `Clear ${snap.counts.backlog} carry-over backlog item${snap.counts.backlog !== 1 ? 's' : ''}`,
+    ].filter(Boolean),
+    _source: 'heuristic',
+  };
+}
+
+// Safe JSON parse with fallback — LLMs sometimes wrap in markdown or add preamble.
+function parseAgileJSON(text) {
+  if (!text) return null;
+  let s = text.trim();
+  // Strip markdown fences
+  s = s.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+  // Find first { and last }
+  const i = s.indexOf('{'), j = s.lastIndexOf('}');
+  if (i === -1 || j === -1 || j <= i) return null;
+  try { return JSON.parse(s.slice(i, j + 1)); } catch (e) { return null; }
 }
 
 // ─── FLOATING AI BUBBLE ───────────────────────────────────────────────
@@ -3785,11 +4368,31 @@ function LiveTab({ tasks: allTasks, members, onStatus, onPriority, onNote, onAdd
   const total=allTasks.length,done=allTasks.filter(t=>t.status==='done').length,inProg=allTasks.filter(t=>t.status==='in-progress').length,blocked=allTasks.filter(t=>t.status==='blocked').length,todo=allTasks.filter(t=>t.status==='todo').length,pct=total?Math.round(done/total*100):0;
   // My own counts (for the member list header)
   const myDone=tasks.filter(t=>t.status==='done').length;
+  // Backlog = carried-over tasks (unfinished from past standups) — needs urgent attention
+  const myBacklog = tasks.filter(t => t._carriedOver && t.status !== 'done');
+  const teamBacklog = allTasks.filter(t => t._carriedOver && t.status !== 'done');
+  const backlog = isManager ? teamBacklog : myBacklog;
   return (
     <div>
       <div style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:20 }}>
         <StatCard label="Total" value={total} color="#3B9EFF" icon="📋"/><StatCard label="To do" value={todo} color="#94A3B8" icon="⭕"/><StatCard label="In progress" value={inProg} color="#38BDF8" icon="⚡"/><StatCard label="Done" value={done} color="#34D399" icon="✅"/><StatCard label="Blocked" value={blocked} color={blocked>0?'#EF4444':'#34D399'} icon="⚠️" sub={blocked>0?'needs attention':'all clear'}/>
       </div>
+      {backlog.length > 0 && (
+        <div style={{ marginBottom:16, padding:'13px 16px', borderRadius:12, background:'rgba(220,38,38,.08)', border:'1px solid rgba(220,38,38,.28)', display:'flex', alignItems:'center', gap:12, animation:'ss3dPop .3s cubic-bezier(.22,1,.36,1) both' }}>
+          <div style={{ width:32, height:32, borderRadius:9, background:'rgba(220,38,38,.15)', display:'flex', alignItems:'center', justifyContent:'center', color:'#DC2626', flexShrink:0 }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:13.5, fontWeight:700, color:'#DC2626', letterSpacing:'-.01em' }}>{backlog.length} unfinished task{backlog.length!==1?'s':''} carried over from previous standups</div>
+            <div style={{ fontSize:12, color:c.sub, marginTop:2 }}>{isManager?'These need to be completed or reassigned. Filter by "To do" or "In progress" to see them.':'Complete these first — they\'ve been pending from earlier standups.'}</div>
+          </div>
+          <button onClick={()=>{ setFs('all'); setFu(isManager?'all':fu); }}
+            style={{ padding:'7px 13px', borderRadius:8, border:'1px solid rgba(220,38,38,.4)', background:'transparent', color:'#DC2626', cursor:'pointer', fontSize:12, fontWeight:600, whiteSpace:'nowrap', transition:'all .15s' }}
+            onMouseEnter={e=>{e.currentTarget.style.background='rgba(220,38,38,.12)';}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';}}>
+            Show all
+          </button>
+        </div>
+      )}
       {total>0&&<Card style={{ padding:'14px 18px',marginBottom:16 }}><div style={{ display:'flex',justifyContent:'space-between',marginBottom:8 }}><span style={{ fontSize:13,color:c.mut }}>Team progress{!isManager?<span style={{ color:c.mut }}> · you: {myDone}/{tasks.length} done</span>:''}</span><span style={{ fontSize:13,fontWeight:700,color:'#3B9EFF' }}>{pct}% · {done}/{total}</span></div><Bar pct={pct} h={8} color="linear-gradient(90deg,#0070F3,#34D399)"/></Card>}
       <Card style={{ overflow:'hidden' }}>
         <div style={{ padding:'12px 16px',borderBottom:`1px solid ${c.bord}`,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center' }}>
@@ -3815,7 +4418,7 @@ function MgrRow({ task, members, onStatus, onPriority, onNote, onDelete, session
   const cycle={'todo':'in-progress','in-progress':'done','done':'todo','blocked':'in-progress'};
   const setStatusTo=(s)=>onStatus(task.id,s);
   return (
-    <div style={{ borderBottom:`1px solid ${c.bord}`,transition:'background .15s',animation:`slideIn .35s cubic-bezier(.22,1,.36,1) both`,animationDelay:`${Math.min(idx*0.035,0.5)}s` }} onMouseEnter={e=>e.currentTarget.style.background=c.row} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+    <div style={{ borderBottom:`1px solid ${c.bord}`,transition:'background .15s',animation:`ssRowEnter .38s cubic-bezier(.22,1,.36,1) both`,animationDelay:`${Math.min(idx*0.04,0.45)}s` }} onMouseEnter={e=>e.currentTarget.style.background=c.row} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
       <div style={{ display:'flex',alignItems:'center',gap:10,padding:'11px 16px' }}>
         <button onClick={()=>setStatusTo(cycle[task.status]||'in-progress')} title={`Mark ${cycle[task.status]==='done'?'done':cycle[task.status]==='in-progress'?'in progress':'to do'}`} style={{ position:'relative',width:20,height:20,borderRadius:'50%',flexShrink:0,border:`2px solid ${task.status==='done'?'#34D399':task.status==='in-progress'?'#38BDF8':'rgba(128,128,128,.3)'}`,background:task.status==='done'?'#34D399':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .2s' }}>
           {task.status==='done'&&<><span className="check-burst" style={{ position:'absolute',inset:-2,borderRadius:'50%',background:'rgba(52,211,153,.5)',pointerEvents:'none' }}/><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path className="check-path" d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg></>}
@@ -8136,9 +8739,13 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
   // Members see only their own tasks across home metrics; managers see the whole team's.
   const myEmail0 = session?.user?.email;
   const tasks = isManager ? allTasks : allTasks.filter(t => t.assignee_email === myEmail0);
-  // Team-wide figures for the bottom stat cards (members see the whole team, not just themselves)
-  const teamCompletion = allTasks.length ? Math.round(allTasks.filter(t => t.status === 'done').length / allTasks.length * 100) : 0;
+  // Team-wide figures (used for stat cards + aiSummary so Home matches the Tasks page exactly).
+  const teamDoneList = allTasks.filter(t => t.status === 'done');
+  const teamInProgList = allTasks.filter(t => t.status === 'in_progress' || t.status === 'inprogress' || t.status === 'in-progress');
+  const teamTodoList = allTasks.filter(t => t.status === 'todo' || !t.status);
   const teamBlocked = allTasks.filter(t => t.status === 'blocked');
+  const teamActiveList = allTasks.filter(t => t.status !== 'done');
+  const teamCompletion = allTasks.length ? Math.round(teamDoneList.length / allTasks.length * 100) : 0;
   const c = useC();
   const { dark } = useTheme();
   const fullName = session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || 'there';
@@ -8189,8 +8796,15 @@ function HomeCommand({ session, team, tasks: allTasks, members, onGoto, onAddTas
   const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase();
 
   const aiSummary = (() => {
-    const subj = isManager ? 'The team has' : 'You have';
-    const parts = [`${subj} ${active.length} active task${active.length !== 1 ? 's' : ''}.`];
+    // For managers, mirror the Tasks page exactly. For members, use their own.
+    if (isManager) {
+      const parts = [`The team has ${teamActiveList.length} active task${teamActiveList.length !== 1 ? 's' : ''} (${teamInProgList.length} in progress, ${teamTodoList.length} to do).`];
+      if (teamBlocked.length) parts.push(`${teamBlocked.length} ${teamBlocked.length === 1 ? 'is' : 'are'} blocked.`);
+      if (dueToday.length) parts.push(`${dueToday.length} ${dueToday.length === 1 ? 'is' : 'are'} due today.`);
+      if (!teamActiveList.length) parts.push(`Everything's wrapped up. 🎉`);
+      return parts.join(' ');
+    }
+    const parts = [`You have ${active.length} active task${active.length !== 1 ? 's' : ''} (${inProgress.length} in progress).`];
     if (blocked.length) parts.push(`${blocked.length} ${blocked.length === 1 ? 'is' : 'are'} blocked.`);
     if (dueToday.length) parts.push(`${dueToday.length} ${dueToday.length === 1 ? 'is' : 'are'} due today.`);
     if (!active.length) parts.push(`Everything's wrapped up. 🎉`);
@@ -10773,7 +11387,7 @@ function ManagerView({
 
   // ── Sub-tab pill bar ──
   const SubTabs = ({ tabs, value, onChange }) => (
-    <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: `1px solid ${c.bord}`, paddingBottom: 0, overflowX: 'auto', scrollbarWidth: 'thin' }}>
+    <div className="ss-subtabs" style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: `1px solid ${c.bord}`, paddingBottom: 0, overflowX: 'auto' }}>
       {tabs.map(t => {
         const on = value === t.id;
         return (
@@ -10852,27 +11466,7 @@ function ManagerView({
             const status = (m) => { const r = att[m.email] || {}; const onB = (r.breaks||[]).some(b=>!b.end); const on = r.online !== false && r.lastSeen && (Date.now()-r.lastSeen) < 70000; return onB ? 'break' : on ? 'online' : 'offline'; };
             const online = members.filter(m => status(m) === 'online');
             return (
-              <div style={{ position: 'relative', flexShrink: 0 }}>
-                <button onClick={() => setPresenceOpen(o => !o)} title="Who's online" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 11px', borderRadius: 18, border: `1px solid ${c.bord}`, background: presenceOpen ? c.row : 'transparent', color: c.sub, cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#34D399' }}/>
-                  {online.length}/{members.length}
-                </button>
-                {presenceOpen && (
-                  <>
-                    <div onClick={() => setPresenceOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }}/>
-                    <div style={{ position: 'absolute', top: 40, right: 0, zIndex: 50, width: 250, maxHeight: 340, overflowY: 'auto', background: dark ? '#161B2E' : '#fff', border: `1px solid ${c.bord}`, borderRadius: 14, boxShadow: '0 14px 44px rgba(0,0,0,.3)', padding: 8, animation: 'popIn .15s ease both' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: c.mut, textTransform: 'uppercase', letterSpacing: '.05em', padding: '6px 10px' }}>{online.length} online now</div>
-                      {members.map(m => { const st = status(m); const dot = st === 'online' ? '#34D399' : st === 'break' ? '#F59E0B' : '#94A3B8'; const lbl = st === 'online' ? 'Online' : st === 'break' ? 'On break' : 'Offline'; return (
-                        <div key={m.email} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 9 }}>
-                          <div style={{ position: 'relative' }}><Av member={m} size={28} url={m.avatar_url}/><span style={{ position: 'absolute', bottom: -1, right: -1, width: 9, height: 9, borderRadius: '50%', background: dot, border: `1.5px solid ${dark ? '#161B2E' : '#fff'}` }}/></div>
-                          <span style={{ flex: 1, fontSize: 13, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name || m.email.split('@')[0]}</span>
-                          <span style={{ fontSize: 11, color: dot, fontWeight: 600 }}>{lbl}</span>
-                        </div>
-                      ); })}
-                    </div>
-                  </>
-                )}
-              </div>
+              <PresencePill members={members} online={online} status={status} dark={dark} c={c} open={presenceOpen} setOpen={setPresenceOpen}/>
             );
           })()}
 
@@ -10987,10 +11581,11 @@ function ManagerView({
           {area === 'knowledge' && (
             <>
               <SubTabs value={knowledgeSub} onChange={setKnowledgeSub}
-                tabs={[{ id: 'docs', label: 'Docs & SOPs' }, { id: 'brainstorm', label: 'Brainstorm' }, { id: 'meetings', label: 'Meeting notes' }]}/>
+                tabs={[{ id: 'docs', label: 'Docs & SOPs' }, { id: 'brainstorm', label: 'Brainstorm' }, { id: 'meetings', label: 'Meeting notes' }, { id: 'agile', label: 'Agile' }]}/>
               {knowledgeSub === 'docs' && <ProjectWiki team={team} session={session} members={members}/>}
               {knowledgeSub === 'brainstorm' && <BrainstormSpace team={team} session={session} members={members}/>}
               {knowledgeSub === 'meetings' && <ManagerNotesTab session={session} team={team} history={history}/>}
+              {knowledgeSub === 'agile' && <AgileEngineTab team={team} session={session} members={members} tasks={tasks} history={history} isManager={isManager}/>}
             </>
           )}
 
@@ -12018,6 +12613,364 @@ function NotesTab({ session, team, role='manager', history=[] }) {
   );
 }
 function ManagerNotesTab({ session, team, history }) { return <NotesTab session={session} team={team} role="manager" history={history}/>; }
+
+// ─── AGILE ENGINE TAB ────────────────────────────────────────────────────────
+// The user-facing surface of the agile engine. Hosts four artifact cards.
+// This iteration ships Sprint Plan fully; the others show heuristic previews
+// with a clear "Coming soon" state so the structure is visible.
+function AgileEngineTab({ team, session, members, tasks, history, isManager }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const teamId = team?.id || 'demo';
+  const snap = useMemo(() => buildAgileSnapshot({ teamId, tasks, members, history, teamName: team?.name || 'Team' }), [teamId, tasks, members, history, team?.name]);
+  // Loaded once. Refreshes when tasks/history change (snap above is memoized).
+  const [active, setActive] = useState('sprint'); // sprint | retro | risk | stories
+
+  const hasEnoughData = snap.counts.total >= 3 || (history && history.length >= 1);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+      {/* Header */}
+      <div>
+        <div className="eyebrow" style={{ color: '#3B9EFF', marginBottom: 10 }}>Agile engine</div>
+        <h1 className="font-heading" style={{ fontSize: 30, fontWeight: 600, color: c.text, margin: 0, letterSpacing: '-.03em' }}>
+          Generate agile artifacts from your <span className="ss-grad-text">live work</span>.
+        </h1>
+        <p style={{ fontSize: 14, color: c.sub, marginTop: 12, marginBottom: 0, maxWidth: 680, lineHeight: 1.65 }}>
+          The engine reads your active tasks, past standups, member workload patterns, and project docs to suggest sprint plans, retros, risk dashboards, and user stories. Heuristics compute the numbers; AI writes the narrative. Always review before adopting.
+        </p>
+      </div>
+
+      {/* Snapshot bar — what the engine sees right now */}
+      <AgileSnapshotBar snap={snap} c={c} dark={dark}/>
+
+      {/* Artifact picker */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', borderBottom: `1px solid ${c.bord}`, paddingBottom: 2 }}>
+        {[
+          { id: 'sprint',  label: 'Sprint plan',         shipped: true },
+          { id: 'retro',   label: 'Retrospective',       shipped: false },
+          { id: 'risk',    label: 'Risk dashboard',      shipped: false },
+          { id: 'stories', label: 'User stories',        shipped: false },
+        ].map(t => (
+          <button key={t.id} onClick={() => setActive(t.id)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 14px', border: 'none', borderBottom: `2px solid ${active === t.id ? '#3B9EFF' : 'transparent'}`, background: 'transparent', color: active === t.id ? c.text : c.mut, fontSize: 13, fontWeight: active === t.id ? 700 : 500, cursor: 'pointer', marginBottom: -1, transition: 'all .12s' }}>
+            {t.label}
+            {!t.shipped && <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: 'rgba(251,191,36,.12)', color: '#FBBF24', fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', fontFamily: "'JetBrains Mono', monospace" }}>Preview</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* Insufficient data state */}
+      {!hasEnoughData && (
+        <Card style={{ padding: '32px 28px', textAlign: 'center' }}>
+          <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(0,112,243,.08)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#3B9EFF', marginBottom: 14 }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+          <div className="font-heading" style={{ fontSize: 18, fontWeight: 600, color: c.text, marginBottom: 6 }}>Not enough data yet</div>
+          <div style={{ fontSize: 13, color: c.mut, lineHeight: 1.6, maxWidth: 380, margin: '0 auto' }}>
+            The engine needs at least 3 tasks or 1 completed standup to start generating useful artifacts. Add tasks and run a standup; come back here once there's signal to work with.
+          </div>
+        </Card>
+      )}
+
+      {/* Active artifact */}
+      {hasEnoughData && active === 'sprint'  && <AgileSprintCard  snap={snap} session={session} members={members}/>}
+      {hasEnoughData && active === 'retro'   && <AgilePreviewCard kind="retro"   snap={snap} session={session} members={members}/>}
+      {hasEnoughData && active === 'risk'    && <AgilePreviewCard kind="risk"    snap={snap} session={session} members={members}/>}
+      {hasEnoughData && active === 'stories' && <AgilePreviewCard kind="stories" snap={snap} session={session} members={members}/>}
+    </div>
+  );
+}
+
+// Compact bar showing what the engine sees — gives the user confidence its
+// view of the world matches reality. Click-through to deep-dive (future).
+function AgileSnapshotBar({ snap, c, dark }) {
+  const cells = [
+    { label: 'Active tasks',         value: snap.counts.active, sub: `${snap.counts.inProg} in progress · ${snap.counts.todo} to do` },
+    { label: 'Backlog',              value: snap.counts.backlog, sub: snap.counts.backlog ? 'carried over' : 'no carry-over' },
+    { label: 'Velocity',             value: snap.velocity.sprint || '—', sub: snap.velocity.sprint ? 'tasks per 2-week sprint' : 'need 5+ standups' },
+    { label: 'Historical completion', value: snap.velocity.completion + '%', sub: `${snap.velocity.daysOfData} standups analyzed` },
+    { label: 'Risk signals',         value: snap.risks.length, sub: snap.risks.length ? snap.risks[0].severity + ' priority top' : 'none flagged' },
+  ];
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 10, padding: '14px 16px', borderRadius: 14, border: `1px solid ${c.bord}`, background: dark ? 'rgba(255,255,255,.03)' : 'rgba(0,112,243,.04)' }}>
+      {cells.map(cell => (
+        <div key={cell.label}>
+          <div className="eyebrow" style={{ color: c.mut, marginBottom: 4 }}>{cell.label}</div>
+          <div className="font-heading" style={{ fontSize: 22, fontWeight: 600, color: c.text, letterSpacing: '-.02em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{cell.value}</div>
+          <div style={{ fontSize: 11, color: c.mut, marginTop: 4 }}>{cell.sub}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// "AI generated — review before use" banner. Shows on every artifact output.
+function AgileBanner({ source }) {
+  const c = useC();
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 14px', borderRadius: 10, background: 'rgba(251,191,36,.08)', border: '1px solid rgba(251,191,36,.25)', marginBottom: 16 }}>
+      <div style={{ width: 26, height: 26, borderRadius: 7, background: 'rgba(251,191,36,.16)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D97706', flexShrink: 0 }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <div style={{ flex: 1, fontSize: 12.5, color: c.sub, lineHeight: 1.5 }}>
+        <strong style={{ color: c.text, fontWeight: 600 }}>{source === 'heuristic' ? 'Heuristic output' : 'AI-generated'}</strong>
+        {source === 'heuristic'
+          ? ' — built from your data using rules only (no LLM). Accurate but mechanical; review before adopting.'
+          : ' — review before adopting. The AI was constrained to your snapshot, but check facts and judgment.'}
+      </div>
+    </div>
+  );
+}
+
+// Sprint Plan — the one fully-shipped artifact.
+function AgileSprintCard({ snap, session, members }) {
+  const c = useC();
+  const { dark } = useTheme();
+  const [loading, setLoading] = useState(false);
+  const [output, setOutput] = useState(null);
+  const [error, setError] = useState('');
+
+  const generate = async () => {
+    setLoading(true); setError('');
+    let result = null;
+    try {
+      const prompt = agilePrompt('sprint', snap);
+      const aiRes = await askAI(prompt, { agileSnapshot: snap, teamName: snap.teamName });
+      const aiText = typeof aiRes === 'string' ? aiRes : (aiRes?.text || '');
+      const parsed = parseAgileJSON(aiText);
+      // Validate the AI honored the candidate constraint. Drop any taskId/title it invented.
+      if (parsed && Array.isArray(parsed.scope)) {
+        const validIds = new Set(snap.candidates.map(c => c.task.id));
+        const validTitles = new Set(snap.candidates.map(c => (c.task.title || c.task.text || '').toLowerCase().trim()));
+        parsed.scope = parsed.scope.filter(s => validIds.has(s.taskId) || validTitles.has((s.taskTitle || '').toLowerCase().trim()));
+        // Enrich scope with the actual task data so we render real titles.
+        parsed.scope = parsed.scope.map(s => {
+          const cand = snap.candidates.find(c => c.task.id === s.taskId || (c.task.title || c.task.text || '').toLowerCase().trim() === (s.taskTitle || '').toLowerCase().trim());
+          return { ...s, task: cand?.task || null };
+        }).filter(s => s.task);
+        if (parsed.scope.length === 0) {
+          // AI returned nothing usable → fall back to heuristic
+          result = heuristicSprint(snap);
+        } else {
+          result = { ...parsed, _source: 'ai' };
+        }
+      } else {
+        result = heuristicSprint(snap);
+      }
+    } catch (e) {
+      result = heuristicSprint(snap);
+      setError('AI unavailable — showing heuristic plan instead.');
+    }
+    setOutput(result); setLoading(false);
+  };
+
+  // Auto-generate on first mount so users see something useful immediately.
+  useEffect(() => { if (!output && !loading) generate(); /* eslint-disable-next-line */ }, []);
+
+  if (loading && !output) return (
+    <Card style={{ padding: '40px 24px', textAlign: 'center' }}>
+      <div style={{ width: 36, height: 36, borderRadius: '50%', border: `3px solid ${c.bord}`, borderTopColor: '#3B9EFF', animation: 'spin .7s linear infinite', margin: '0 auto 14px' }}/>
+      <div style={{ fontSize: 13.5, color: c.sub, fontWeight: 500 }}>Analyzing tasks, history, and docs…</div>
+      <div style={{ fontSize: 12, color: c.mut, marginTop: 6 }}>Engine builds a deterministic snapshot then asks AI to synthesize.</div>
+    </Card>
+  );
+
+  if (!output) return null;
+
+  return (
+    <div>
+      <AgileBanner source={output._source}/>
+      {error && <div style={{ marginBottom: 14, padding: '9px 13px', borderRadius: 9, background: 'rgba(248,113,113,.08)', border: '1px solid rgba(248,113,113,.25)', fontSize: 12.5, color: '#F87171' }}>{error}</div>}
+
+      {/* Sprint goal hero */}
+      <Card style={{ padding: '22px 24px', marginBottom: 16, background: dark ? 'linear-gradient(135deg, rgba(0,112,243,.08), rgba(59,158,255,.04))' : 'linear-gradient(135deg, rgba(0,112,243,.05), rgba(59,158,255,.02))' }}>
+        <div className="eyebrow" style={{ color: '#3B9EFF', marginBottom: 10 }}>Proposed sprint goal</div>
+        <h2 className="font-heading" style={{ fontSize: 22, fontWeight: 600, color: c.text, margin: '0 0 12px', letterSpacing: '-.02em', lineHeight: 1.35 }}>{output.sprintGoal}</h2>
+        <p style={{ fontSize: 13.5, color: c.sub, margin: 0, lineHeight: 1.65 }}>{output.rationale}</p>
+        <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+          <button onClick={generate} disabled={loading}
+            style={{ padding: '8px 16px', borderRadius: 9, border: `1px solid ${c.bord}`, background: 'transparent', color: c.sub, cursor: loading ? 'wait' : 'pointer', fontSize: 12.5, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 7, transition: 'all .15s' }}
+            onMouseEnter={e => !loading && (e.currentTarget.style.background = c.row)} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            {loading
+              ? <><div style={{ width: 11, height: 11, borderRadius: '50%', border: `2px solid ${c.bord}`, borderTopColor: '#3B9EFF', animation: 'spin .7s linear infinite' }}/> Regenerating…</>
+              : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/></svg> Regenerate</>}
+          </button>
+        </div>
+      </Card>
+
+      {/* Scope */}
+      {output.scope?.length > 0 && (
+        <Card style={{ padding: '18px 22px', marginBottom: 14 }}>
+          <div className="eyebrow" style={{ color: c.mut, marginBottom: 14 }}>In scope · {output.scope.length} task{output.scope.length !== 1 ? 's' : ''}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {output.scope.map((s, i) => {
+              const t = s.task;
+              const member = members.find(m => m.email === t?.assignee_email);
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '11px 12px', borderRadius: 10, background: dark ? 'rgba(255,255,255,.03)' : 'rgba(0,112,243,.04)' }}>
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,112,243,.15)', color: '#3B9EFF', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, fontFamily: "'JetBrains Mono', monospace" }}>{i + 1}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: c.text, marginBottom: 3, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span>{t?.title || t?.text || s.taskTitle}</span>
+                      {t?._carriedOver && <span style={{ fontSize: 9.5, padding: '2px 6px', borderRadius: 5, background: 'rgba(220,38,38,.12)', color: '#DC2626', fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase' }}>Backlog</span>}
+                      {t?.priority && <span style={{ fontSize: 9.5, padding: '2px 6px', borderRadius: 5, background: t.priority === 'high' || t.priority === 'critical' ? 'rgba(248,113,113,.12)' : 'rgba(251,191,36,.12)', color: t.priority === 'high' || t.priority === 'critical' ? '#F87171' : '#D97706', fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase' }}>{t.priority}</span>}
+                    </div>
+                    <div style={{ fontSize: 12, color: c.mut, lineHeight: 1.45 }}>{s.reason}</div>
+                  </div>
+                  {member && <Av member={member} size={26} url={member.avatar_url}/>}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* Deferred + watch-outs + success criteria in a 3-col grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
+        {output.deferred?.length > 0 && (
+          <Card style={{ padding: '16px 18px' }}>
+            <div className="eyebrow" style={{ color: c.mut, marginBottom: 10 }}>Deferred</div>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {output.deferred.map((d, i) => (
+                <li key={i} style={{ fontSize: 12.5, color: c.sub, lineHeight: 1.5 }}>
+                  <span style={{ color: c.text, fontWeight: 500 }}>{d.taskTitle}</span>
+                  <div style={{ color: c.mut, fontSize: 11.5, marginTop: 2 }}>{d.reason}</div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
+        {output.watchOuts?.length > 0 && (
+          <Card style={{ padding: '16px 18px' }}>
+            <div className="eyebrow" style={{ color: '#DC2626', marginBottom: 10 }}>Watch out for</div>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {output.watchOuts.map((w, i) => (
+                <li key={i} style={{ fontSize: 12.5, color: c.sub, lineHeight: 1.55, display: 'flex', gap: 8 }}>
+                  <span style={{ color: '#DC2626', flexShrink: 0 }}>▸</span>
+                  <span>{w}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
+        {output.successCriteria?.length > 0 && (
+          <Card style={{ padding: '16px 18px' }}>
+            <div className="eyebrow" style={{ color: '#34D399', marginBottom: 10 }}>Success criteria</div>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {output.successCriteria.map((s, i) => (
+                <li key={i} style={{ fontSize: 12.5, color: c.sub, lineHeight: 1.55, display: 'flex', gap: 8 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34D399" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}><polyline points="20 6 9 17 4 12"/></svg>
+                  <span>{s}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Preview card for the not-yet-fully-shipped artifacts. Shows the heuristic
+// signals so the user can see what the engine will analyze, and a clear
+// "coming next round" state. NO mock AI output — only real data signals.
+function AgilePreviewCard({ kind, snap }) {
+  const c = useC();
+  const { dark } = useTheme();
+
+  const labels = {
+    retro:   { title: 'Retrospective',  desc: 'What went well, what stalled, what to change — derived from real standup history.' },
+    risk:    { title: 'Risk dashboard', desc: 'Leading indicators of delivery risk: blockers, overload, overdue items, low historical reliability.' },
+    stories: { title: 'User stories',   desc: 'Convert active tasks into Epic → Story → Acceptance Criteria using project context.' },
+  };
+  const cfg = labels[kind];
+
+  return (
+    <div>
+      <AgileBanner source="heuristic"/>
+      <Card style={{ padding: '22px 24px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(251,191,36,.12)', color: '#D97706', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div style={{ flex: 1 }}>
+            <h2 className="font-heading" style={{ fontSize: 19, fontWeight: 600, color: c.text, margin: 0, letterSpacing: '-.02em' }}>{cfg.title}</h2>
+            <p style={{ fontSize: 13, color: c.mut, margin: '5px 0 0', lineHeight: 1.6 }}>{cfg.desc}</p>
+            <div style={{ fontSize: 11, color: '#D97706', marginTop: 8, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', fontFamily: "'JetBrains Mono', monospace" }}>Full AI synthesis ships next round</div>
+          </div>
+        </div>
+
+        {/* Heuristic signals preview */}
+        {kind === 'retro' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            <RetroPreviewCol title="Wins" color="#34D399" items={snap.retroSignals.wins.map(w => w.title + (w.who ? ' (' + w.who + ')' : ''))} empty="No completions yet"/>
+            <RetroPreviewCol title="Stalled" color="#DC2626" items={snap.retroSignals.stalls.map(s => s.title)} empty="No carry-over backlog"/>
+            <RetroPreviewCol title="Blocked" color="#FBBF24" items={snap.retroSignals.blockers.map(b => b.title)} empty="No active blockers"/>
+            <RetroPreviewCol title="Velocity" color="#3B9EFF" items={[`Avg ${snap.velocity.daily} tasks/day`, `≈${snap.velocity.sprint} per 2-week sprint`, `${snap.velocity.completion}% historical completion`]} empty=""/>
+          </div>
+        )}
+
+        {kind === 'risk' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {snap.risks.length === 0 && <div style={{ fontSize: 13, color: c.mut, padding: '20px 0', textAlign: 'center' }}>No risk signals detected. The engine watches for blocker pile-ups, overload, overdue carry-over, low throughput, and reliability gaps.</div>}
+            {snap.risks.map((r, i) => {
+              const col = r.severity === 'high' ? '#DC2626' : r.severity === 'medium' ? '#D97706' : '#3B9EFF';
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, background: dark ? 'rgba(255,255,255,.03)' : 'rgba(0,112,243,.04)' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: col, boxShadow: `0 0 0 3px ${col}33`, flexShrink: 0 }}/>
+                  <span style={{ flex: 1, fontSize: 13, color: c.text }}>{r.text}</span>
+                  <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 5, background: col + '20', color: col, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', fontFamily: "'JetBrains Mono', monospace" }}>{r.severity}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {kind === 'stories' && (
+          <div>
+            <div className="eyebrow" style={{ color: c.mut, marginBottom: 10 }}>Themes detected · these will become epics</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+              {snap.themes.length === 0 && <span style={{ fontSize: 12.5, color: c.mut }}>Not enough task variety yet — add more tasks to reveal themes.</span>}
+              {snap.themes.map(t => (
+                <span key={t.keyword} style={{ fontSize: 12, padding: '5px 11px', borderRadius: 20, background: 'rgba(0,112,243,.1)', color: '#3B9EFF', fontWeight: 600, border: '1px solid rgba(0,112,243,.2)' }}>
+                  {t.keyword} <span style={{ opacity: .6, marginLeft: 4 }}>×{t.count}</span>
+                </span>
+              ))}
+            </div>
+            <div className="eyebrow" style={{ color: c.mut, marginBottom: 10 }}>Candidate tasks · {Math.min(snap.candidates.length, 8)} of {snap.candidates.length}</div>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {snap.candidates.slice(0, 8).map((c2, i) => (
+                <li key={i} style={{ fontSize: 12.5, color: c.sub, padding: '7px 10px', borderRadius: 8, background: dark ? 'rgba(255,255,255,.03)' : 'rgba(0,112,243,.04)' }}>
+                  {c2.task.title || c2.task.text}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function RetroPreviewCol({ title, color, items, empty }) {
+  const c = useC();
+  return (
+    <div>
+      <div className="eyebrow" style={{ color, marginBottom: 8 }}>{title}</div>
+      {items.length === 0
+        ? <div style={{ fontSize: 12, color: c.mut, fontStyle: 'italic' }}>{empty}</div>
+        : <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {items.slice(0, 5).map((it, i) => (
+              <li key={i} style={{ fontSize: 12.5, color: c.sub, lineHeight: 1.5, display: 'flex', gap: 7 }}>
+                <span style={{ color, flexShrink: 0 }}>·</span>
+                <span>{it}</span>
+              </li>
+            ))}
+          </ul>}
+    </div>
+  );
+}
 
 // ─── TEAM ANALYSIS TAB ───────────────────────────────────────────────────────
 // ─── BLOCKER INTELLIGENCE ─────────────────────────────────────────────────────
