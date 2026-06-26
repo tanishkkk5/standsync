@@ -166,6 +166,7 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 3px var(--ss-focus,rgba
 @keyframes ssLogoFlash{0%{opacity:0;transform:perspective(1200px) rotateX(20deg) translateZ(-120px) scale(.85)}45%{opacity:1;transform:perspective(1200px) rotateX(0) translateZ(0) scale(1.04)}65%{transform:perspective(1200px) rotateX(0) translateZ(0) scale(.98)}100%{opacity:1;transform:perspective(1200px) rotateX(0) translateZ(0) scale(1)}}
 .ss-logo-flash{animation:ssLogoFlash .7s cubic-bezier(.22,1,.36,1) both;transform-style:preserve-3d}
 @keyframes ssScan{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.ss-logo-bar{position:relative;overflow:hidden}
 .ss-subtabs{scrollbar-width:none;-ms-overflow-style:none}
 .ss-subtabs::-webkit-scrollbar{display:none;width:0;height:0}
 /* Depth lift: card pushes toward the viewer on hover */
@@ -609,7 +610,7 @@ function Card({ children, style={}, onClick, tilt=false, className='' }) {
       border:`1px solid ${h&&onClick?c.bordH:c.bord}`,borderRadius:16,
       backdropFilter:'blur(28px) saturate(1.3)',WebkitBackdropFilter:'blur(28px) saturate(1.3)',
       boxShadow:tilt&&h
-        ?`${sx}px ${sy}px ${sp}px -${sp*.4}px rgba(0,112,243,${dark?.42:.3}),0 4px 16px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,${dark?.07:.6})`
+        ?`${sx}px ${sy}px ${sp}px -${sp*.4}px rgba(0,112,243,${dark ? .42 : .3}),0 4px 16px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,${dark ? .07 : .6})`
         :dark?'0 2px 20px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.04)':'0 2px 20px rgba(0,112,243,.06),inset 0 1px 0 rgba(255,255,255,.9)',
       transition:'background .18s,border-color .18s',cursor:onClick?'pointer':undefined,
       transform:tilt?`perspective(700px) rotateX(${t.rx}deg) rotateY(${t.ry}deg) ${h?'translateZ(22px)':'translateZ(0)'}`:(h&&onClick?'translateY(-2px)':'none'),
@@ -656,27 +657,39 @@ function Modal({ children, onClose, title, width=500 }) {
   return <div className="ss-3d-scene" style={{ position:'fixed',inset:0,background:'rgba(0,0,0,.65)',backdropFilter:'blur(6px)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:20 }} onClick={e=>e.target===e.currentTarget&&onClose()}><Card style={{ width:'100%',maxWidth:width,padding:28,animation:'ss3dPop .34s cubic-bezier(.22,1,.36,1) both',maxHeight:'90vh',overflowY:'auto' }}>{title&&<h3 style={{ margin:'0 0 20px',color:c.text,fontSize:16,fontWeight:700 }}>{title}</h3>}{children}</Card></div>;
 }
 function StatCard({ label, value, color='#3B9EFF', sub, icon }) {
-  const c=useC(); const [iconPos,setIconPos]=useState({x:0,y:0}); const [hov,setHov]=useState(false);
+  const c=useC();
+  const [iconPos,setIconPos]=useState({x:0,y:0});
+  const [hov,setHov]=useState(false);
+  const wrapRef=useRef(null);
   const iconRef=useRef(null);
   const onMove=(e)=>{
     if(!iconRef.current)return;
     const r=iconRef.current.getBoundingClientRect();
     setIconPos({ x:(e.clientX-r.left-r.width*.5)*.25, y:(e.clientY-r.top-r.height*.5)*.25 });
   };
-  return <Card tilt className="ss-statcard" style={{ padding:'16px 20px',position:'relative',overflow:'hidden' }}
-    onMouseMove={onMove} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>{ setHov(false); setIconPos({x:0,y:0}); }}>
-    <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start' }}>
-      <div>
-        <div className="eyebrow" style={{ color:c.mut,marginBottom:6 }}>{label}</div>
-        <div className="font-heading" style={{ fontSize:30,fontWeight:600,color,letterSpacing:'-.025em',lineHeight:1,fontVariantNumeric:'tabular-nums',
-          transform:hov?'perspective(400px) translateZ(8px)':'perspective(400px) translateZ(0)',transition:'transform .3s var(--spring-fast,cubic-bezier(.34,1.56,.64,1))' }}>{value}</div>
-        {sub&&<div style={{ fontSize:11,color:c.mut,marginTop:5,fontFamily:"'JetBrains Mono',monospace" }}>{sub}</div>}
-      </div>
-      {icon&&<span ref={iconRef} className="ss-float" style={{ fontSize:22,opacity:.45,display:'inline-block',
-        transform:`translate(${iconPos.x}px,${iconPos.y}px)`,transition:'transform .2s var(--spring-fast,cubic-bezier(.34,1.56,.64,1))' }}>{icon}</span>}
+  return (
+    <div ref={wrapRef}
+      onMouseMove={onMove}
+      onMouseEnter={()=>setHov(true)}
+      onMouseLeave={()=>{ setHov(false); setIconPos({x:0,y:0}); }}
+      style={{ position:'relative' }}>
+      <Card tilt className="ss-statcard" style={{ padding:'16px 20px',overflow:'hidden' }}>
+        <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start' }}>
+          <div>
+            <div className="eyebrow" style={{ color:c.mut,marginBottom:6 }}>{label}</div>
+            <div className="font-heading" style={{ fontSize:30,fontWeight:600,color,letterSpacing:'-.025em',lineHeight:1,fontVariantNumeric:'tabular-nums',
+              transform:hov?'perspective(400px) translateZ(8px)':'perspective(400px) translateZ(0)',
+              transition:'transform .3s var(--spring-fast,cubic-bezier(.34,1.56,.64,1))' }}>{value}</div>
+            {sub&&<div style={{ fontSize:11,color:c.mut,marginTop:5,fontFamily:"'JetBrains Mono',monospace" }}>{sub}</div>}
+          </div>
+          {icon&&<span ref={iconRef} className="ss-float" style={{ fontSize:22,opacity:.45,display:'inline-block',
+            transform:`translate(${iconPos.x}px,${iconPos.y}px)`,
+            transition:'transform .2s var(--spring-fast,cubic-bezier(.34,1.56,.64,1))' }}>{icon}</span>}
+        </div>
+        <div className="ss-statcard-underline" style={{ position:'absolute',bottom:0,left:16,right:16,height:2,background:`linear-gradient(90deg,transparent,${c.accent},transparent)`,opacity:0,transition:'opacity .25s' }}/>
+      </Card>
     </div>
-    <div className="ss-statcard-underline" style={{ position:'absolute',bottom:0,left:16,right:16,height:2,background:`linear-gradient(90deg,transparent,${c.accent},transparent)`,opacity:0,transition:'opacity .25s' }}/>
-  </Card>;
+  );
 }
 function Lbl({ children, style={} }) { const c=useC(); return <div style={{ fontSize:10,fontWeight:700,letterSpacing:'.1em',color:c.mut,textTransform:'uppercase',marginBottom:8,...style }}>{children}</div>; }
 // Reusable empty state: icon/illustration, title, explanation, primary + secondary actions, optional preview.
@@ -735,7 +748,7 @@ function ProfileMenu({ session, onSettings, onLogout }) {
         {avatarUrl?<img src={avatarUrl} alt={ini} style={{ width:'100%',height:'100%',objectFit:'cover' }}/>:<span style={{ fontSize:12,fontWeight:700,color }}>{ini}</span>}
       </button>
       {open&&(
-        <div style={{ position:'absolute',right:0,top:42,width:230,background:c.dark?'rgba(18,15,50,.98)':'#fff',border:`1px solid ${c.bord}`,borderRadius:14,padding:8,zIndex:500,backdropFilter:'blur(20px)',animation:'slideDown .2s ease',boxShadow:'0 8px 32px rgba(0,0,0,.3)' }}>
+        <div style={{ position:'absolute',right:0,top:42,width:230,background:c.surf,border:`1px solid ${c.bord}`,borderRadius:14,padding:8,zIndex:500,backdropFilter:'blur(20px)',animation:'slideDown .2s ease',boxShadow:'0 8px 32px rgba(0,0,0,.3)' }}>
           <div style={{ padding:'10px 12px',borderBottom:`1px solid ${c.bord}`,marginBottom:4 }}>
             <div style={{ fontSize:13,fontWeight:700,color:c.text }}>{name}</div>
             <div style={{ fontSize:11,color:c.mut,marginTop:2 }}>{email}</div>
@@ -2260,7 +2273,7 @@ function SpaceSettingsModal({ spaceId, customSpaces, members, isManager, onClose
                   <div style={{ position:'relative' }}>
                     <input value={memberSearch} onChange={e=>setMemberSearch(e.target.value)} placeholder="+ Add member..." style={{ background:c.inp,border:`1px solid ${c.inpB}`,borderRadius:8,padding:'6px 10px',color:c.text,fontSize:12,outline:'none',width:160 }}/>
                     {memberSearch&&(
-                      <div style={{ position:'absolute',top:'100%',right:0,width:220,background:c.dark?'#1A1740':'#fff',border:`1px solid ${c.bord}`,borderRadius:10,zIndex:100,marginTop:4,boxShadow:'0 8px 24px rgba(0,0,0,.2)',maxHeight:160,overflowY:'auto' }}>
+                      <div style={{ position:'absolute',top:'100%',right:0,width:220,background:c.surf,border:`1px solid ${c.bord}`,borderRadius:10,zIndex:100,marginTop:4,boxShadow:'0 8px 24px rgba(0,0,0,.2)',maxHeight:160,overflowY:'auto' }}>
                         {members.filter(m=>!spMembers.find(sm=>sm.email===m.email)&&(m.name?.toLowerCase().includes(memberSearch.toLowerCase())||m.email?.toLowerCase().includes(memberSearch.toLowerCase()))).map(m=>(
                           <div key={m.email} onClick={()=>{addMemberToSpace(spaceId,m);setMemberSearch('');}} style={{ padding:'8px 12px',cursor:'pointer',fontSize:12,color:c.text,display:'flex',alignItems:'center',gap:8 }} onMouseEnter={e=>e.currentTarget.style.background='rgba(0,112,243,.1)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                             <Av member={m} size={22} url={m.avatar_url}/><span>{m.name||m.email}</span>
@@ -2556,6 +2569,7 @@ function GroupCreateModal({ members, myEmail, onClose, onCreate }){
 
 function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='default', onChangeTheme, isManager=false, onCreateTask, teamId='demo' }) {
   const c=useC();
+  const { dark } = useTheme();
   const [msg,setMsg]=useState('');
   const [activeSpace,setActiveSpace]=useState('general');
   const [showEmoji,setShowEmoji]=useState(false);
@@ -2643,7 +2657,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
   };
 
   // Filter messages by active space/DM
-  const spaceMessages=messages.filter(m=>{
+  const spaceMessages=(Array.isArray(messages)?messages:[]).filter(m=>{
     if(activeSpace.startsWith('dm-')){
       const dmEmail=activeSpace.slice(3);
       // Match DMs in both directions
@@ -2905,7 +2919,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
               <button key={m.email} onClick={()=>setActiveSpace(dmKey)} style={{ display:'flex',alignItems:'center',gap:9,padding:'7px 10px',borderRadius:9,border:'none',background:isActive?(c.dark?'rgba(0,112,243,.2)':'rgba(0,112,243,.12)'):'transparent',color:isActive?'#3B9EFF':c.sub,cursor:'pointer',fontSize:13,fontWeight:(isActive||unread)?700:400,textAlign:'left',width:'100%' }}>
                 <div style={{ position:'relative',flexShrink:0 }}>
                   <Av member={m} size={22} url={m.avatar_url}/>
-                  <div style={{ position:'absolute',bottom:-1,right:-1,width:7,height:7,borderRadius:'50%',background:'#34D399',border:'1.5px solid '+(c.dark?'#0F0D2A':'#F3F4FF') }}/>
+                  <div style={{ position:'absolute',bottom:-1,right:-1,width:7,height:7,borderRadius:'50%',background:'#34D399',border:'1.5px solid '+(c.dark?c.surf:'#F3F4FF') }}/>
                 </div>
                 <span style={{ flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:unread&&!isActive?c.text:undefined }}>{(m.name||m.email).split(' ')[0]}</span>
                 {unread>0&&<span style={{ flexShrink:0,minWidth:18,height:18,borderRadius:9,background:'#0070F3',color:'#fff',fontSize:11,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 5px' }}>{unread>9?'9+':unread}</span>}
@@ -3054,7 +3068,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
 
           {/* Files/Links sidebar */}
           {showFiles&&(
-            <div style={{ width:240,flexShrink:0,borderLeft:`1px solid ${c.bord}`,background:c.dark?'rgba(10,8,30,.95)':'rgba(230,234,255,.9)',display:'flex',flexDirection:'column' }}>
+            <div style={{ width:240,flexShrink:0,borderLeft:`1px solid ${c.bord}`,background:c.dark?'rgba(14,14,18,.96)':'rgba(240,241,248,.9)',display:'flex',flexDirection:'column' }}>
               <div style={{ padding:'14px 14px 12px',borderBottom:`1px solid ${c.bord}`,display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0 }}>
                 <span style={{ fontSize:13,fontWeight:700,color:c.text }}>Files & Links</span>
                 <button onClick={()=>setShowFiles(false)} style={{ background:'none',border:'none',color:c.mut,cursor:'pointer',fontSize:18,lineHeight:1 }}>✕</button>
@@ -3137,7 +3151,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
 
           {/* Emoji picker */}
           {showEmoji&&(
-            <div style={{ padding:'10px',background:c.dark?'rgba(18,15,50,.98)':'#fff',border:`1px solid ${c.bord}`,borderRadius:'10px 10px 0 0',borderBottom:'none',marginBottom:-1,boxShadow:'0 -4px 20px rgba(0,0,0,.15)' }} onClick={e=>e.stopPropagation()}>
+            <div style={{ padding:'10px',background:c.surf,border:`1px solid ${c.bord}`,borderRadius:'10px 10px 0 0',borderBottom:'none',marginBottom:-1,boxShadow:'0 -4px 20px rgba(0,0,0,.15)' }} onClick={e=>e.stopPropagation()}>
               <div style={{ display:'flex',gap:2,marginBottom:8,borderBottom:`1px solid ${c.bord}`,paddingBottom:6 }}>
                 {Object.keys(EMOJI_GROUPS).map(g=>(
                   <button key={g} onClick={()=>setEmojiGroup(g)} style={{ padding:'4px 10px',borderRadius:8,border:'none',background:emojiGroup===g?'rgba(0,112,243,.15)':'transparent',color:emojiGroup===g?'#3B9EFF':c.mut,cursor:'pointer',fontSize:12,fontWeight:emojiGroup===g?700:400 }}>{g}</button>
@@ -3176,7 +3190,7 @@ function RichChatPanel({ messages=[], onSend, session, members=[], chatTheme='de
 
           {/* Mention picker */}
           {showMention&&(
-            <div onClick={e=>e.stopPropagation()} style={{ position:'absolute',bottom:54,left:12,zIndex:30,background:c.dark?'#161B2E':'#fff',border:`1px solid ${c.bord}`,borderRadius:14,boxShadow:'0 12px 40px rgba(0,0,0,.3)',padding:8,width:240,maxHeight:240,overflowY:'auto' }}>
+            <div onClick={e=>e.stopPropagation()} style={{ position:'absolute',bottom:54,left:12,zIndex:30,background:c.surf,border:`1px solid ${c.bord}`,borderRadius:14,boxShadow:'0 12px 40px rgba(0,0,0,.3)',padding:8,width:240,maxHeight:240,overflowY:'auto' }}>
               <div style={{ fontSize:11,fontWeight:700,color:c.mut,textTransform:'uppercase',letterSpacing:'.05em',padding:'4px 8px 8px' }}>Mention</div>
               {members.map(m=>(
                 <button key={m.email} onClick={()=>{setMsg(x=>x+'@'+(m.name||m.email.split('@')[0])+' ');setShowMention(false);inputRef.current?.focus();}} style={{ display:'flex',alignItems:'center',gap:10,width:'100%',padding:'7px 8px',background:'transparent',border:'none',borderRadius:9,cursor:'pointer',color:c.text,fontSize:13,textAlign:'left' }}
@@ -6365,7 +6379,7 @@ function WikiFilePanel({ selProject, projectFiles, setProjectFiles, saveWiki, pr
       {preview && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
           onClick={() => setPreview(null)}>
-          <div style={{ background: dark ? '#12103A' : '#fff', borderRadius: 16, width: '90%', maxWidth: 900, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 80px rgba(0,0,0,.5)' }}
+          <div style={{ background: dark ? c.surf : '#fff', borderRadius: 16, width: '90%', maxWidth: 900, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 80px rgba(0,0,0,.5)' }}
             onClick={e => e.stopPropagation()}>
             {/* Modal header */}
             <div style={{ padding: '14px 20px', borderBottom: `1px solid ${c.bord}`, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -6784,7 +6798,7 @@ function ProjectWiki({ team, session, members = [] }) {
               <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search docs..." style={{ width:'100%', background:dark?'rgba(255,255,255,.06)':'rgba(0,112,243,.07)', border:`1px solid ${c.bord}`, borderRadius:8, padding:'6px 10px 6px 28px', color:c.text, fontSize:12, outline:'none', boxSizing:'border-box' }}/>
             </div>
             {search && searchResults.length > 0 && (
-              <div style={{ position:'absolute', zIndex:100, width:220, background:dark?'#12103A':'#fff', border:`1px solid ${c.bord}`, borderRadius:10, marginTop:4, boxShadow:'0 8px 24px rgba(0,0,0,.2)', maxHeight:240, overflowY:'auto', left:10 }}>
+              <div style={{ position:'absolute', zIndex:100, width:220, background:dark?c.surf:'#fff', border:`1px solid ${c.bord}`, borderRadius:10, marginTop:4, boxShadow:'0 8px 24px rgba(0,0,0,.2)', maxHeight:240, overflowY:'auto', left:10 }}>
                 {searchResults.map(pg => {
                   const proj = projects.find(p => p.id === pg.projectId);
                   return (
@@ -8182,7 +8196,7 @@ function BrainstormSpace({ team, session, members=[] }) {
         <div style={{position:'relative',flexShrink:0}}>
           <button onClick={()=>setShowSens(s=>!s)} title="Board sensitivity" style={{width:30,height:30,borderRadius:7,border:`1px solid ${showSens?'#0070F3':c.bord}`,background:showSens?'rgba(0,112,243,.1)':'transparent',color:showSens?'#0070F3':c.mut,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>⚙</button>
           {showSens&&(
-            <div onMouseDown={e=>e.stopPropagation()} style={{position:'absolute',top:38,right:0,zIndex:60,width:260,background:dark?'#161B2E':'#fff',border:`1px solid ${c.bord}`,borderRadius:14,boxShadow:'0 14px 44px rgba(0,0,0,.3)',padding:16}}>
+            <div onMouseDown={e=>e.stopPropagation()} style={{position:'absolute',top:38,right:0,zIndex:60,width:260,background:dark?c.surf:'#fff',border:`1px solid ${c.bord}`,borderRadius:14,boxShadow:'0 14px 44px rgba(0,0,0,.3)',padding:16}}>
               <div style={{fontSize:13,fontWeight:700,color:c.text,marginBottom:14}}>Board sensitivity</div>
               <div style={{marginBottom:14}}>
                 <div style={{display:'flex',justifyContent:'space-between',fontSize:11.5,color:c.sub,marginBottom:6}}><span>Zoom speed</span><span style={{color:c.mut}}>{zoomSens<=0.0015?'Slow':zoomSens>=0.0035?'Fast':'Balanced'}</span></div>
@@ -11164,8 +11178,9 @@ function ManagerView({
   const toggleNotif = () => { setNotifOpen(o => { const next = !o; if (next) setTimeout(markAllRead, 1200); return next; }); };
 
   const [unreadChat, setUnreadChat] = useState(0);
-  const prevMsgCount = useRef(messages.length);
+  const prevMsgCount = useRef(Array.isArray(messages) ? messages.length : 0);
   useEffect(() => {
+    if (!Array.isArray(messages)) return;
     if (messages.length > prevMsgCount.current) {
       const myEmail = session?.user?.email;
       const externalNew = messages.slice(prevMsgCount.current).filter(m => m.sender_email !== myEmail);
@@ -11174,7 +11189,7 @@ function ManagerView({
         if (area !== 'communication') setUnreadChat(n => n + externalNew.length);
       }
     }
-    prevMsgCount.current = messages.length;
+    prevMsgCount.current = Array.isArray(messages) ? messages.length : prevMsgCount.current;
   }, [messages, area]);
 
   const goArea = (a) => { setArea(a); setMobileNav(false); if (a === 'communication') setUnreadChat(0); };
@@ -12626,7 +12641,7 @@ function AgileEngineTab({ team, session, members, tasks, history, isManager }) {
   // Loaded once. Refreshes when tasks/history change (snap above is memoized).
   const [active, setActive] = useState('sprint'); // sprint | retro | risk | stories
 
-  const hasEnoughData = snap.counts.total >= 3 || (history && history.length >= 1);
+  const hasEnoughData = snap.counts.total >= 1 || (history && history.length >= 1);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
@@ -12727,54 +12742,70 @@ function AgileBanner({ source }) {
 function AgileSprintCard({ snap, session, members }) {
   const c = useC();
   const { dark } = useTheme();
-  const [loading, setLoading] = useState(false);
-  const [output, setOutput] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [output, setOutput] = useState(() => heuristicSprint(snap)); // instant heuristic on mount
   const [error, setError] = useState('');
 
-  const generate = async () => {
-    setLoading(true); setError('');
-    let result = null;
+  const generate = async (showLoader=false) => {
+    if (showLoader) setAiLoading(true);
+    setError('');
+    // Always show heuristic first so there's no blank state
+    const heuristic = heuristicSprint(snap);
+    if (showLoader) setOutput(heuristic); // reset to fresh heuristic on manual regenerate
+    let result = heuristic;
     try {
       const prompt = agilePrompt('sprint', snap);
       const aiRes = await askAI(prompt, { agileSnapshot: snap, teamName: snap.teamName });
       const aiText = typeof aiRes === 'string' ? aiRes : (aiRes?.text || '');
       const parsed = parseAgileJSON(aiText);
-      // Validate the AI honored the candidate constraint. Drop any taskId/title it invented.
       if (parsed && Array.isArray(parsed.scope)) {
         const validIds = new Set(snap.candidates.map(c => c.task.id));
         const validTitles = new Set(snap.candidates.map(c => (c.task.title || c.task.text || '').toLowerCase().trim()));
         parsed.scope = parsed.scope.filter(s => validIds.has(s.taskId) || validTitles.has((s.taskTitle || '').toLowerCase().trim()));
-        // Enrich scope with the actual task data so we render real titles.
         parsed.scope = parsed.scope.map(s => {
           const cand = snap.candidates.find(c => c.task.id === s.taskId || (c.task.title || c.task.text || '').toLowerCase().trim() === (s.taskTitle || '').toLowerCase().trim());
           return { ...s, task: cand?.task || null };
         }).filter(s => s.task);
-        if (parsed.scope.length === 0) {
-          // AI returned nothing usable → fall back to heuristic
-          result = heuristicSprint(snap);
-        } else {
-          result = { ...parsed, _source: 'ai' };
-        }
-      } else {
-        result = heuristicSprint(snap);
+        if (parsed.scope.length > 0) result = { ...parsed, _source: 'ai' };
+        // if AI returned nothing usable, heuristic result stays
       }
     } catch (e) {
-      result = heuristicSprint(snap);
-      setError('AI unavailable — showing heuristic plan instead.');
+      setError('AI call failed — showing heuristic plan. Check lib/ai.js configuration.');
     }
-    setOutput(result); setLoading(false);
+    setOutput(result); setAiLoading(false);
   };
 
-  // Auto-generate on first mount so users see something useful immediately.
-  useEffect(() => { if (!output && !loading) generate(); /* eslint-disable-next-line */ }, []);
-
-  if (loading && !output) return (
-    <Card style={{ padding: '40px 24px', textAlign: 'center' }}>
-      <div style={{ width: 36, height: 36, borderRadius: '50%', border: `3px solid ${c.bord}`, borderTopColor: '#3B9EFF', animation: 'spin .7s linear infinite', margin: '0 auto 14px' }}/>
-      <div style={{ fontSize: 13.5, color: c.sub, fontWeight: 500 }}>Analyzing tasks, history, and docs…</div>
-      <div style={{ fontSize: 12, color: c.mut, marginTop: 6 }}>Engine builds a deterministic snapshot then asks AI to synthesize.</div>
-    </Card>
-  );
+  // On mount: show heuristic immediately, then silently try AI upgrade in background
+  useEffect(() => {
+    const snap_ = snap; // capture current snap
+    let cancelled = false;
+    (async () => {
+      try {
+        const prompt = agilePrompt('sprint', snap_);
+        const aiRes = await askAI(prompt, { agileSnapshot: snap_, teamName: snap_.teamName });
+        if (cancelled) return;
+        const aiText = typeof aiRes === 'string' ? aiRes : (aiRes?.text || '');
+        const parsed = parseAgileJSON(aiText);
+        if (parsed && Array.isArray(parsed.scope) && parsed.scope.length > 0) {
+          const validIds = new Set(snap_.candidates.map(c => c.task.id));
+          const validTitles = new Set(snap_.candidates.map(c => (c.task.title || c.task.text || '').toLowerCase().trim()));
+          const enriched = parsed.scope
+            .filter(s => validIds.has(s.taskId) || validTitles.has((s.taskTitle || '').toLowerCase().trim()))
+            .map(s => {
+              const cand = snap_.candidates.find(c => c.task.id === s.taskId || (c.task.title || c.task.text || '').toLowerCase().trim() === (s.taskTitle || '').toLowerCase().trim());
+              return { ...s, task: cand?.task || null };
+            }).filter(s => s.task);
+          if (enriched.length > 0 && !cancelled) {
+            setOutput({ ...parsed, scope: enriched, _source: 'ai' });
+          }
+        }
+      } catch (e) {
+        // AI unavailable — heuristic already showing, no error needed on silent load
+      }
+    })();
+    return () => { cancelled = true; };
+    /* eslint-disable-next-line */
+  }, []);
 
   if (!output) return null;
 
@@ -12789,10 +12820,10 @@ function AgileSprintCard({ snap, session, members }) {
         <h2 className="font-heading" style={{ fontSize: 22, fontWeight: 600, color: c.text, margin: '0 0 12px', letterSpacing: '-.02em', lineHeight: 1.35 }}>{output.sprintGoal}</h2>
         <p style={{ fontSize: 13.5, color: c.sub, margin: 0, lineHeight: 1.65 }}>{output.rationale}</p>
         <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
-          <button onClick={generate} disabled={loading}
+          <button onClick={() => generate(true)} disabled={aiLoading}
             style={{ padding: '8px 16px', borderRadius: 9, border: `1px solid ${c.bord}`, background: 'transparent', color: c.sub, cursor: loading ? 'wait' : 'pointer', fontSize: 12.5, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 7, transition: 'all .15s' }}
             onMouseEnter={e => !loading && (e.currentTarget.style.background = c.row)} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-            {loading
+            {aiLoading
               ? <><div style={{ width: 11, height: 11, borderRadius: '50%', border: `2px solid ${c.bord}`, borderTopColor: '#3B9EFF', animation: 'spin .7s linear infinite' }}/> Regenerating…</>
               : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/></svg> Regenerate</>}
           </button>
@@ -12875,7 +12906,7 @@ function AgileSprintCard({ snap, session, members }) {
 // Preview card for the not-yet-fully-shipped artifacts. Shows the heuristic
 // signals so the user can see what the engine will analyze, and a clear
 // "coming next round" state. NO mock AI output — only real data signals.
-function AgilePreviewCard({ kind, snap }) {
+function AgilePreviewCard({ kind, snap, session, members }) {
   const c = useC();
   const { dark } = useTheme();
 
