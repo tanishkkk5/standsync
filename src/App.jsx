@@ -1726,7 +1726,7 @@ function heuristicSprint(snap) {
       ? `Close out the ${topTheme}-related work and clear the carry-over backlog.`
       : `Close out the highest-priority active work and clear the carry-over backlog.`,
     rationale: `Based on ${snap.velocity.sprint || 'projected'} task/sprint velocity and ${snap.counts.backlog} carry-over items, the team can realistically commit to ${cands.length} tasks. ${snap.risks.length ? 'Heuristics flagged: ' + snap.risks.slice(0, 2).map(r => r.text).join('; ') + '.' : ''}`,
-    scope: cands.map(c => ({ taskId: c.task.id, taskTitle: c.task.title || c.task.text, reason: c.task._carriedOver ? 'Carried over from prior standups' : c.task.priority === 'high' || c.task.priority === 'critical' ? 'High priority' : 'Next in priority order' })),
+    scope: cands.map(c => ({ taskId: c.task.id, taskTitle: c.task.title || c.task.text, task: c.task, reason: c.task._carriedOver ? 'Carried over from prior standups' : c.task.priority === 'high' || c.task.priority === 'critical' ? 'High priority' : 'Next in priority order' })),
     deferred: snap.candidates.slice(snap.teamCapacity, snap.teamCapacity + 5).map(c => ({ taskTitle: c.task.title || c.task.text, reason: 'Beyond projected sprint capacity' })),
     watchOuts: snap.risks.map(r => r.text),
     successCriteria: [
@@ -5195,6 +5195,7 @@ function buildCommitments(tasks, history) {
     if (t.status === 'done') outcome = 'kept';
     else outcome = overdue ? 'missed' : 'pending';
     out.push({
+      id: t.id || null,
       who: t.assignee_email, whoName: t.assignee_name || t.assignee_email,
       text: t.title || t.text, timeline: t.timeline, outcome, status: t.status,
       date: dateHint || t._standupDate || null,
@@ -5220,6 +5221,7 @@ function isCommitmentOverdue(timeline, createdAt) {
   return ageDays >= 3;
 }
 function reliabilityOf(commitments) {
+  if (!Array.isArray(commitments)) return null;
   const resolved = commitments.filter(c => c.outcome === 'kept' || c.outcome === 'missed');
   if (resolved.length === 0) return null; // nothing resolved yet
   const kept = resolved.filter(c => c.outcome === 'kept').length;
@@ -9994,7 +9996,7 @@ function agileItems(space) {
       ? rep.summary.bottlenecks
       : (Array.isArray(rep.items) ? rep.items : []);
     rows
-      .filter(r => r && r.item && !/^[—\-–\s]*section\b/i.test(r.item) && !/^[—\-–\s]+$/.test(r.item))
+      .filter(r => r && r.item && !/^[\u2500-\u257F\u2014\u2013\-\s]*section\b/i.test(r.item) && !/^[\u2500-\u257F\u2014\u2013\-\s]+$/.test(r.item))
       .slice(0, 40)
       .forEach((r, i) => {
         const st = (r.status || '').toLowerCase();
